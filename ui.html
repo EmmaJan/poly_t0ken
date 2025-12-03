@@ -1,0 +1,1191 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --brand: #6828C8;
+      --brand-hover: #5A20B2;
+      --border: #E2E4E8;
+      --bg: #F7F8FA;
+      --text: #1A1A1A;
+      --muted: #6A6F76;
+      --radius: 12px;
+      --shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 20px;
+      padding-bottom: 80px;
+      /* Espace pour le footer sticky */
+      background-color: #F9FAFB;
+      color: #1F2937;
+      font-size: 14px;
+    }
+
+    h1 {
+      font-size: 22px;
+      font-weight: 700;
+      text-align: center;
+      margin: 12px 0 4px;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 24px;
+    }
+
+    .header-icon {
+      width: 52px;
+      height: 52px;
+      margin: 0 auto;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #ECE8F8, #D4C5F9);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 26px;
+    }
+
+    .card {
+      background: white;
+      padding: 20px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      margin-bottom: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .card h3 {
+      margin: 0 0 16px;
+      font-size: 15px;
+      font-weight: 600;
+    }
+
+    .template-info strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    /* --- EDITABLE TABLE STYLES --- */
+    .table-input {
+      width: 100%;
+      border: 1px solid transparent;
+      background: transparent;
+      padding: 4px;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 12px;
+      border-radius: 4px;
+      color: inherit;
+    }
+
+    .table-input:hover {
+      border-color: #E5E7EB;
+      background: white;
+    }
+
+    .table-input:focus {
+      border-color: var(--brand);
+      background: white;
+      outline: none;
+    }
+
+    .color-swatch-wrapper {
+      position: relative;
+      width: 28px;
+      height: 28px;
+      display: inline-block;
+      vertical-align: middle;
+    }
+
+    .table-color-picker {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .icon-btn {
+      background: transparent;
+      color: #9CA3AF;
+      border: none;
+      padding: 4px;
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .icon-btn:hover {
+      background: #FEE2E2;
+      color: #EF4444;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .btn-small {
+      padding: 8px 12px;
+      font-size: 12px;
+      width: auto;
+      margin-top: 12px;
+      background: #F3F4F6;
+      color: #374151;
+      border: 1px solid #E5E7EB;
+    }
+
+    .btn-small:hover {
+      background: #E5E7EB;
+      transform: none;
+    }
+
+    label {
+      font-size: 12px;
+      font-weight: 600;
+      display: block;
+      margin-bottom: 6px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    input[type="text"],
+    select {
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 14px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      margin-bottom: 14px;
+      font-family: inherit;
+    }
+
+    input[type="text"]:focus,
+    select:focus {
+      outline: none;
+      border-color: var(--brand);
+      box-shadow: 0 0 0 3px rgba(104, 40, 200, 0.1);
+    }
+
+    .color-input-group {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      margin-bottom: 14px;
+    }
+
+    .color-preview {
+      width: 48px;
+      height: 48px;
+      border-radius: 8px;
+      border: 2px solid var(--border);
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .color-preview input[type="color"] {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+      padding: 0;
+      margin: 0;
+      cursor: pointer;
+      opacity: 0;
+      z-index: 10;
+      /* Ensure it's on top */
+    }
+
+    .color-preview-bg {
+      width: 100%;
+      height: 100%;
+    }
+
+    button {
+      background: var(--brand);
+      color: white;
+      border: none;
+      padding: 12px 18px;
+      border-radius: 8px;
+      width: 100%;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: inherit;
+    }
+
+    button:hover {
+      background: var(--brand-hover);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(104, 40, 200, 0.3);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    .btn-secondary {
+      background: white;
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 10px 14px;
+      width: auto;
+    }
+
+    .btn-secondary:hover {
+      background: #F9FAFB;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+      background: #E5E7EB;
+      padding: 4px;
+      border-radius: 10px;
+    }
+
+    .tab {
+      flex: 1;
+      padding: 8px 12px;
+      border-radius: 7px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      text-align: center;
+      transition: all 0.2s;
+      border: none;
+      background: transparent;
+      color: #6B7280;
+    }
+
+    .tab.active {
+      background: white;
+      color: var(--brand);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Token Table */
+    .token-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+    }
+
+    .token-table th {
+      text-align: left;
+      padding: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 2px solid var(--border);
+    }
+
+    .token-table td {
+      padding-top: 10px;
+      padding-bottom: 10px;
+      padding-left: 8px;
+      padding-right: 8px;
+      border-bottom: 1px solid #F3F4F6;
+      font-size: 13px;
+      vertical-align: middle;
+    }
+
+    .token-table tr:hover {
+      background: #F9FAFB;
+    }
+
+    .color-swatch {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      display: inline-block;
+    }
+
+    .token-name {
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 12px;
+      color: #374151;
+    }
+
+    .token-value {
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .preview-section {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .preview-section::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .preview-section::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    .preview-section::-webkit-scrollbar-thumb {
+      background: #D1D5DB;
+      border-radius: 10px;
+    }
+
+    .step-indicator {
+      text-align: center;
+      margin-bottom: 20px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .step-indicator span {
+      display: inline-block;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--border);
+      color: var(--muted);
+      line-height: 28px;
+      margin: 0 6px;
+      font-weight: 600;
+      font-size: 13px;
+    }
+
+    .step-indicator span.active {
+      background: var(--brand);
+      color: white;
+    }
+
+    .step-indicator span.done {
+      background: #10B981;
+      color: white;
+    }
+
+    .sticky-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      background: rgba(255, 255, 255, 0.9);
+      backdrop-filter: blur(8px);
+      padding: 16px 20px;
+      border-top: 1px solid #E5E7EB;
+      display: flex;
+      gap: 10px;
+      box-sizing: border-box;
+      z-index: 100;
+    }
+
+    .file-info {
+      margin-top: 12px;
+      padding: 8px;
+      background: #F3F4F6;
+      border-radius: 6px;
+      font-size: 13px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="header-icon">🎨</div>
+  <h1>Token Starter</h1>
+  <div class="subtitle">Generate a complete design system in seconds</div>
+
+  <!-- STEP 1: Configuration -->
+  <div id="step1">
+    <div class="step-indicator">
+      <span class="active">1</span>
+      <span>2</span>
+    </div>
+
+    <div class="card">
+      <h3>⚙️ Configuration</h3>
+
+      <label>Primary Color</label>
+      <div class="color-input-group">
+        <div class="color-preview">
+          <div class="color-preview-bg" id="colorPreviewBg"></div>
+          <input type="color" id="colorPicker" value="#6366F1">
+        </div>
+        <div style="flex: 1;">
+          <input type="text" id="colorInput" value="#6366F1" placeholder="#6366F1">
+        </div>
+        <button class="btn-secondary" id="randomBtn">🎲 Random</button>
+      </div>
+
+      <label>Design System Template</label>
+      <select id="namingSelect">
+        <option value="tailwind">Tailwind / Shadcn</option>
+        <option value="mui">Material UI</option>
+        <option value="ant">Ant Design</option>
+        <option value="bootstrap">Bootstrap</option>
+        <option value="chakra">Chakra UI</option>
+        <option value="custom">Custom</option>
+      </select>
+
+      <div style="margin-bottom: 16px; display: flex; align-items: center;">
+        <input type="checkbox" id="darkModeCheckbox" style="width: auto; margin: 0 8px 0 0;">
+        <label for="darkModeCheckbox" style="margin: 0; font-weight: 500; cursor: pointer;">Générer le mode Dark /
+          Light</label>
+      </div>
+
+      <button id="generateBtn">Generate Tokens Preview →</button>
+    </div>
+
+    <div class="card">
+      <h3>🗂️ Importer des tokens depuis un fichier</h3>
+      <p class="text-sm" style="margin-bottom: 8px;">
+        Sélectionne un fichier <code>.json</code> ou <code>.css</code> contenant tes tokens.
+      </p>
+      <!-- Input file caché -->
+      <input id="realFileInput" type="file" accept=".json,.css" style="display:none;" />
+
+      <!-- Ton bouton stylé -->
+      <button id="tokenFileButton" class="btn-secondary" style="margin-top: 8px;">
+        Importer un fichier
+      </button>
+
+      <!-- File Info & Generate Button -->
+      <div id="fileInfo" class="file-info hidden">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 16px;">📄</span>
+          <span id="fileName" style="font-weight: 500;"></span>
+        </div>
+        <button id="removeFileBtn"
+          style="background: transparent; border: none; color: #9CA3AF; cursor: pointer; padding: 4px; font-size: 18px; line-height: 1; width: auto; height: auto;">×</button>
+      </div>
+
+      <button id="generateFromFileBtn" class="hidden" style="margin-top: 8px;">
+        Générer les tokens
+      </button>
+    </div>
+
+
+  </div>
+
+  <!-- STEP 2: Preview & Import -->
+  <div id="step2" class="hidden">
+    <div class="step-indicator">
+      <span class="done">✓</span>
+      <span class="active">2</span>
+    </div>
+
+    <!-- Main Tabs -->
+    <div class="tabs" style="margin-bottom: 16px;">
+      <button class="tab active" id="tabDesigner">🎨 Designer</button>
+      <button class="tab" id="tabDev">👨‍💻 Developer</button>
+    </div>
+
+    <!-- Designer View -->
+    <div id="designerView">
+      <div class="card">
+        <h3>👁️ Token Preview</h3>
+
+        <div class="tabs" id="tokenTabs">
+          <button class="tab active" data-category="brand">Brand</button>
+          <button class="tab" data-category="system">System</button>
+          <button class="tab" data-category="gray">Gray</button>
+          <button class="tab" data-category="spacing">Spacing</button>
+          <button class="tab" data-category="radius">Radius</button>
+          <button class="tab" data-category="typography">Typography</button>
+          <button class="tab" data-category="border">Border</button>
+        </div>
+
+        <div class="preview-section" id="tokenPreview"></div>
+      </div>
+    </div>
+
+
+
+    <!-- Developer View -->
+    <div id="devView" class="hidden">
+      <div class="card">
+        <h3>📦 Export Tokens</h3>
+        <p style="font-size: 12px; color: var(--muted); margin-bottom: 12px;">
+          Export your tokens for development. Compatible with Tailwind, CSS Variables, and JSON.
+        </p>
+
+        <label>Format</label>
+        <select id="exportFormat">
+          <option value="css">CSS Variables (:root)</option>
+          <option value="json">JSON (Design Tokens)</option>
+          <option value="tailwind">Tailwind Config (JS)</option>
+          <option value="scss">SCSS Variables</option>
+        </select>
+
+        <textarea id="exportOutput"
+          style="width: 100%; height: 200px; padding: 12px; border-radius: 8px; border: 1px solid var(--border); font-family: monospace; font-size: 12px; margin-bottom: 12px;"
+          readonly></textarea>
+
+        <button class="btn-secondary" id="copyBtn">📋 Copy to Clipboard</button>
+      </div>
+    </div>
+
+    <!-- Action Buttons (Sticky Footer) -->
+    <div class="sticky-footer" style="flex-direction: column; gap: 8px;">
+
+      <!-- Checkbox Overwrite (Hidden by default) -->
+      <div id="overwriteCheckboxContainer" class="hidden" style="width: 100%; display: flex; justify-content: center;">
+        <label
+          style="display: flex; align-items: right; cursor: pointer; text-transform: none; color: var(--text); font-weight: 500; font-size: 13px; margin: 0;">
+          <input type="checkbox" id="overwriteCheckbox" style="width: auto; margin: 0 8px 8px 8px;">
+          Écraser les variables déjà existantes dans le fichier
+        </label>
+      </div>
+
+      <div style="display: flex; gap: 10px; width: 100%;">
+        <button class="btn-secondary" id="backBtn" style="flex: 1;">← Back</button>
+        <button id="importBtn" style="flex: 2;">Import to Figma 🚀</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ============================================
+    // STATE
+    // ============================================
+    var currentColor = "#6366F1";
+    var currentNaming = "tailwind";
+    var currentTokens = null;
+    var activeCategory = "brand";
+
+    // ============================================
+    // DOM ELEMENTS
+    // ============================================
+    var colorPicker = document.getElementById("colorPicker");
+    var colorInput = document.getElementById("colorInput");
+    var colorPreviewBg = document.getElementById("colorPreviewBg");
+    var namingSelect = document.getElementById("namingSelect");
+
+    var randomBtn = document.getElementById("randomBtn");
+    var generateBtn = document.getElementById("generateBtn");
+    var importBtn = document.getElementById("importBtn");
+    var backBtn = document.getElementById("backBtn");
+    var step1 = document.getElementById("step1");
+    var step2 = document.getElementById("step2");
+    var tokenTabs = document.getElementById("tokenTabs");
+    var tokenPreview = document.getElementById("tokenPreview");
+
+    // Dev Mode Elements
+    var tabDesigner = document.getElementById("tabDesigner");
+    var tabDev = document.getElementById("tabDev");
+    var designerView = document.getElementById("designerView");
+    var devView = document.getElementById("devView");
+    var exportFormat = document.getElementById("exportFormat");
+    var exportOutput = document.getElementById("exportOutput");
+    var copyBtn = document.getElementById("copyBtn");
+
+    // Overwrite Checkbox
+    var overwriteCheckboxContainer = document.getElementById("overwriteCheckboxContainer");
+    var overwriteCheckbox = document.getElementById("overwriteCheckbox");
+
+    // Listen for messages from code.js
+    window.onmessage = function (event) {
+      var msg = event.data.pluginMessage;
+      if (!msg) return;
+
+      if (msg.type === "tokens-generated") {
+        currentTokens = msg.tokens;
+        updatePreview();
+        updateExport();
+        step1.classList.add("hidden");
+        step2.classList.remove("hidden");
+      }
+
+      if (msg.type === "has-variables") {
+        if (msg.value === true) {
+          overwriteCheckboxContainer.classList.remove("hidden");
+        } else {
+          overwriteCheckboxContainer.classList.add("hidden");
+        }
+      }
+    };
+
+
+
+    // ============================================
+    // STEP 1: Configuration
+    // ============================================
+
+    function updateColorPreview(color) {
+      colorPreviewBg.style.backgroundColor = color;
+    }
+
+    colorPicker.addEventListener("input", function () {
+      currentColor = colorPicker.value.toUpperCase();
+      colorInput.value = currentColor;
+      updateColorPreview(currentColor);
+    });
+
+    colorInput.addEventListener("input", function () {
+      currentColor = colorInput.value.toUpperCase();
+      colorPicker.value = currentColor;
+      updateColorPreview(currentColor);
+    });
+
+    namingSelect.addEventListener("change", function () {
+      currentNaming = namingSelect.value;
+    });
+
+    randomBtn.addEventListener("click", function () {
+      var randomColor = "#" + Math.floor(Math.random() * 16777215).toString(16).padStart(6, "0").toUpperCase();
+      currentColor = randomColor;
+      colorInput.value = randomColor;
+      colorPicker.value = randomColor;
+      updateColorPreview(randomColor);
+    });
+
+    generateBtn.addEventListener("click", function () {
+      var withDarkMode = document.getElementById("darkModeCheckbox").checked;
+      parent.postMessage({
+        pluginMessage: {
+          type: "generate",
+          color: currentColor,
+          naming: currentNaming,
+          withDarkMode: withDarkMode
+        }
+      }, "*");
+    });
+
+    importBtn.addEventListener("click", function () {
+      var shouldOverwrite = overwriteCheckbox.checked;
+      parent.postMessage({
+        pluginMessage: {
+          type: "import",
+          naming: currentNaming,
+          overwrite: shouldOverwrite
+        }
+      }, "*");
+    });
+
+    backBtn.addEventListener("click", function () {
+      step2.classList.add("hidden");
+      step1.classList.remove("hidden");
+    });
+
+
+    (function setupFileImport() {
+      var realFileInput = document.getElementById("realFileInput");
+      var tokenFileButton = document.getElementById("tokenFileButton");
+      var fileInfo = document.getElementById("fileInfo");
+      var fileName = document.getElementById("fileName");
+      var removeFileBtn = document.getElementById("removeFileBtn");
+      var generateFromFileBtn = document.getElementById("generateFromFileBtn");
+
+      var selectedFile = null;
+
+      // 1. Trigger hidden input
+      tokenFileButton.addEventListener("click", function () {
+        realFileInput.click();
+      });
+
+      // 2. Handle file selection
+      realFileInput.addEventListener("change", function (e) {
+        selectedFile = e.target.files[0];
+        if (selectedFile) {
+          fileName.textContent = selectedFile.name;
+          fileInfo.classList.remove("hidden");
+          generateFromFileBtn.classList.remove("hidden");
+          tokenFileButton.classList.add("hidden"); // Hide import button when file selected
+        }
+      });
+
+      // 3. Handle Remove File
+      removeFileBtn.addEventListener("click", function () {
+        selectedFile = null;
+        realFileInput.value = ""; // Reset input
+        fileInfo.classList.add("hidden");
+        generateFromFileBtn.classList.add("hidden");
+        tokenFileButton.classList.remove("hidden"); // Show import button again
+      });
+
+      // 4. Handle Generate
+      generateFromFileBtn.addEventListener("click", function () {
+        if (!selectedFile) return;
+
+        var reader = new FileReader();
+        reader.onload = function (e) {
+          var content = e.target.result;
+          var ext = selectedFile.name.split(".").pop().toLowerCase();
+          var tokensFromFile = null;
+
+          try {
+            if (ext === "json") {
+              tokensFromFile = JSON.parse(content);
+            } else if (ext === "css") {
+              tokensFromFile = parseCssToTokens(content);
+            } else {
+              alert("Extension non supportée (seulement .json ou .css)");
+              return;
+            }
+
+            if (tokensFromFile) {
+              currentTokens = tokensFromFile;
+              // Switch to Step 2
+              step1.classList.add("hidden");
+              step2.classList.remove("hidden");
+              updatePreview();
+              updateExport();
+            }
+
+          } catch (err) {
+            console.error(err);
+            alert("Erreur pendant la lecture du fichier");
+          }
+        };
+        reader.readAsText(selectedFile, "utf-8");
+      });
+    })();
+
+    function parseCssToTokens(css) {
+      var tokens = {
+        brand: {},
+        system: {},
+        gray: {},
+        spacing: {},
+        radius: {},
+        typography: {},
+        border: {}
+      };
+
+      // Regex to match --variable: value;
+      var regex = /--([a-zA-Z0-9-_]+):\s*([^;]+);/g;
+      var match;
+
+      while ((match = regex.exec(css)) !== null) {
+        var key = match[1].trim();
+        var value = match[2].trim();
+
+        // Categorization Logic
+        if (key.includes("brand") || key.includes("primary")) {
+          tokens.brand[key] = value;
+        } else if (key.includes("system") || key.includes("success") || key.includes("warning") || key.includes("error") || key.includes("info")) {
+          tokens.system[key] = value;
+        } else if (key.includes("gray") || key.includes("grey") || key.includes("neutral")) {
+          tokens.gray[key] = value;
+        } else if (key.includes("spacing") || key.includes("gap") || key.includes("margin") || key.includes("padding")) {
+          tokens.spacing[key] = value;
+        } else if (key.includes("radius") || key.includes("rounded")) {
+          tokens.radius[key] = value;
+        } else if (key.includes("typo") || key.includes("font") || key.includes("text")) {
+          tokens.typography[key] = value;
+        } else if (key.includes("border") || key.includes("stroke")) {
+          tokens.border[key] = value;
+        } else {
+          // Default to brand if unknown, or maybe a 'custom' category if we had one.
+          // For now, let's put it in brand so it's visible.
+          tokens.brand[key] = value;
+        }
+      }
+
+      // Log for debugging
+      console.log("Parsed Tokens:", tokens);
+      return tokens;
+    }
+
+
+    // ============================================
+    // STEP 2: Preview
+    // ============================================
+
+    // Helper to calculate dark hex (matches code.js logic for UI preview)
+    function getDarkHexUI(hex, type, tokenName) {
+      // Simple HSL conversion
+      var r = parseInt(hex.slice(1, 3), 16) / 255;
+      var g = parseInt(hex.slice(3, 5), 16) / 255;
+      var b = parseInt(hex.slice(5, 7), 16) / 255;
+      var max = Math.max(r, g, b), min = Math.min(r, g, b);
+      var h, s, l = (max + min) / 2;
+      if (max == min) {
+        h = s = 0;
+      } else {
+        var d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+          case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+          case g: h = (b - r) / d + 2; break;
+          case b: h = (r - g) / d + 4; break;
+        }
+        h /= 6;
+      }
+
+      var newL, newS;
+
+      if (type === "gray") {
+        // Simple inversion for grays
+        newL = 1 - l;
+        newS = s;
+      } else if (type === "brand" || type === "system") {
+        // Check for numeric scale
+        var numericMatch = tokenName.match(/(\d+)/);
+
+        if (numericMatch) {
+          // Numeric scale: invert intelligently
+          var scaleValue = parseInt(numericMatch[1]);
+          var invertedScale = 1000 - scaleValue;
+
+          if (invertedScale <= 100) {
+            newL = (95 - (invertedScale / 100) * 5) / 100;
+          } else if (invertedScale <= 500) {
+            newL = (90 - ((invertedScale - 100) / 400) * 40) / 100;
+          } else {
+            newL = (50 - ((invertedScale - 500) / 400) * 40) / 100;
+          }
+
+          newS = Math.min(1, s * 1.1);
+        } else {
+          // Semantic color: increase lightness
+          newL = Math.min(0.75, l + 0.15);
+          newS = Math.min(1, s * 1.15);
+        }
+      } else {
+        newL = l;
+        newS = s;
+      }
+
+      // Convert back to Hex
+      var hue2rgb = function (p, q, t) {
+        if (t < 0) t += 1;
+        if (t > 1) t -= 1;
+        if (t < 1 / 6) return p + (q - p) * 6 * t;
+        if (t < 1 / 2) return q;
+        if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+        return p;
+      };
+      var q = newL < 0.5 ? newL * (1 + newS) : newL + newS - newL * newS;
+      var p = 2 * newL - q;
+      var r2 = Math.round(hue2rgb(p, q, h + 1 / 3) * 255);
+      var g2 = Math.round(hue2rgb(p, q, h) * 255);
+      var b2 = Math.round(hue2rgb(p, q, h - 1 / 3) * 255);
+      return "#" + ((1 << 24) + (r2 << 16) + (g2 << 8) + b2).toString(16).slice(1).toUpperCase();
+    }
+
+    function renderTokenTable(category, tokens) {
+      var isColor = category === "brand" || category === "system" || category === "gray";
+      var withDarkMode = document.getElementById("darkModeCheckbox").checked;
+
+      var html = '<table class="token-table"><thead><tr>';
+      html += '<th>Name</th>';
+      html += '<th>Light Value</th>';
+      if (isColor) {
+        html += '<th>Light</th>';
+        if (withDarkMode) html += '<th>Dark (Auto)</th>';
+      }
+      html += '<th style="width: 30px;"></th>'; // Colonne actions
+      html += '</tr></thead><tbody>';
+
+      for (var key in tokens) {
+        if (tokens.hasOwnProperty(key)) {
+          html += '<tr>';
+          // Name Input
+          html += '<td><input type="text" class="table-input name-input" value="' + key + '" data-old-name="' + key + '"></td>';
+
+          // Value Input
+          html += '<td><input type="text" class="table-input value-input" value="' + tokens[key] + '" data-key="' + key + '"></td>';
+
+          if (isColor) {
+            // Light Preview
+            html += '<td><div class="color-swatch-wrapper">';
+            html += '<div class="color-swatch" style="background:' + tokens[key] + '"></div>';
+            html += '<input type="color" class="table-color-picker" value="' + tokens[key] + '" data-key="' + key + '">';
+            html += '</div></td>';
+
+            // Dark Preview (Calculated)
+            if (withDarkMode) {
+              var darkHex = getDarkHexUI(tokens[key], category, key);
+              html += '<td><div class="color-swatch-wrapper">';
+              html += '<div class="color-swatch" style="background:' + darkHex + '"></div>';
+              // No picker for dark mode yet (auto-calculated), or maybe read-only
+              html += '</div></td>';
+            }
+          }
+
+          // Delete Button
+          html += '<td><button class="icon-btn delete-btn" data-key="' + key + '" title="Remove token">×</button></td>';
+          html += '</tr>';
+        }
+      }
+
+      html += '</tbody></table>';
+      html += '<button class="btn-secondary btn-small" id="addTokenBtn">+ Add Token</button>';
+      return html;
+    }
+
+    function updatePreview() {
+      if (!currentTokens) return;
+
+      var categoryData = currentTokens[activeCategory];
+      if (categoryData) {
+        tokenPreview.innerHTML = renderTokenTable(activeCategory, categoryData);
+        attachTableListeners(); // Attacher les événements après le rendu
+      }
+    }
+
+    function attachTableListeners() {
+      // 1. Gestion des inputs (Nom et Valeur)
+      var inputs = tokenPreview.querySelectorAll('.table-input');
+      inputs.forEach(function (input) {
+        input.addEventListener('change', function (e) {
+          var key = e.target.getAttribute('data-key'); // Pour input valeur
+          var oldName = e.target.getAttribute('data-old-name'); // Pour input nom
+          var value = e.target.value;
+
+          if (key) {
+            // Mise à jour de la VALEUR
+            currentTokens[activeCategory][key] = value;
+            // Si c'est une couleur, on met à jour l'aperçu visuel sans tout recharger
+            if (activeCategory === "brand" || activeCategory === "system" || activeCategory === "gray") {
+              var row = e.target.closest('tr');
+              var swatch = row.querySelector('.color-swatch');
+              var picker = row.querySelector('.table-color-picker');
+              if (swatch) swatch.style.background = value;
+              if (picker) picker.value = value;
+            }
+            updateExport();
+          } else if (oldName) {
+            // Mise à jour du NOM (Renommage)
+            var newName = value;
+            if (newName && newName !== oldName) {
+              var newCategoryObj = {};
+              // On reconstruit l'objet pour garder l'ordre (approximatif)
+              for (var k in currentTokens[activeCategory]) {
+                if (k === oldName) {
+                  newCategoryObj[newName] = currentTokens[activeCategory][oldName];
+                } else {
+                  newCategoryObj[k] = currentTokens[activeCategory][k];
+                }
+              }
+              currentTokens[activeCategory] = newCategoryObj;
+              updatePreview(); // Re-render nécessaire pour mettre à jour les attributs data
+              updateExport();
+            }
+          }
+        });
+      });
+
+      // 2. Gestion du Color Picker
+      var colorPickers = tokenPreview.querySelectorAll('.table-color-picker');
+      colorPickers.forEach(function (picker) {
+        picker.addEventListener('input', function (e) {
+          var key = e.target.getAttribute('data-key');
+          var value = e.target.value.toUpperCase();
+
+          // Mise à jour du modèle
+          currentTokens[activeCategory][key] = value;
+
+          // Mise à jour UI immédiate
+          var row = e.target.closest('tr');
+          var textInput = row.querySelector('.value-input');
+          var swatch = row.querySelector('.color-swatch');
+
+          if (textInput) textInput.value = value;
+          if (swatch) swatch.style.background = value;
+
+          updateExport();
+        });
+      });
+
+      // 3. Gestion de la Suppression
+      var deleteBtns = tokenPreview.querySelectorAll('.delete-btn');
+      deleteBtns.forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+          var key = e.target.getAttribute('data-key');
+          delete currentTokens[activeCategory][key];
+          updatePreview();
+          updateExport();
+        });
+      });
+
+      // 4. Gestion de l'Ajout
+      var addBtn = document.getElementById('addTokenBtn');
+      if (addBtn) {
+        addBtn.addEventListener('click', function () {
+          var newKey = "new-token-" + Date.now().toString().slice(-4);
+          var newValue = "#000000";
+
+          // Valeurs par défaut selon la catégorie
+          if (activeCategory === "spacing" || activeCategory === "radius" || activeCategory === "border") newValue = "4px";
+          if (activeCategory === "typography") newValue = "16px";
+
+          currentTokens[activeCategory][newKey] = newValue;
+          updatePreview();
+          updateExport();
+
+          // Focus sur le nom du nouveau token
+          setTimeout(function () {
+            var newInputs = tokenPreview.querySelectorAll('.name-input');
+            if (newInputs.length > 0) newInputs[newInputs.length - 1].focus();
+          }, 50);
+        });
+      }
+    }
+
+    // Tab switching
+    var tabs = tokenTabs.querySelectorAll(".tab");
+    for (var i = 0; i < tabs.length; i++) {
+      tabs[i].addEventListener("click", function () {
+        // Remove active from all
+        for (var j = 0; j < tabs.length; j++) {
+          tabs[j].classList.remove("active");
+        }
+        // Add active to clicked
+        this.classList.add("active");
+        activeCategory = this.getAttribute("data-category");
+        updatePreview();
+      });
+    }
+
+    importBtn.addEventListener("click", function () {
+      var shouldOverwrite = overwriteCheckbox.checked;
+      var withDarkMode = document.getElementById("darkModeCheckbox").checked;
+      parent.postMessage({
+        pluginMessage: {
+          type: "import",
+          naming: currentNaming,
+          overwrite: shouldOverwrite,
+          withDarkMode: withDarkMode,
+          tokens: currentTokens // Pass the current tokens (whether generated or imported)
+        }
+      }, "*");
+    });
+
+    // ============================================
+    // MESSAGE HANDLER
+    // ============================================
+
+    window.onmessage = function (event) {
+      var msg = event.data.pluginMessage;
+      if (!msg) return;
+
+      if (msg.type === "tokens-generated") {
+        currentTokens = msg.tokens;
+        step1.classList.add("hidden");
+        step2.classList.remove("hidden");
+        updatePreview();
+        updateExport(); // Générer l'export initial
+      }
+    };
+
+    // ============================================
+    // DEV MODE LOGIC
+    // ============================================
+
+    tabDesigner.addEventListener("click", function () {
+      tabDesigner.classList.add("active");
+      tabDev.classList.remove("active");
+      designerView.classList.remove("hidden");
+      devView.classList.add("hidden");
+    });
+
+    tabDev.addEventListener("click", function () {
+      tabDev.classList.add("active");
+      tabDesigner.classList.remove("active");
+      devView.classList.remove("hidden");
+      designerView.classList.add("hidden");
+    });
+
+    exportFormat.addEventListener("change", updateExport);
+
+    copyBtn.addEventListener("click", function () {
+      exportOutput.select();
+      document.execCommand("copy");
+      var originalText = copyBtn.innerText;
+      copyBtn.innerText = "✅ Copied!";
+      setTimeout(function () {
+        copyBtn.innerText = originalText;
+      }, 2000);
+    });
+
+    function updateExport() {
+      if (!currentTokens) return;
+      var format = exportFormat.value;
+      var output = "";
+
+      if (format === "css") {
+        output = ":root {\n";
+        output += generateCSSVars(currentTokens);
+        output += "}";
+      } else if (format === "json") {
+        output = JSON.stringify(currentTokens, null, 2);
+      } else if (format === "tailwind") {
+        output = "module.exports = {\n  theme: {\n    extend: {\n";
+        output += "      colors: " + JSON.stringify(currentTokens.brand, null, 8) + ",\n";
+        output += "    }\n  }\n}";
+      } else if (format === "scss") {
+        output = generateSCSSVars(currentTokens);
+      }
+
+      exportOutput.value = output;
+    }
+
+    function generateCSSVars(tokens, prefix) {
+      var css = "";
+      for (var key in tokens) {
+        if (typeof tokens[key] === "object") {
+          css += generateCSSVars(tokens[key], key);
+        } else {
+          var varName = prefix ? "--" + prefix + "-" + key : "--" + key;
+          // Nettoyer le nom (remplacer . par -)
+          varName = varName.replace(/\./g, "-");
+          css += "  " + varName + ": " + tokens[key] + ";\n";
+        }
+      }
+      return css;
+    }
+
+    function generateSCSSVars(tokens, prefix) {
+      var scss = "";
+      for (var key in tokens) {
+        if (typeof tokens[key] === "object") {
+          scss += generateSCSSVars(tokens[key], key);
+        } else {
+          var varName = prefix ? "$" + prefix + "-" + key : "$" + key;
+          varName = varName.replace(/\./g, "-");
+          scss += varName + ": " + tokens[key] + ";\n";
+        }
+      }
+      return scss;
+    }
+
+    // Initialize
+    updateColorPreview(currentColor);
+  </script>
+</body>
+
+</html>
