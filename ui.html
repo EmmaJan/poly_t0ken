@@ -9,36 +9,77 @@
        POLYCEA THEME - Variables CSS
        ============================================ */
     :root {
-      /* Couleurs de base */
       --poly-bg: #07190F;
       --poly-surface: #0E2416;
       --poly-surface-soft: #122D1D;
-
-      /* Accent Polycea */
       --poly-accent: #8AD53F;
+      --poly-accent-rgb: 138, 213, 63;
       --poly-accent-hover: #A6E766;
-
-      /* Texte & bordures */
       --poly-text: #F9FAFB;
       --poly-text-muted: #9CA3AF;
       --poly-border-subtle: #1F3A25;
-
-      /* Sémantiques */
       --poly-success: #16A34A;
       --poly-info: #2563EB;
       --poly-warning: #F59E0B;
       --poly-error: #DC2626;
-
-      /* Design tokens */
       --poly-radius: 12px;
       --poly-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
       --poly-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.2);
-
       font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
 
     * {
       box-sizing: border-box;
+    }
+
+    /* ============================================
+       RESIZE HANDLE STYLES
+       ============================================ */
+
+    /* Fix scroll in scan results section */
+    #scanResultsList {
+      max-height: 400px;
+      overflow-y: auto;
+      padding-right: 8px; /* Space for scrollbar */
+    }
+
+    /* Custom scrollbar for scan results */
+    #scanResultsList::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    #scanResultsList::-webkit-scrollbar-track {
+      background: var(--poly-surface-soft);
+      border-radius: 3px;
+    }
+
+    #scanResultsList::-webkit-scrollbar-thumb {
+      background: var(--poly-accent);
+      border-radius: 3px;
+    }
+
+    #scanResultsList::-webkit-scrollbar-thumb:hover {
+      background: var(--poly-accent-hover);
+    }
+    #resize-handle {
+      opacity: 0.8;
+      transition: all 0.2s ease;
+    }
+
+    #resize-handle:hover {
+      opacity: 1;
+      transform: scale(1.1);
+    }
+
+    /* Prevent selection during resize */
+    .resizing * {
+      user-select: none !important;
+      cursor: nw-resize !important;
+    }
+
+    /* Prevent scroll during resize */
+    .resizing {
+      overflow: hidden !important;
     }
 
     body {
@@ -48,18 +89,21 @@
       color: var(--poly-text);
       font-size: 14px;
       line-height: 1.5;
+      position: relative; /* Pour le positionnement du handle de redimensionnement */
+      min-width: 400px;
+      min-height: 500px;
     }
 
     /* ============================================
-       APP LAYOUT - Structure principale
+       APP LAYOUT & HEADER
        ============================================ */
     .app {
-      min-height: 100vh;
+      height: 100vh;
       display: flex;
       flex-direction: column;
+      overflow: hidden;
     }
 
-    /* Header Refonte */
     .app-header {
       background: var(--poly-surface);
       border-bottom: 1px solid var(--poly-border-subtle);
@@ -68,94 +112,253 @@
       align-items: center;
       justify-content: space-between;
       min-height: 72px;
-      /* Hauteur minimale garantie */
-      box-sizing: border-box;
-      overflow: visible;
-      /* Empêche toute coupure */
+      flex-shrink: 0;
+      position: relative; /* Pour le debug si nécessaire */
+    }
+
+    .header-logo-section {
+      flex: 0 0 auto; /* Ne prend que l'espace nécessaire */
+      min-width: 0; /* Permet de réduire si nécessaire */
+      max-width: 60%; /* Maximum 60% de la largeur du header */
+      display: flex;
+      align-items: center;
+    }
+
+    .header-controls {
+      flex: 0 0 auto; /* Ne prend que l'espace nécessaire */
+      margin-left: auto; /* Pousse vers la droite */
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo {
+      height: 32px !important;
+      width: auto !important;
+      min-width: 0 !important;
+      object-fit: contain;
+      display: block;
+      flex-shrink: 0 !important;
     }
 
     .header-left {
       display: flex;
       align-items: center;
       gap: 8px;
-      /* Espacement demandé */
+      flex-shrink: 0;
     }
 
-    /* Logo Image */
-    .logo {
-      height: 40px;
-      /* Taille ajustée pour le logo carré */
-      width: auto;
-      object-fit: contain;
-      display: block;
-      border-radius: 8px;
-      /* Arrondi léger comme sur l'image */
-    }
 
-    .app-title h1 {
-      margin: 0;
-      font-size: 20px;
-      font-weight: 700;
-      color: var(--poly-text);
-    }
-
-    .app-title span {
-      font-size: 12px;
-      color: var(--poly-text-muted);
-      font-weight: 400;
-    }
-
-    /* App body - Zone scrollable unique */
+    /* App body - Unique Scrollable Zone logic handled by steps */
     .app-body {
+      display: flex;
+      flex-direction: column;
       flex: 1;
-      /* Prend toute la hauteur disponible */
-      overflow-y: auto;
-      /* Seul scroll de la page */
-      overflow-x: hidden;
+      height: 100%;
+      overflow: hidden;
       padding: 20px;
-      /* Au moins 20px sur tous les côtés */
-      padding-bottom: 80px;
-      /* Espace pour le footer sticky */
-    }
-
-    /* Scrollbar personnalisée pour app-body */
-    .app-body::-webkit-scrollbar {
-      width: 8px;
-    }
-
-    .app-body::-webkit-scrollbar-track {
-      background: transparent;
-    }
-
-    .app-body::-webkit-scrollbar-thumb {
-      background: var(--poly-border-subtle);
-      border-radius: 10px;
-    }
-
-    .app-body::-webkit-scrollbar-thumb:hover {
-      background: var(--poly-accent);
+      padding-bottom: 0 !important;
     }
 
     /* ============================================
-       CARDS & SECTIONS
+       WIZARD STEPS & CARDS (The Logic)
        ============================================ */
+    .wizard-step {
+      display: none;
+    }
+
+    /* DEFAULT STATE (Steps 0, 1, 2): Hug Content & Page Scroll */
+    .wizard-step.active {
+      display: flex;
+      flex-direction: column;
+      height: auto;
+      width: 100%;
+    }
+
+    /* Allow specific steps to scroll the page body */
+    #wizardStep0.active,
+    #wizardStep1.active,
+    #wizardStep2.active,
+    #wizardStep4.active {
+      overflow-y: auto;
+      height: 100%;
+      display: block;
+      padding-bottom: 120px;
+      /* Clear footer */
+    }
+
     .card {
+      display: flex;
+      flex-direction: column;
+      height: auto;
+      flex-grow: 0;
       background: var(--poly-surface-soft);
       padding: 20px;
       border-radius: var(--poly-radius);
       border: 1px solid var(--poly-border-subtle);
-      margin-bottom: 16px;
       box-shadow: var(--poly-shadow-sm);
+      margin-bottom: 20px;
     }
 
+    /* --- STEP 0: No borders for sections --- */
+    #wizardStep0 .card.choice-section {
+      border: none;
+      box-shadow: none;
+    }
+
+    /* --- No borders for correction cards --- */
+    .cleaning-result-card {
+      border: none;
+      box-shadow: none;
+    }
+
+
+    /* --- STEP 3 EXCEPTION: Full Height & Internal Scroll --- */
+    #wizardStep3.active {
+      height: 100%;
+      flex: 1;
+      overflow: hidden;
+      /* No outer scroll */
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    #wizardStep3 .card {
+      height: 100%;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      /* Allows children to shrink */
+      margin-bottom: 0;
+      border-bottom-left-radius: 0;
+      border-bottom-right-radius: 0;
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    /* ============================================
+       DESIGNER & DEV VIEWS (Step 3)
+       ============================================ */
+
+    /* Designer View (Token Table) */
+    #designerView {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+      /* CRITICAL for scroll */
+      overflow-y: auto;
+      /* Internal scroll */
+      padding: 0 4px 120px 0;
+      /* Bottom padding for footer */
+    }
+
+    /* Developer View (Code Editor) */
+    #devView {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      overflow: hidden;
+      gap: 0;
+      min-height: 0;
+      /* CRITICAL for scroll */
+    }
+
+    /* Spacing fixes for Dev View */
+    #devView h3 {
+      margin: 0 0 8px 0;
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--poly-text);
+    }
+
+    #devView p {
+      margin: 0 0 20px 0;
+      font-size: 13px;
+      color: var(--poly-text-muted);
+      line-height: 1.4;
+    }
+
+    #devView label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      color: var(--poly-text-muted);
+    }
+
+    #devView select {
+      margin-bottom: 16px;
+      width: 100%;
+    }
+
+    /* Code Editor Wrapper & Container */
+    .editor-wrapper {
+      position: relative;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border: 1px solid var(--poly-border-subtle);
+      border-radius: 8px;
+      min-height: 0;
+      /* CRITICAL for scroll */
+    }
+
+    .editor-container {
+      flex: 1;
+      background: #1E1E1E;
+      border: none;
+      border-radius: 0;
+      overflow: auto;
+      /* Internal Scroll */
+      padding: 16px 16px 120px 16px;
+      /* Huge bottom padding */
+      font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      color: #D4D4D4;
+      white-space: pre;
+      user-select: text;
+      cursor: text;
+    }
+
+    /* Syntax Highlighting */
+    .syn-key {
+      color: #9CDCFE;
+    }
+
+    .syn-string {
+      color: #CE9178;
+    }
+
+    .syn-number {
+      color: #B5CEA8;
+    }
+
+    .syn-comment {
+      color: #6A9955;
+    }
+
+    .syn-kwd {
+      color: #C586C0;
+    }
+
+    .syn-punc {
+      color: #D4D4D4;
+    }
+
+    /* ============================================
+       COMPONENTS (Inputs, Buttons, etc.)
+       ============================================ */
     .card h3 {
       margin: 0 0 16px;
       font-size: 15px;
       font-weight: 600;
       color: var(--poly-text);
-      display: flex;
-      align-items: center;
-      gap: 8px;
     }
 
     .card p {
@@ -164,18 +367,6 @@
       margin: 0 0 12px;
     }
 
-    .card code {
-      background: var(--poly-surface);
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-family: 'Monaco', 'Courier New', monospace;
-      font-size: 12px;
-      color: var(--poly-accent);
-    }
-
-    /* ============================================
-       FORM ELEMENTS
-       ============================================ */
     label {
       font-size: 12px;
       font-weight: 600;
@@ -207,17 +398,39 @@
       box-shadow: 0 0 0 3px rgba(138, 213, 63, 0.15);
     }
 
-    input[type="text"]::placeholder {
-      color: var(--poly-text-muted);
-      opacity: 0.6;
-    }
-
     /* Color Input Group */
     .color-input-group {
       display: flex;
       gap: 10px;
-      align-items: flex-start;
+      align-items: center;
+      /* Center alignment */
       margin-bottom: 14px;
+      width: 100%;
+    }
+
+    /* Middle Input Wrapper */
+    .color-input-wrapper {
+      flex: 1;
+      display: flex;
+    }
+
+    /* Force input to match height and remove margin inside group */
+    .color-input-group input[type="text"] {
+      margin-bottom: 0;
+      height: 48px;
+    }
+
+    /* Ensure button doesn't look weird */
+    .color-input-group button {
+      height: 48px;
+      width: auto !important;
+      /* Force auto width */
+      flex-shrink: 0;
+      margin: 0;
+      /* Remove default margins if any */
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     .color-preview {
@@ -246,7 +459,6 @@
       margin: 0;
       cursor: pointer;
       opacity: 0;
-      z-index: 10;
     }
 
     .color-preview-bg {
@@ -254,9 +466,7 @@
       height: 100%;
     }
 
-    /* ============================================
-       BUTTONS
-       ============================================ */
+    /* Buttons */
     button {
       background: var(--poly-accent);
       color: var(--poly-bg);
@@ -268,17 +478,11 @@
       font-weight: 600;
       cursor: pointer;
       transition: all 0.2s;
-      font-family: inherit;
     }
 
     button:hover {
       background: var(--poly-accent-hover);
       transform: translateY(-1px);
-      box-shadow: 0 4px 12px rgba(138, 213, 63, 0.3);
-    }
-
-    button:active {
-      transform: translateY(0);
     }
 
     button:disabled {
@@ -286,80 +490,106 @@
       color: var(--poly-text-muted);
       border: 1px solid var(--poly-border-subtle);
       cursor: not-allowed;
-      transform: none;
-      box-shadow: none;
       opacity: 0.6;
-    }
-
-    button:disabled:hover {
-      background: var(--poly-surface-soft);
       transform: none;
-      box-shadow: none;
     }
 
     .btn-secondary {
       background: var(--poly-surface);
       color: var(--poly-text);
       border: 1px solid var(--poly-border-subtle);
-      padding: 10px 14px;
-      width: auto;
     }
 
     .btn-secondary:hover {
       background: var(--poly-surface-soft);
       border-color: var(--poly-accent);
-      transform: translateY(-1px);
-      box-shadow: var(--poly-shadow-sm);
     }
 
-    .btn-small {
-      padding: 8px 12px;
-      font-size: 12px;
+    .btn-icon {
+      background: transparent;
+      border: none;
+      padding: 2px 6px;
+      cursor: pointer;
+      font-size: 14px;
+      opacity: 0.6;
       width: auto;
-      margin-top: 12px;
+    }
+
+    .btn-icon:hover {
+      opacity: 1;
+      color: var(--poly-error);
+    }
+
+    .btn-icon svg {
+      width: 16px;
+      height: 16px;
+      stroke-width: 2;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
       background: var(--poly-surface);
-      color: var(--poly-text);
-      border: 1px solid var(--poly-border-subtle);
+      padding: 4px;
+      border-radius: 10px;
     }
 
-    .btn-small:hover {
-      background: var(--poly-surface-soft);
-      border-color: var(--poly-accent);
-      transform: none;
-    }
-
-    .icon-btn {
+    .tab {
+      flex: 1;
+      padding: 8px 12px;
+      border-radius: 7px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      text-align: center;
+      border: none;
       background: transparent;
       color: var(--poly-text-muted);
-      border: none;
-      padding: 4px;
-      width: 24px;
-      height: 24px;
+    }
+
+    .tab.active {
+      background: var(--poly-surface-soft);
+      color: var(--poly-accent);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+
+    .tab:hover:not(.active),
+    .tab:focus:not(.active) {
+      color: var(--poly-accent);
+      background: rgba(138, 213, 63, 0.1);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Locked Banner */
+    .locked-banner {
+      margin-top: 16px;
+      padding: 12px 16px;
+      background: rgba(138, 213, 63, 0.1);
+      border: 1px solid rgba(138, 213, 63, 0.2);
+      border-radius: 8px;
       display: flex;
       align-items: center;
-      justify-content: center;
-      font-size: 18px;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: all 0.2s;
+      gap: 12px;
+      color: var(--poly-accent);
     }
 
-    .icon-btn:hover {
-      background: rgba(220, 38, 38, 0.1);
-      color: var(--poly-error);
-      transform: none;
-      box-shadow: none;
+    .locked-banner-text {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--poly-text);
+      line-height: 1.4;
     }
 
-    /* ============================================
-       MODE TOGGLE (Designer / Developer)
-       ============================================ */
-    .mode-toggle-container {
-      display: flex;
-      justify-content: flex-end;
-      margin-bottom: 16px;
+    .locked-banner-sub {
+      font-size: 11px;
+      color: var(--poly-text-muted);
+      display: block;
+      margin-top: 2px;
     }
 
+    /* Mode Toggle */
     .mode-toggle {
       display: inline-flex;
       background: var(--poly-surface);
@@ -378,68 +608,208 @@
       color: var(--poly-text-muted);
       border-radius: 4px;
       cursor: pointer;
-      transition: all 0.2s;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .mode-toggle-btn:hover:not(.active) {
-      background: rgba(18, 45, 29, 0.5);
-      color: var(--poly-accent);
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
     }
 
     .mode-toggle-btn.active {
       background: var(--poly-accent);
       color: var(--poly-bg);
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
     }
 
-    .mode-toggle.hidden {
-      display: none;
-    }
-
-    /* ============================================
-       TABS
-       ============================================ */
-    .tabs {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 12px;
-      background: var(--poly-surface);
-      padding: 4px;
-      border-radius: 10px;
-    }
-
-    .tab {
-      flex: 1;
-      padding: 8px 12px;
-      border-radius: 7px;
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: 500;
-      text-align: center;
-      transition: all 0.2s;
-      border: none;
-      background: transparent;
-      color: var(--poly-text-muted);
-    }
-
-    .tab.active {
-      background: var(--poly-surface-soft);
-      color: var(--poly-accent);
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-    }
-
-    .tab:hover:not(.active) {
-      background: rgba(18, 45, 29, 0.5);
+    .mode-toggle-btn:hover,
+    .mode-toggle-btn:focus {
+      background: rgba(138, 213, 63, 0.15);
       color: var(--poly-accent);
       box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
     }
 
-    /* ============================================
-       TOKEN TABLE
-       ============================================ */
+    .mode-toggle-btn.active:hover,
+    .mode-toggle-btn.active:focus {
+      background: var(--poly-accent-hover);
+      color: var(--poly-bg);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* Library Grid & Icons */
+    .library-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    /* --- LIBRARY CARD STYLES (Harmonized with Step 0) --- */
+
+    /* 1. The Container (Card) */
+    .library-option {
+      background: var(--poly-surface);
+      padding: 20px;
+      border-radius: var(--poly-radius);
+      border: 2px solid var(--poly-border-subtle);
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--poly-text);
+      min-height: 110px; /* Increased slightly for the circle */
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    /* 2. Hover on Card (Lift effect) */
+    .library-option:hover {
+      border-color: var(--poly-accent);
+      background: var(--poly-surface-soft);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+
+    .library-option.selected {
+      border-color: var(--poly-accent);
+      background: var(--poly-surface-soft);
+      color: var(--poly-accent);
+      box-shadow: 0 0 0 3px rgba(138, 213, 63, 0.15);
+    }
+
+    /* 3. The Icon (Circle Style) */
+    .library-option .icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      /* Dimensions (Match Step 0) */
+      width: 40px !important;
+      height: 40px !important;
+      min-width: 40px !important;
+      min-height: 40px !important;
+
+      /* Shape & Color */
+      border-radius: 50%;
+      background: var(--poly-surface-soft);
+      border: 1px solid var(--poly-border-subtle);
+      color: var(--poly-accent);
+
+      margin-bottom: 8px;
+      flex-shrink: 0 !important;
+      transition: all 0.2s ease;
+    }
+
+    /* 4. Hover on Icon (Invert Colors + Scale) */
+    .library-option:hover .icon,
+    .library-option.selected .icon {
+      background: var(--poly-accent);
+      border-color: var(--poly-accent);
+      color: var(--poly-bg) !important; /* Icon turns dark */
+      transform: scale(1.1);
+    }
+
+
+    /* Choice Grid (Vue 0) */
+    .choice-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .choice-card {
+      background: var(--poly-surface);
+      border: 1px solid var(--poly-border-subtle);
+      border-radius: 8px;
+      padding: 16px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
+      height: 100%;
+    }
+
+    .choice-card:hover {
+      border-color: var(--poly-accent);
+      background: var(--poly-surface-soft);
+    }
+
+    .choice-card.active {
+      border-color: var(--poly-accent);
+      background: rgba(138, 213, 63, 0.05);
+      box-shadow: 0 0 0 1px var(--poly-accent);
+    }
+
+    .choice-card .icon {
+      border-radius: 50%;
+      background: var(--poly-surface-soft);
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--poly-accent);
+      margin-bottom: 8px;
+      border: 1px solid var(--poly-border-subtle);
+    }
+
+    /* Hover and active effects for choice-card icons (make them dark) */
+    .choice-card:hover .icon,
+    .choice-card.active .icon {
+      background: var(--poly-accent);
+      border-color: var(--poly-accent);
+      color: var(--poly-bg) !important; /* Icon turns dark */
+      transform: scale(1.1);
+    }
+
+    .choice-card .icon svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    /* Sticky Footer */
+    .sticky-footer {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      width: 100%;
+      background: rgba(14, 36, 22, 0.95);
+      backdrop-filter: blur(8px);
+      border-top: 1px solid var(--poly-border-subtle);
+      padding: 12px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      z-index: 100;
+      box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.2);
+    }
+
+    .sticky-footer-content {
+      width: 100%;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .footer-signature {
+      font-size: 10px;
+      color: var(--poly-text-muted);
+      opacity: 0.7;
+    }
+
+    .footer-signature a {
+      color: var(--poly-accent-hover);
+      text-decoration: none;
+      border-bottom: 1px dotted var(--poly-text-muted);
+    }
+
+    /* Token Table */
     .token-table {
       width: 100%;
       border-collapse: collapse;
@@ -453,7 +823,6 @@
       font-weight: 600;
       color: var(--poly-text-muted);
       text-transform: uppercase;
-      letter-spacing: 0.5px;
       border-bottom: 2px solid var(--poly-border-subtle);
     }
 
@@ -476,37 +845,6 @@
       display: inline-block;
     }
 
-    .color-swatch-wrapper {
-      position: relative;
-      width: 20px;
-      height: 20px;
-      display: inline-block;
-      vertical-align: middle;
-    }
-
-    .table-color-picker {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      opacity: 0;
-      cursor: pointer;
-    }
-
-    .token-name {
-      font-family: 'Monaco', 'Courier New', monospace;
-      font-size: 11px;
-      color: var(--poly-text);
-    }
-
-    .token-value {
-      font-family: 'Monaco', 'Courier New', monospace;
-      font-size: 11px;
-      color: var(--poly-text-muted);
-    }
-
-    /* Editable table inputs */
     .table-input {
       width: 100%;
       border: 1px solid transparent;
@@ -518,103 +856,85 @@
       color: inherit;
     }
 
-    .table-input:hover {
-      border-color: var(--poly-border-subtle);
-      background: var(--poly-surface);
-    }
-
-    .table-input:focus {
-      border-color: var(--poly-accent);
-      background: var(--poly-surface);
-      outline: none;
-    }
-
-    /* ============================================
-       PREVIEW SECTION
-       ============================================ */
-    .preview-section {
-      padding-bottom: 8px;
-      /* Le scroll est géré par le container parent */
-    }
-
-    .add-token-sticky {
-      position: sticky;
-      bottom: 0;
-      left: 0;
-      width: 100%;
-      padding: 8px 0 0 0;
-      background: linear-gradient(to top, var(--poly-surface-soft) 85%, transparent);
-      margin-top: 8px;
-    }
-
-    /* ============================================
-       STEP INDICATOR
-       ============================================ */
-    .step-indicator {
-      text-align: center;
-      margin-bottom: 20px;
-      font-size: 12px;
+    .table-input.locked {
+      cursor: default;
+      pointer-events: none;
+      opacity: 1;
       color: var(--poly-text-muted);
-      font-weight: 500;
+      border: 1px solid transparent;
     }
 
-    .step-indicator span {
+    /* Animations */
+    @keyframes fadeInUp {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .token-table tr {
+      opacity: 0;
+      animation: fadeInUp 0.3s ease forwards;
+    }
+
+    .token-table tr:nth-child(1) {
+      animation-delay: 0.05s;
+    }
+
+    .token-table tr:nth-child(2) {
+      animation-delay: 0.1s;
+    }
+
+    .token-table tr:nth-child(3) {
+      animation-delay: 0.15s;
+    }
+
+    .token-table tr:nth-child(4) {
+      animation-delay: 0.2s;
+    }
+
+    .token-table tr:nth-child(5) {
+      animation-delay: 0.25s;
+    }
+
+    .token-table tr:nth-child(6) {
+      animation-delay: 0.3s;
+    }
+
+    .token-table tr:nth-child(7) {
+      animation-delay: 0.35s;
+    }
+
+    .token-table tr:nth-child(8) {
+      animation-delay: 0.4s;
+    }
+
+    .token-table tr:nth-child(9) {
+      animation-delay: 0.45s;
+    }
+
+    .token-table tr:nth-child(10) {
+      animation-delay: 0.5s;
+    }
+
+    /* Popular Badge */
+    .popular-badge {
       display: inline-block;
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      background: var(--poly-surface);
-      color: var(--poly-text-muted);
-      line-height: 28px;
-      margin: 0 6px;
-      font-weight: 600;
-      font-size: 13px;
-      border: 1px solid var(--poly-border-subtle);
-    }
-
-    .step-indicator span.active {
-      background: var(--poly-accent);
-      color: var(--poly-bg);
-      border-color: var(--poly-accent);
-    }
-
-    .step-indicator span.done {
-      background: var(--poly-success);
-      color: white;
-      border-color: var(--poly-success);
-    }
-
-    /* ============================================
-       STICKY FOOTER
-       ============================================ */
-    .sticky-footer {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      width: 100%;
-      background: rgba(14, 36, 22, 0.95);
-      backdrop-filter: blur(8px);
-      padding: 16px 20px;
-      border-top: 1px solid var(--poly-border-subtle);
-      display: flex;
-      gap: 10px;
-      box-sizing: border-box;
-      z-index: 100;
-    }
-
-    /* ============================================
-       FILE INFO
-       ============================================ */
-    .file-info {
-      margin-top: 12px;
-      padding: 10px 12px;
-      background: var(--poly-surface);
-      border-radius: 8px;
-      font-size: 13px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      border: 1px solid var(--poly-border-subtle);
+      padding: 3px 8px;
+      background: rgba(180, 220, 80, 0.2);
+      color: #B4DC50;
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      border-radius: 4px;
+      border: 1px solid rgba(180, 220, 80, 0.3);
+      line-height: 1.2;
     }
 
     .file-info:hover {
@@ -656,6 +976,343 @@
     input[type="checkbox"] {
       accent-color: var(--poly-accent);
       cursor: pointer;
+    }
+
+    /* ============================================
+       NOUVELLE INTERFACE NETTOYAGE - Hiérarchie claire
+       ============================================ */
+
+    /* Tableau de bord récapitulatif */
+    .cleaning-dashboard {
+      background: var(--poly-surface-soft);
+      border: 1px solid var(--poly-border-subtle);
+      border-radius: var(--poly-radius);
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: var(--poly-shadow-sm);
+    }
+
+    .dashboard-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .dashboard-stats {
+      display: flex;
+      gap: 16px;
+    }
+
+    .stat-item {
+      text-align: center;
+      min-width: 60px;
+    }
+
+    .stat-number {
+      display: block;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--poly-accent);
+      line-height: 1;
+    }
+
+    .stat-label {
+      font-size: 10px;
+      color: var(--poly-text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-top: 2px;
+    }
+
+    /* Onglets de nettoyage */
+    .cleaning-tabs {
+      background: var(--poly-surface);
+      padding: 4px;
+      border-radius: var(--poly-radius);
+      margin-bottom: 20px;
+    }
+
+    .tab-buttons {
+      display: flex;
+      gap: 4px;
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 8px 12px;
+      border-radius: 7px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      text-align: center;
+      border: none;
+      background: transparent;
+      color: var(--poly-text-muted);
+      transition: all 0.2s ease;
+    }
+
+    .tab-btn:hover:not(.active) {
+      background: var(--poly-surface-soft);
+      color: var(--poly-text);
+    }
+
+    .tab-btn.active {
+      background: var(--poly-surface-soft);
+      color: var(--poly-accent);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    }
+
+    /* Contenu des onglets */
+    .tab-content {
+      min-height: 200px;
+    }
+
+    .tab-pane {
+      display: none;
+    }
+
+    .tab-pane.active {
+      display: block;
+    }
+
+    /* En-têtes de section */
+    .section-header {
+      margin-bottom: 16px;
+    }
+
+    .section-header h5 {
+      margin: 0 0 4px 0;
+      color: var(--poly-text);
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .section-desc {
+      margin: 0;
+      font-size: 12px;
+      color: var(--poly-text-muted);
+      line-height: 1.4;
+    }
+
+    /* Actions groupées */
+    .bulk-actions {
+      margin-top: 16px;
+      padding: 16px;
+      background: var(--poly-surface-soft);
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .bulk-actions .btn-primary {
+      padding: 10px 20px;
+      font-size: 13px;
+    }
+
+    /* État vide pour les onglets */
+    .status-empty {
+      text-align: center;
+      padding: 40px 20px;
+      color: var(--poly-text-muted);
+    }
+
+    .status-empty span {
+      display: block;
+      margin-bottom: 8px;
+    }
+
+    /* Amélioration des cartes de résultats */
+    .cleaning-result-card {
+      display: flex;
+      align-items: center;
+      padding: 12px 16px;
+      background: var(--poly-surface-soft);
+      border: 1px solid var(--poly-border-subtle);
+      border-radius: var(--poly-radius);
+      box-shadow: var(--poly-shadow-sm);
+      transition: all 0.2s ease;
+    }
+
+    /* Conteneur de grille pour les cartes de nettoyage */
+    .cleaning-cards-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    /* Ajustements pour les cartes en grille */
+    .cleaning-cards-grid .cleaning-result-card {
+      margin-bottom: 0;
+    }
+
+    /* Responsive pour la grille */
+    @media (max-width: 600px) {
+      .cleaning-cards-grid {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+    }
+
+    .cleaning-result-card:hover {
+      background: rgba(255, 255, 255, 0.02);
+      border-color: var(--poly-accent);
+    }
+
+    .cleaning-result-card.auto-fixable {
+      border-left: 4px solid var(--poly-success);
+    }
+
+    .cleaning-result-card.manual-fix {
+      border-left: 4px solid var(--poly-warning);
+    }
+
+    /* Indicateurs de priorité */
+    .priority-indicator {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-right: 12px;
+    }
+
+    .priority-indicator.auto {
+      background: var(--poly-success);
+      color: white;
+    }
+
+    .priority-indicator.manual {
+      background: var(--poly-warning);
+      color: white;
+    }
+
+    /* Actions globales */
+    .global-actions {
+      background: var(--poly-surface-soft);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .global-actions .btn-outline {
+      border: 1px solid var(--poly-border-subtle);
+      background: transparent;
+      color: var(--poly-text);
+    }
+
+    .global-actions .btn-outline:hover {
+      background: var(--poly-surface);
+      border-color: var(--poly-accent);
+    }
+
+    /* Mini-swatches pour les couleurs */
+    .mini-swatch {
+      width: 16px;
+      height: 16px;
+      border-radius: 3px;
+      border: 1px solid var(--poly-border-subtle);
+      display: inline-block;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+
+    /* Indicateurs de statut pour les cartes */
+    .cleaning-result-card.ready-to-apply {
+      border-color: var(--poly-success);
+      background: rgba(22, 163, 74, 0.05);
+    }
+
+    /* Labels de propriétés */
+    .property-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--poly-accent);
+      background: var(--poly-surface);
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .cleaning-result-card.ready-to-apply .priority-indicator.manual {
+      background: var(--poly-success);
+      color: white;
+    }
+
+    /* Améliorations pour les sélecteurs manuels */
+    .manual-select {
+      transition: border-color 0.2s ease;
+    }
+
+    .manual-select:focus {
+      outline: none;
+      border-color: var(--poly-accent);
+      box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+    }
+
+    /* Animation pour les notifications */
+    @keyframes slideInRight {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    /* Boutons d'application individuels - largeur fixe */
+    .cleaning-result-card .btn-primary {
+      width: auto;
+      min-width: 80px;
+      max-width: 120px;
+      flex-shrink: 0;
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    /* Améliorations responsive */
+    @media (max-width: 600px) {
+      .dashboard-stats {
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+
+      .tab-buttons {
+        flex-wrap: wrap;
+      }
+
+      .tab-btn {
+        flex: 1;
+        min-width: 120px;
+        font-size: 12px;
+      }
+
+      .cleaning-result-card {
+        flex-direction: column;
+        gap: 12px;
+        align-items: flex-start;
+      }
+
+      .cleaning-result-card .btn-primary {
+        width: 100%;
+        max-width: none;
+      }
+
+      .global-actions {
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .global-actions .btn-secondary,
+      .global-actions .btn-primary {
+        width: 100%;
+      }
     }
 
     /* ============================================
@@ -760,8 +1417,20 @@
       display: none;
     }
 
+    /* 1. Allow the step container to shrink */
     .wizard-step.active {
-      display: block;
+      display: flex;
+      flex-direction: column;
+      /* REMOVED: flex: 1 and height: 100% */
+      height: auto;
+      width: 100%;
+    }
+
+    /* EXCEPTION: Step 3 (Dashboard) MUST be Full Height */
+    #wizardStep3.active {
+      height: 100%;
+      flex: 1;
+      overflow: hidden;
     }
 
     /* Cards de choix (Vue 0) */
@@ -770,6 +1439,52 @@
       grid-template-columns: repeat(2, 1fr);
       gap: 12px;
       margin-bottom: 20px;
+    }
+
+    /* Sections organisées */
+    .choice-section {
+      padding: 20px;
+      margin-bottom: 24px;
+      background: linear-gradient(135deg, var(--poly-surface) 0%, var(--poly-surface-soft) 100%);
+      border: 1px solid var(--poly-accent);
+      border-radius: var(--poly-radius);
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+    }
+
+    .choice-section:last-child {
+      margin-bottom: 0;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .section-icon {
+      font-size: 16px;
+      opacity: 0.8;
+    }
+
+    .section-title {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--poly-accent);
+      margin: 0;
+    }
+
+    /* Variations de couleur pour chaque section */
+    .section-create {
+      background: linear-gradient(135deg, rgba(10, 36, 22, 0.95) 0%, rgba(18, 45, 29, 0.95) 100%);
+      border-left: 3px solid var(--poly-accent);
+    }
+
+    .section-analyze {
+      background: linear-gradient(135deg, var(--poly-surface-soft) 0%, rgba(var(--poly-accent-rgb, 0.05), 0.05) 100%);
+      border-left: 3px solid #4ADE80;
     }
 
     .choice-card {
@@ -916,36 +1631,51 @@
       margin-top: 16px;
     }
 
-    .library-option {
-      background: var(--poly-surface);
-      padding: 20px;
-      border-radius: var(--poly-radius);
-      border: 2px solid var(--poly-border-subtle);
-      cursor: pointer;
-      transition: all 0.2s;
-      text-align: center;
-      font-weight: 600;
-      font-size: 14px;
-      color: var(--poly-text);
-      min-height: 90px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-    }
+    /* --- LIBRARY CARD STYLES (Harmonized with Step 0) --- */
 
-    .library-option:hover {
-      border-color: var(--poly-accent);
-      background: var(--poly-surface-soft);
-    }
 
-    .library-option.selected {
-      border-color: var(--poly-accent);
+/* Ajustement de l'SVG à l'intérieur */
+.library-option .icon svg {
+  width: 20px;
+  height: 20px;
+  display: block;
+  flex-shrink: 0;
+  /* On retire object-fit qui ne sert à rien sur un SVG inline */
+}
+
+/* Ajustement spécifique pour l'icône des variables (viewBox 90x104) */
+#choiceManageTokens .icon svg {
+  width: 18px;
+  height: 20px;
+}
+
+
+      /* Dimensions (Match Step 0) */
+      width: 40px !important;
+      height: 40px !important;
+      min-width: 40px !important;
+      min-height: 40px !important;
+
+      /* Shape & Color */
+      border-radius: 50%;
       background: var(--poly-surface-soft);
+      border: 1px solid var(--poly-border-subtle);
       color: var(--poly-accent);
-      box-shadow: 0 0 0 3px rgba(138, 213, 63, 0.15);
+
+      margin-bottom: 8px;
+      flex-shrink: 0 !important;
+      transition: all 0.2s ease;
     }
+
+    /* 4. Hover on Icon (Invert Colors + Scale) */
+    .library-option:hover .icon,
+    .library-option.selected .icon {
+      background: var(--poly-accent);
+      border-color: var(--poly-accent);
+      color: var(--poly-bg) !important; /* Icon turns dark */
+      transform: scale(1.1);
+    }
+
 
     .popular-badge {
       display: inline-block;
@@ -960,27 +1690,275 @@
       border: 1px solid rgba(180, 220, 80, 0.3);
       line-height: 1.2;
     }
+
+    /* ============================================
+       VARIABLE SELECTOR STYLES
+       ============================================ */
+
+    .variable-selector {
+      transition: all 0.2s ease;
+    }
+
+    .variable-selector:hover {
+      opacity: 0.9;
+    }
+
+    .variable-selector:focus {
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(138, 213, 63, 0.3);
+    }
+
+    .variable-badge.exact-match {
+      transition: all 0.2s ease;
+    }
+
+    .variable-badge.exact-match:hover {
+      opacity: 0.9;
+    }
+
+    /* ============================================
+       COMPACT TABLE STYLES - Scan Results UX
+       ============================================ */
+
+    /* Catégories Pliables */
+    details.category-group {
+      margin-bottom: 12px;
+      border: 1px solid var(--poly-border-subtle);
+      border-radius: 8px;
+      background: var(--poly-surface);
+      overflow: hidden;
+    }
+
+    summary.category-header {
+      padding: 12px 16px;
+      background: rgba(255, 255, 255, 0.03);
+      cursor: pointer;
+      font-weight: 600;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      list-style: none; /* Cache la flèche par défaut */
+    }
+
+    summary.category-header:hover { background: rgba(255, 255, 255, 0.05); }
+
+    /* Style pour les détails ouverts/fermés */
+    details.category-group summary::before {
+      content: "▶";
+      margin-right: 8px;
+      transition: transform 0.2s;
+      color: var(--poly-accent);
+    }
+
+    details.category-group[open] summary::before {
+      transform: rotate(90deg);
+    }
+
+    /* Cacher la flèche par défaut */
+    details.category-group summary::-webkit-details-marker {
+      display: none;
+    }
+
+    /* Lignes Compactes - Nouvelle structure Grid */
+    .compact-row {
+      display: grid;
+      grid-template-columns: 1.5fr 0.8fr 2fr 30px; /* Grille précise */
+      align-items: center;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--poly-border-subtle);
+      gap: 16px;
+      transition: background 0.1s;
+      margin-bottom: 8px;
+    }
+
+    .compact-row:hover {
+      background: var(--poly-surface-soft);
+    }
+
+    /* Colonne Problème (Valeur Actuelle) */
+    .col-problem {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: 'Monaco', monospace;
+      font-size: 12px;
+      color: var(--poly-text);
+    }
+
+
+    .value-display {
+      font-weight: bold;
+    }
+
+    .mini-swatch {
+      width: 16px;
+      height: 16px;
+      border-radius: 4px;
+      border: 1px solid var(--poly-border-subtle);
+      display: inline-block;
+    }
+
+    /* Colonne Flèche (Lien) */
+    .col-arrow {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      opacity: 0.6;
+    }
+
+    .arrow-symbol {
+      font-size: 14px;
+      color: var(--poly-text-muted);
+    }
+
+    .layer-count-badge {
+      font-size: 9px;
+      padding: 4px 8px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 4px;
+      cursor: inherit;
+      margin-top: 6px;
+      transition: all 0.2s;
+    }
+
+    .layer-count-badge:hover {
+      background: var(--poly-accent);
+      color: #000;
+    }
+
+    /* Colonne Solution (Variable) */
+    .col-solution {
+      display: flex;
+      align-items: center;
+      width: 100%;
+    }
+
+    .variable-pill {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 6px 10px;
+      background: rgba(138, 213, 63, 0.1);
+      border: 1px solid rgba(138, 213, 63, 0.3);
+      border-radius: 6px;
+      color: var(--poly-accent);
+      font-weight: 500;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .variable-pill:hover {
+      background: var(--poly-accent);
+      color: #000;
+    }
+
+    .variable-icon {
+      width: 12px;
+      height: 12px;
+      opacity: 0.7;
+    }
+
+    /* Selecteur en cas de conflit */
+    .conflict-select {
+      width: 100%;
+      padding: 6px 10px;
+      border-radius: 6px;
+      background: var(--poly-surface);
+      color: var(--poly-warning);
+      border: 1px solid var(--poly-warning);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+    }
+
+    .conflict-select:focus {
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3);
+    }
+
+    /* Bouton Ignorer (X) */
+    .btn-x {
+      background: transparent;
+      border: none;
+      color: var(--poly-text-muted);
+      cursor: pointer;
+      font-size: 14px;
+      padding: 2px;
+      border-radius: 4px;
+      transition: all 0.2s;
+    }
+
+    .btn-x:hover {
+      color: var(--poly-error);
+      background: rgba(239, 68, 68, 0.1);
+    }
+
+    /* Bouton Tout Corriger */
+    .btn-fix-all {
+      background: var(--poly-accent);
+      color: var(--poly-bg);
+      border: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-fix-all:hover {
+      background: var(--poly-accent-hover);
+      transform: translateY(-1px);
+    }
   </style>
 </head>
 
 <body>
   <div class="app">
     <!-- ============================================
-         HEADER avec logo Polycea
+         HEADER RECONÇU - Structure optimisée
+         - Logo dans section dédiée avec contraintes flexibles
+         - Contrôles séparés pour éviter les conflits d'espace
          ============================================ -->
-    <header class="app-header" style="flex-direction: row; align-items: center;">
-      <div class="header-left">
-        <!-- Logo PNG Base64 -->
-        <img
-          src="data:image/png;base64,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czQQo0gje7ztt1l1yf6dLBt7rEz+HERERN3JsKwY7XFuHNHAXv6MZzaI09YZ60Wr1X8rVW0ILsMrk6jrXLmcTO47f/lToDdCVE8bnJ3JypZuKGYjaQ21x2voN1FloUlERKFoFtjaJEX3TbqJSEmmltkg7gxZsNgntXHZctODd2v+UCbFxgghwrOXH/DYbU2wBFE/UuRDTzTzBRZy2AAtwdWeWeVua3kOGYYZw2+CagoWmkREFIDbF63LKsgnbFgk6s/pOWYfP64aW2TvwjiTemOGYKKGOmVU96ANvrT7kvhIpbfvU4Yf77Tf6iDlcE2q4nrOHmAcqT0OWWgS0Tbx3EdusA2lafXdSKu+dlXKdS/sd8URUUQKLubxkmWYRVGv202lj+7jXl2Cuh65VRSYddm8rpoMt5zvRWgdsGb5pN0liG56grwXbeh93FIwiCMiorC+QjuvGMQReTHwFEXoVaQY4bVX96CMyQw0V45oEC6QOsSw+7gl9jhgEEdERIHF8Ce9pnMQ0daS+OuhYjraHpod2a5Dbm5MW8OtSHkA9D78NkHeC3foNgsnIiIKosX8uAR5o+ICRLTNUii3DLnblEDmor38adW113aMNtHgXO/YPVsQzpFvpdFl1a8yCdgkUDzh5qpEtCMkT9PuM9Z2bjv5S+3xAvnwyqoyrCiPfgA3/CbaGXcyPPmvL3SdEerRnTaYW9rU32ACZI4cV78kH26rAVkERTZR9WnllIIyRV5QSoH5hr1vREQ0tLUtcy5YFhGF8/JDyLUm23Mr/C+06Rt75Aq//orj332OL+0rhOrZIBqM66F77g4pECWQM8gDOrOWXNJKAXnBeW9ERDQFLI+IdptvECfUgdyTA1w8O8OhDebeMZijbedaMjlEiIiIiIhG1SaIE5rFTn4jwdyvv+AQESvAREREREREnWR40iaIE16BnJBg7tEfcJBlqwm4RERERERE5CeNgMNHX+TTftrwDuQK336B4yhf5SoFERERERERNYpsh9jnn+Hg4f1u+3W3DuSE2zBcNl9+BSIiIiIiIqokG31L7PTQdogd3eu+T3enQE7IPnOP7mNuT+oeGNARERERERGtZBkupAduFcDdXx0JAlGvWtlEAjr7Y/79BywyrCbsyQaWBkRERERERLdFhPfRJX6wP998/jneh+h9qxIskCsUAZ38+7s/Y39vD/s2sIttFPrvWR7YGRAREREREU1Alq/70VokvW7RKlhLXSxERERERERERERERERERERERERERERERERERERENf4fTxhiB+nK8gEAAAAASUVORK5CYII="
-          alt="Polycea Logo" class="logo" />
-        <!-- Sous-titre uniquement -->
+    <header class="app-header">
+      <!-- Logo Section - Priorité haute -->
+      <div class="header-logo-section">
+        <svg xmlns="http://www.w3.org/2000/svg" width="329" height="36" viewBox="0 0 329 36" fill="none">
+          <path d="M1.48278 25.3976C1.48278 31.1143 5.81112 35.7461 11.1594 35.7461H17.022V30.4083H12.2736C9.06809 30.4083 7.03677 27.6275 7.03677 24.2009V20.6711L4.16549 17.8731L7.03677 15.075V11.5452C7.03677 8.11864 9.06809 5.33781 12.2736 5.33781L17.022 5.33781V5.1252e-07L11.1594 0C5.8197 -4.66813e-07 1.48278 4.63184 1.48278 10.3485L1.48278 12.7419L6.27715e-07 14.2916L0 21.4718L1.48278 23.0215L1.48278 25.4149V25.3976Z" fill="#96D700"/>
+          <path d="M22.9807 27.3276C21.3063 27.3276 19.9595 26.6997 18.9403 25.4438C17.9392 24.1698 17.4387 22.4317 17.4387 20.2294C17.4387 18.7552 17.7026 17.4902 18.2304 16.4346C18.7765 15.379 19.4772 14.5691 20.3326 14.0049C21.2062 13.4225 22.1162 13.1313 23.0626 13.1313C23.8089 13.1313 24.4368 13.2587 24.9464 13.5135C25.456 13.7683 25.9383 14.1141 26.3933 14.5509L26.2295 12.476V7.86224H30.2427V27H26.9666L26.6936 25.6622H26.5844C26.1112 26.1354 25.5561 26.5358 24.9191 26.8635C24.2821 27.1729 23.636 27.3276 22.9807 27.3276ZM24.0182 24.0515C24.455 24.0515 24.8554 23.9605 25.2194 23.7785C25.5834 23.5965 25.9201 23.278 26.2295 22.823V17.2809C25.8837 16.9533 25.5197 16.7258 25.1375 16.5984C24.7553 16.471 24.3731 16.4073 23.9909 16.4073C23.5541 16.4073 23.1536 16.5438 22.7896 16.8168C22.4256 17.0898 22.1253 17.5085 21.8887 18.0727C21.6703 18.6187 21.5611 19.3194 21.5611 20.1748C21.5611 21.5034 21.7795 22.4863 22.2163 23.1233C22.6531 23.7421 23.2538 24.0515 24.0182 24.0515Z" fill="white"/>
+          <path d="M39.8591 27.3276C38.5669 27.3276 37.4021 27.0455 36.3646 26.4812C35.3272 25.917 34.5082 25.1071 33.9076 24.0515C33.307 22.9959 33.0067 21.7218 33.0067 20.2294C33.0067 18.7552 33.307 17.4902 33.9076 16.4346C34.5264 15.379 35.3272 14.5691 36.31 14.0049C37.2929 13.4225 38.3212 13.1313 39.395 13.1313C40.6872 13.1313 41.7611 13.4225 42.6165 14.0049C43.4719 14.5691 44.1089 15.3426 44.5275 16.3254C44.9461 17.3082 45.1554 18.4094 45.1554 19.6288C45.1554 19.9746 45.1372 20.3204 45.1008 20.6662C45.0644 20.9938 45.028 21.2577 44.9916 21.4579H36.1189L36.0643 18.6733H41.7156C41.7156 17.9635 41.5427 17.381 41.1969 16.926C40.851 16.4528 40.2777 16.2162 39.4769 16.2162C39.0401 16.2162 38.6124 16.3345 38.1938 16.5711C37.7752 16.8077 37.4294 17.2172 37.1564 17.7997C36.8834 18.3821 36.756 19.192 36.7742 20.2294C36.7924 21.2486 36.9744 22.0494 37.3202 22.6319C37.6842 23.2143 38.1392 23.6329 38.6852 23.8877C39.2312 24.1243 39.8045 24.2426 40.4051 24.2426C40.9329 24.2426 41.4335 24.1698 41.9067 24.0242C42.3981 23.8604 42.8804 23.642 43.3536 23.369L44.664 25.826C43.9906 26.2992 43.2262 26.6724 42.3708 26.9454C41.5154 27.2002 40.6781 27.3276 39.8591 27.3276Z" fill="white"/>
+          <path d="M51.9145 27.3276C51.0226 27.3276 50.1035 27.1547 49.1571 26.8089C48.2107 26.463 47.4008 25.9625 46.7274 25.3073L48.42 23.0414C49.0388 23.5328 49.6485 23.8786 50.2491 24.0788C50.8679 24.2608 51.4595 24.3518 52.0237 24.3518C52.6243 24.3518 53.0611 24.2517 53.3341 24.0515C53.6071 23.8331 53.7436 23.551 53.7436 23.2052C53.7436 22.8958 53.6162 22.641 53.3614 22.4408C53.1248 22.2406 52.8063 22.0677 52.4059 21.922C52.0237 21.7582 51.5869 21.5853 51.0954 21.4033C50.4402 21.1667 49.8396 20.8664 49.2936 20.5024C48.7476 20.1384 48.3017 19.7016 47.9559 19.192C47.6283 18.6824 47.4645 18.0727 47.4645 17.3628C47.4645 16.0888 47.9377 15.0696 48.8841 14.3052C49.8487 13.5226 51.1045 13.1313 52.6516 13.1313C53.6344 13.1313 54.5262 13.2951 55.327 13.6227C56.1461 13.9321 56.8468 14.3416 57.4292 14.8512L55.7092 17.0898C55.2178 16.744 54.7264 16.4983 54.235 16.3527C53.7436 16.1889 53.2613 16.107 52.7881 16.107C52.2603 16.107 51.869 16.2071 51.6142 16.4073C51.3594 16.6075 51.232 16.8623 51.232 17.1717C51.232 17.4265 51.323 17.645 51.505 17.827C51.687 18.009 51.96 18.1819 52.324 18.3457C52.7062 18.4913 53.1794 18.6551 53.7436 18.8371C54.4352 19.0737 55.0631 19.374 55.6273 19.738C56.2098 20.0838 56.6648 20.5206 56.9924 21.0484C57.32 21.5762 57.4838 22.2133 57.4838 22.9595C57.4838 23.7785 57.2654 24.5156 56.8286 25.1708C56.41 25.826 55.7912 26.3538 54.9721 26.7543C54.1531 27.1365 53.1339 27.3276 51.9145 27.3276Z" fill="white"/>
+          <path d="M60.0326 27V13.4589H64.0457V27H60.0326ZM62.0255 11.4659C61.3521 11.4659 60.8061 11.2748 60.3875 10.8926C59.9689 10.5104 59.7595 10.0008 59.7595 9.36377C59.7595 8.72676 59.9689 8.21715 60.3875 7.83494C60.8061 7.45273 61.3521 7.26163 62.0255 7.26163C62.6989 7.26163 63.2449 7.45273 63.6635 7.83494C64.0821 8.21715 64.2914 8.72676 64.2914 9.36377C64.2914 10.0008 64.0821 10.5104 63.6635 10.8926C63.2449 11.2748 62.6989 11.4659 62.0255 11.4659Z" fill="white"/>
+          <path d="M72.4097 32.7604C71.3541 32.7604 70.3895 32.633 69.5159 32.3782C68.6605 32.1416 67.978 31.7685 67.4683 31.2589C66.9769 30.7674 66.7312 30.1213 66.7312 29.3205C66.7312 28.7563 66.895 28.2467 67.2226 27.7917C67.5684 27.3367 68.0507 26.9363 68.6696 26.5904V26.4812C68.3238 26.2446 68.0234 25.9443 67.7686 25.5803C67.532 25.1981 67.4137 24.734 67.4137 24.188C67.4137 23.6966 67.5593 23.2325 67.8505 22.7957C68.1418 22.3407 68.5058 21.9584 68.9426 21.649V21.5398C68.4512 21.2122 68.0234 20.739 67.6594 20.1202C67.2954 19.5014 67.1134 18.8007 67.1134 18.0181C67.1134 16.9442 67.3773 16.0433 67.9051 15.3153C68.433 14.5873 69.1246 14.0413 69.98 13.6773C70.8354 13.3133 71.7454 13.1313 72.7101 13.1313C73.0923 13.1313 73.4563 13.1586 73.8021 13.2132C74.1661 13.2678 74.5028 13.3497 74.8122 13.4589H79.7536V16.38H77.4877V16.4892C77.6697 16.7258 77.8062 16.9897 77.8972 17.2809C77.9882 17.554 78.0337 17.8634 78.0337 18.2092C78.0337 19.2284 77.7971 20.0747 77.3239 20.7481C76.8506 21.4033 76.2045 21.8947 75.3855 22.2224C74.5847 22.55 73.6929 22.7138 72.7101 22.7138C72.4734 22.7138 72.2186 22.6956 71.9456 22.6592C71.6726 22.6046 71.3814 22.5318 71.072 22.4408C70.9082 22.5864 70.7808 22.732 70.6898 22.8776C70.617 23.0232 70.5806 23.2143 70.5806 23.4509C70.5806 23.7785 70.7353 24.0333 71.0447 24.2153C71.3541 24.3791 71.8819 24.461 72.6281 24.461H74.8122C76.4866 24.461 77.7607 24.734 78.6343 25.28C79.5261 25.8078 79.972 26.6814 79.972 27.9009C79.972 28.8291 79.6626 29.6572 79.0438 30.3852C78.425 31.1314 77.5514 31.7139 76.4229 32.1325C75.2945 32.5511 73.9568 32.7604 72.4097 32.7604ZM72.7101 20.284C73.0741 20.284 73.3926 20.2021 73.6656 20.0383C73.9386 19.8563 74.157 19.6015 74.3208 19.2739C74.4846 18.9463 74.5665 18.5277 74.5665 18.0181C74.5665 17.29 74.3845 16.744 74.0205 16.38C73.6747 16.016 73.2379 15.834 72.7101 15.834C72.1822 15.834 71.7363 16.016 71.3723 16.38C71.0265 16.744 70.8536 17.29 70.8536 18.0181C70.8536 18.5277 70.9355 18.9463 71.0993 19.2739C71.2813 19.6015 71.5088 19.8563 71.7818 20.0383C72.0548 20.2021 72.3642 20.284 72.7101 20.284ZM73.0377 30.2487C73.6383 30.2487 74.1661 30.1759 74.6211 30.0303C75.0943 29.8847 75.4674 29.6845 75.7404 29.4297C76.0134 29.1749 76.1499 28.8928 76.1499 28.5834C76.1499 28.1466 75.9679 27.8554 75.6039 27.7098C75.2399 27.5824 74.7303 27.5187 74.0751 27.5187H72.6827C72.2095 27.5187 71.8273 27.5005 71.5361 27.4641C71.2631 27.4459 71.0083 27.4095 70.7717 27.3549C70.5169 27.5733 70.3258 27.7826 70.1984 27.9828C70.0892 28.2012 70.0346 28.4378 70.0346 28.6926C70.0346 29.2022 70.3076 29.5844 70.8536 29.8392C71.4178 30.1122 72.1458 30.2487 73.0377 30.2487Z" fill="white"/>
+          <path d="M82.161 27V13.4589H85.437L85.71 15.1788H85.8192C86.3835 14.6146 87.0205 14.1323 87.7303 13.7319C88.4401 13.3315 89.25 13.1313 90.16 13.1313C91.6525 13.1313 92.7263 13.6227 93.3815 14.6055C94.0367 15.5701 94.3643 16.8987 94.3643 18.5914V27H90.3511V19.1101C90.3511 18.1273 90.2146 17.4538 89.9416 17.0898C89.6868 16.7258 89.2682 16.5438 88.6858 16.5438C88.1762 16.5438 87.7394 16.6621 87.3754 16.8987C87.0114 17.1171 86.611 17.4356 86.1741 17.8543V27H82.161Z" fill="white"/>
+          <path d="M107.208 24.4337V19.4104H102.403V16.5711H107.208V11.5478H110.157V16.5711H114.962V19.4104H110.157V24.4337H107.208Z" fill="#96D700"/>
+          <path d="M127.971 27.3276C126.296 27.3276 124.949 26.6997 123.93 25.4438C122.929 24.1698 122.429 22.4317 122.429 20.2294C122.429 18.7552 122.693 17.4902 123.22 16.4346C123.766 15.379 124.467 14.5691 125.323 14.0049C126.196 13.4225 127.106 13.1313 128.053 13.1313C128.799 13.1313 129.427 13.2587 129.936 13.5135C130.446 13.7683 130.928 14.1141 131.383 14.5509L131.219 12.476V7.86224H135.233V27H131.957L131.684 25.6622H131.574C131.101 26.1354 130.546 26.5358 129.909 26.8635C129.272 27.1729 128.626 27.3276 127.971 27.3276ZM129.008 24.0515C129.445 24.0515 129.845 23.9605 130.209 23.7785C130.573 23.5965 130.91 23.278 131.219 22.823V17.2809C130.874 16.9533 130.51 16.7258 130.127 16.5984C129.745 16.471 129.363 16.4073 128.981 16.4073C128.544 16.4073 128.144 16.5438 127.78 16.8168C127.416 17.0898 127.115 17.5085 126.879 18.0727C126.66 18.6187 126.551 19.3194 126.551 20.1748C126.551 21.5034 126.769 22.4863 127.206 23.1233C127.643 23.7421 128.244 24.0515 129.008 24.0515Z" fill="white"/>
+          <path d="M144.849 27.3276C143.557 27.3276 142.392 27.0455 141.355 26.4812C140.317 25.917 139.498 25.1071 138.898 24.0515C138.297 22.9959 137.997 21.7218 137.997 20.2294C137.997 18.7552 138.297 17.4902 138.898 16.4346C139.516 15.379 140.317 14.5691 141.3 14.0049C142.283 13.4225 143.311 13.1313 144.385 13.1313C145.677 13.1313 146.751 13.4225 147.606 14.0049C148.462 14.5691 149.099 15.3426 149.518 16.3254C149.936 17.3082 150.145 18.4094 150.145 19.6288C150.145 19.9746 150.127 20.3204 150.091 20.6662C150.054 20.9938 150.018 21.2577 149.982 21.4579H141.109L141.054 18.6733H146.706C146.706 17.9635 146.533 17.381 146.187 16.926C145.841 16.4528 145.268 16.2162 144.467 16.2162C144.03 16.2162 143.602 16.3345 143.184 16.5711C142.765 16.8077 142.419 17.2172 142.146 17.7997C141.873 18.3821 141.746 19.192 141.764 20.2294C141.782 21.2486 141.964 22.0494 142.31 22.6319C142.674 23.2143 143.129 23.6329 143.675 23.8877C144.221 24.1243 144.795 24.2426 145.395 24.2426C145.923 24.2426 146.423 24.1698 146.897 24.0242C147.388 23.8604 147.87 23.642 148.344 23.369L149.654 25.826C148.981 26.2992 148.216 26.6724 147.361 26.9454C146.505 27.2002 145.668 27.3276 144.849 27.3276Z" fill="white"/>
+          <path d="M155.871 27L151.312 13.4589H155.352L157.099 19.8472C157.281 20.5206 157.454 21.2031 157.618 21.8947C157.8 22.5864 157.982 23.2962 158.164 24.0242H158.273C158.437 23.2962 158.61 22.5864 158.792 21.8947C158.974 21.2031 159.147 20.5206 159.311 19.8472L161.085 13.4589H164.935L160.512 27H155.871Z" fill="white"/>
+          <path d="M171.668 16.2435V13.4043H184.226V16.2435H171.668ZM171.668 22.5773V19.738H184.226V22.5773H171.668Z" fill="#96D700"/>
+          <path d="M192.731 27V9.19997H198.846C200.156 9.19997 201.34 9.38197 202.395 9.74598C203.469 10.0918 204.324 10.6833 204.961 11.5205C205.598 12.3577 205.917 13.4953 205.917 14.9331C205.917 16.3163 205.598 17.4538 204.961 18.3457C204.324 19.2375 203.478 19.9018 202.422 20.3386C201.367 20.7572 200.211 20.9665 198.955 20.9665H196.744V27H192.731ZM196.744 17.7724H198.71C199.82 17.7724 200.639 17.5267 201.167 17.0352C201.713 16.5438 201.986 15.8431 201.986 14.9331C201.986 13.9867 201.694 13.3315 201.112 12.9675C200.53 12.5852 199.692 12.3941 198.6 12.3941H196.744V17.7724Z" fill="white"/>
+          <path d="M213.895 27.3276C212.748 27.3276 211.674 27.0546 210.673 26.5085C209.672 25.9443 208.853 25.1344 208.216 24.0788C207.597 23.005 207.288 21.7218 207.288 20.2294C207.288 18.737 207.597 17.463 208.216 16.4073C208.853 15.3335 209.672 14.5236 210.673 13.9776C211.674 13.4134 212.748 13.1313 213.895 13.1313C215.023 13.1313 216.088 13.4134 217.089 13.9776C218.09 14.5236 218.9 15.3335 219.519 16.4073C220.156 17.463 220.474 18.737 220.474 20.2294C220.474 21.7218 220.156 23.005 219.519 24.0788C218.9 25.1344 218.09 25.9443 217.089 26.5085C216.088 27.0546 215.023 27.3276 213.895 27.3276ZM213.895 24.0788C214.441 24.0788 214.896 23.9241 215.26 23.6147C215.642 23.3053 215.924 22.8594 216.106 22.277C216.288 21.6945 216.379 21.012 216.379 20.2294C216.379 19.4468 216.288 18.7643 216.106 18.1819C215.924 17.5995 215.642 17.1535 215.26 16.8441C214.896 16.5347 214.441 16.38 213.895 16.38C213.33 16.38 212.866 16.5347 212.502 16.8441C212.138 17.1535 211.865 17.5995 211.683 18.1819C211.501 18.7643 211.41 19.4468 211.41 20.2294C211.41 21.012 211.501 21.6945 211.683 22.277C211.865 22.8594 212.138 23.3053 212.502 23.6147C212.866 23.9241 213.33 24.0788 213.895 24.0788Z" fill="white"/>
+          <path d="M226.908 27.3003C225.998 27.3003 225.27 27.1183 224.724 26.7543C224.197 26.372 223.814 25.8442 223.578 25.1708C223.341 24.4792 223.223 23.6784 223.223 22.7684V7.88954H227.236V22.9322C227.236 23.369 227.309 23.6693 227.455 23.8331C227.618 23.9787 227.791 24.0515 227.973 24.0515C228.046 24.0515 228.11 24.0515 228.164 24.0515C228.237 24.0333 228.328 24.0151 228.437 23.9969L228.929 26.9727C228.71 27.0637 228.428 27.1365 228.082 27.1911C227.755 27.2639 227.363 27.3003 226.908 27.3003Z" fill="white"/>
+          <path d="M232.536 32.2963C232.136 32.2963 231.781 32.269 231.471 32.2144C231.18 32.1598 230.898 32.0779 230.625 31.9687L231.335 29.0202C231.535 29.0748 231.699 29.1021 231.826 29.1021C231.972 29.1203 232.108 29.1294 232.236 29.1294C232.909 29.1294 233.428 28.9565 233.792 28.6107C234.174 28.2831 234.447 27.8645 234.611 27.3549L234.802 26.6451L229.588 13.4589H233.628L235.566 19.2739C235.767 19.8927 235.949 20.5206 236.112 21.1576C236.276 21.7946 236.449 22.4499 236.631 23.1233H236.74C236.886 22.4863 237.032 21.8492 237.177 21.2122C237.341 20.557 237.505 19.9109 237.669 19.2739L239.307 13.4589H243.156L238.46 27.1365C238.023 28.2649 237.55 29.2113 237.041 29.9757C236.549 30.7401 235.94 31.3135 235.211 31.6957C234.502 32.0961 233.61 32.2963 232.536 32.2963Z" fill="white"/>
+          <path d="M250.486 27.3003C248.811 27.3003 247.61 26.818 246.882 25.8533C246.154 24.8705 245.79 23.6056 245.79 22.0585V16.5984H243.961V13.6227L246.036 13.4589L246.5 9.30917H249.831V13.4589H253.079V16.5984H249.831V22.0039C249.831 22.7684 249.985 23.3235 250.295 23.6693C250.622 23.9969 251.05 24.1607 251.578 24.1607C251.796 24.1607 252.015 24.1425 252.233 24.1061C252.451 24.0697 252.661 24.0151 252.861 23.9423L253.516 26.7543C253.17 26.8999 252.734 27.0273 252.206 27.1365C251.696 27.2457 251.123 27.3003 250.486 27.3003Z" fill="white"/>
+          <path d="M261.155 27.3276C259.299 27.3276 257.797 26.554 256.651 25.007C255.522 23.46 254.958 21.2122 254.958 18.2638C254.958 15.2971 255.522 13.0676 256.651 11.5751C257.797 10.0827 259.299 9.33647 261.155 9.33647C263.012 9.33647 264.504 10.0918 265.632 11.6024C266.779 13.0949 267.352 15.3153 267.352 18.2638C267.352 21.2122 266.779 23.46 265.632 25.007C264.504 26.554 263.012 27.3276 261.155 27.3276ZM261.155 24.2153C261.61 24.2153 262.02 24.0515 262.384 23.7239C262.748 23.3781 263.03 22.7775 263.23 21.922C263.448 21.0484 263.558 19.829 263.558 18.2638C263.558 16.6803 263.448 15.47 263.23 14.6328C263.03 13.7956 262.748 13.2223 262.384 12.9129C262.02 12.6034 261.61 12.4487 261.155 12.4487C260.7 12.4487 260.291 12.6034 259.927 12.9129C259.563 13.2223 259.271 13.7956 259.053 14.6328C258.853 15.47 258.753 16.6803 258.753 18.2638C258.753 19.829 258.853 21.0484 259.053 21.922C259.271 22.7775 259.563 23.3781 259.927 23.7239C260.291 24.0515 260.7 24.2153 261.155 24.2153Z" fill="white"/>
+          <path d="M270.146 27V7.86224H274.104V18.7825H274.214L278.418 13.4589H282.813L278.118 19.0828L283.168 27H278.827L275.77 21.7309L274.104 23.6147V27H270.146Z" fill="white"/>
+          <path d="M290.39 27.3276C289.098 27.3276 287.933 27.0455 286.896 26.4812C285.858 25.917 285.039 25.1071 284.439 24.0515C283.838 22.9959 283.538 21.7218 283.538 20.2294C283.538 18.7552 283.838 17.4902 284.439 16.4346C285.057 15.379 285.858 14.5691 286.841 14.0049C287.824 13.4225 288.852 13.1313 289.926 13.1313C291.218 13.1313 292.292 13.4225 293.147 14.0049C294.003 14.5691 294.64 15.3426 295.058 16.3254C295.477 17.3082 295.686 18.4094 295.686 19.6288C295.686 19.9746 295.668 20.3204 295.632 20.6662C295.595 20.9938 295.559 21.2577 295.523 21.4579H286.65L286.595 18.6733H292.246C292.246 17.9635 292.074 17.381 291.728 16.926C291.382 16.4528 290.809 16.2162 290.008 16.2162C289.571 16.2162 289.143 16.3345 288.725 16.5711C288.306 16.8077 287.96 17.2172 287.687 17.7997C287.414 18.3821 287.287 19.192 287.305 20.2294C287.323 21.2486 287.505 22.0494 287.851 22.6319C288.215 23.2143 288.67 23.6329 289.216 23.8877C289.762 24.1243 290.335 24.2426 290.936 24.2426C291.464 24.2426 291.964 24.1698 292.438 24.0242C292.929 23.8604 293.411 23.642 293.885 23.369L295.195 25.826C294.522 26.2992 293.757 26.6724 292.902 26.9454C292.046 27.2002 291.209 27.3276 290.39 27.3276Z" fill="white"/>
+          <path d="M298.46 27V13.4589H301.736L302.009 15.1788H302.118C302.682 14.6146 303.319 14.1323 304.029 13.7319C304.739 13.3315 305.549 13.1313 306.459 13.1313C307.951 13.1313 309.025 13.6227 309.68 14.6055C310.335 15.5701 310.663 16.8987 310.663 18.5914V27H306.65V19.1101C306.65 18.1273 306.513 17.4538 306.24 17.0898C305.985 16.7258 305.567 16.5438 304.984 16.5438C304.475 16.5438 304.038 16.6621 303.674 16.8987C303.31 17.1171 302.91 17.4356 302.473 17.8543V27H298.46Z" fill="white"/>
+          <path d="M327.388 10.5051C327.388 4.78846 323.059 0.156621 317.711 0.156621H311.848V5.49443H316.597C319.802 5.49443 321.834 8.27526 321.834 11.7018V15.2316L324.705 18.0297L321.834 20.8277V24.3576C321.834 27.7841 319.802 30.5649 316.597 30.5649H311.848V35.9027H317.711C323.051 35.9027 327.388 31.2709 327.388 25.5543V23.1609L328.87 21.6112V14.431L327.388 12.8813V10.4879V10.5051Z" fill="#96D700"/>
+        </svg>
       </div>
 
-      <!-- Mode Toggle (Designer / Developer) - Masqué par défaut -->
-      <div class="mode-toggle hidden" id="modeToggle">
-        <button class="mode-toggle-btn active" id="modeDesigner">Designer</button>
-        <button class="mode-toggle-btn" id="modeDev">Developer</button>
+      <!-- Controls Section - Priorité basse -->
+      <div class="header-controls">
+        <!-- Mode Toggle (Designer / Developer) - Masqué par défaut -->
+        <div class="mode-toggle hidden" id="modeToggle">
+          <button class="mode-toggle-btn active" id="modeDesigner">Designer</button>
+          <button class="mode-toggle-btn" id="modeDev">Developer</button>
+        </div>
       </div>
     </header>
 
@@ -994,52 +1972,84 @@
            ============================================ -->
       <div id="wizardStep0" class="wizard-step active">
         <div class="card">
-          <h3 style="margin-bottom: 4px;">Le plugin made in Polycea pour déclarer nos tokens design</h3>
-          <p style="margin-bottom: 20px;">Choisissez comment vous souhaitez commencer :</p>
+          <h3 style="margin-bottom: 4px;">Générez, importez et synchronisez vos variables Figma avec votre code
+          </h3>
+          <p style="margin-bottom: 24px;">Choisissez comment vous souhaitez commencer :</p>
 
-          <div class="choice-grid">
-            <!-- Option A: Créer un nouveau système -->
-            <div class="choice-card" id="choiceNewSystem">
-              <span class="icon">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path
-                    d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
-                </svg>
+          <!-- Section 1: CRÉER & IMPORTER -->
+          <div class="card choice-section section-create">
+            <div class="section-header">
+              <span class="section-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M2.5 7C2.5 9.48528 4.51472 11.5 7 11.5C9.48528 11.5 11.5 9.48528 11.5 7C11.5 4.51472 9.48528 2.5 7 2.5C4.51472 2.5 2.5 4.51472 2.5 7ZM2.5 17C2.5 19.4853 4.51472 21.5 7 21.5C9.48528 21.5 11.5 19.4853 11.5 17C11.5 14.5147 9.48528 12.5 7 12.5C4.51472 12.5 2.5 14.5147 2.5 17ZM12.5 17C12.5 19.4853 14.5147 21.5 17 21.5C19.4853 21.5 21.5 19.4853 21.5 17C21.5 14.5147 19.4853 12.5 17 12.5C14.5147 12.5 12.5 14.5147 12.5 17ZM16 11V8H13V6H16V3H18V6H21V8H18V11H16Z"></path></svg>
               </span>
-              <h3>Nouveau système</h3>
-              <p>Générez des tokens à partir d'une couleur primaire.</p>
+              <h4 class="section-title">CRÉER & IMPORTER</h4>
             </div>
+            <div class="choice-grid">
+              <!-- Option A: Créer un nouveau système -->
+              <div class="choice-card" id="choiceNewSystem">
+                <span class="icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path
+                      d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+                  </svg>
+                </span>
+                <h3>Démarrer un nouveau système</h3>
+                <p>Générez automatiquement une palette complète et des échelles standards à partir d'une couleur
+                  principale.</p>
+              </div>
 
-            <!-- Option B: Importer un fichier -->
-            <div class="choice-card" id="choiceImportFile">
-              <span class="icon">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
-                  <path d="M12 12v9" />
-                  <path d="m16 16-4-4-4 4" />
-                </svg>
-              </span>
-              <h3>Importer un fichier</h3>
-              <p>Depusi un fichier JSON ou CSS.</p>
+              <!-- Option B: Importer un fichier -->
+              <div class="choice-card" id="choiceImportFile">
+                <span class="icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
+                    <path d="M12 12v9" />
+                    <path d="m16 16-4-4-4 4" />
+                  </svg>
+                </span>
+                <h3>Importer les tokens de votre code</h3>
+                <p>Depuis un fichier JSON ou CSS.</p>
+              </div>
             </div>
+          </div>
 
-            <!-- Option C: Gérer mes tokens (visible uniquement si tokens existent) -->
-            <div class="choice-card hidden" id="choiceManageTokens">
-              <span class="icon">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path
-                    d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.1a2 2 0 0 1-1-1.72v-.51a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
+          <!-- Section 2: ANALYSER & CORRIGER -->
+          <div class="card choice-section section-analyze" style="display: none;">
+            <div class="section-header">
+              <span class="section-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M9 7.53861L15 21.5386L18.6594 13H23V11H17.3406L15 16.4614L9 2.46143L5.3406 11H1V13H6.6594L9 7.53861Z"></path></svg>
               </span>
-              <h3>Gérer mes tokens</h3>
-              <p id="existingTokensInfo" style="margin-bottom: 4px;">Chargement...</p>
-              <p style="font-size: 10px; opacity: 0.7; margin: 0;">
-                <span id="existingTokensCount">0 tokens</span>
-              </p>
+              <h4 class="section-title">ANALYSER & CORRIGER</h4>
+            </div>
+            <div class="choice-grid">
+              <!-- Option C: Gérer mes tokens (visible uniquement si tokens existent) -->
+              <div class="choice-card hidden" id="choiceManageTokens">
+                <span class="icon" style="color: var(--poly-accent);">
+                  <svg width="90" height="104" viewBox="0 0 90 104" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                    <path fill-rule="evenodd" clip-rule="evenodd" d="M9 31.176L45 10.386L81 31.176V72.747L45 93.537L9 72.747V31.176ZM45 0.00900002L90 25.992V77.949L45 103.932L0 77.949V25.983L45 0V0.00900002ZM54 51.939C54 56.916 49.968 60.939 45 60.939C40.032 60.939 36 56.916 36 51.939C36 46.971 40.032 42.939 45 42.939C49.968 42.939 54 46.971 54 51.939Z" />
+                  </svg>
+                </span>
+                <h3>Gérer les variables locales</h3>
+                <p id="existingTokensInfo" style="margin-bottom: 4px;">Chargement...</p>
+                <p style="font-size: 10px; opacity: 0.7; margin: 0;">
+                  <span id="existingTokensCount">0 tokens</span>
+                </p>
+              </div>
+
+              <!-- Option D: Vérifier une Frame -->
+              <div class="choice-card" id="choiceVerifyFrames">
+                <span class="icon">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"/>
+                    <path d="m21 21-4.35-4.35"/>
+                  </svg>
+                </span>
+                <h3>Vérifier une Frame</h3>
+                <p>Détectez les valeurs en dur et remplacez-les par vos variables.</p>
+              </div>
             </div>
           </div>
 
@@ -1065,18 +2075,66 @@
       <div id="wizardStep1" class="wizard-step">
         <div class="card">
           <h3>Choisissez votre librairie</h3>
-          <p style="margin-bottom: 16px;">La librairie détermine le format des tokens générés.</p>
+          <p style="margin-bottom: 4px;">PolyToken adaptera les noms, les échelles de couleurs et les espacements pour
+            correspondre parfaitement à votre framework !</p>
 
           <div class="library-grid">
             <div class="library-option" data-library="tailwind" aria-label="Tailwind / Shadcn - Option populaire">
+              <span class="icon" style="color: var(--poly-accent);">
+                <svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
+                  <path
+                    d="M12.001,4.8c-3.2,0-5.2,1.6-6,4.8c1.2-1.6,2.6-2.2,4.2-1.8c0.913,0.228,1.565,0.89,2.288,1.624 C13.666,10.618,15.027,12,18.001,12c3.2,0,5.2-1.6,6-4.8c-1.2,1.6-2.6,2.2-4.2,1.8c-0.913-0.228-1.565-0.89-2.288-1.624 C16.337,6.182,14.976,4.8,12.001,4.8z M6.001,12c-3.2,0-5.2,1.6-6,4.8c1.2-1.6,2.6-2.2,4.2-1.8c0.913,0.228,1.565,0.89,2.288,1.624 c1.177,1.194,2.538,2.576,5.512,2.576c3.2,0,5.2-1.6,6-4.8c-1.2,1.6-2.6,2.2-4.2,1.8c-0.913-0.228-1.565-0.89-2.288-1.624 C10.337,13.382,8.976,12,6.001,12z" />
+                </svg>
+              </span>
               <span>Tailwind / Shadcn</span>
-              <span class="popular-badge" aria-hidden="true">Populaire</span>
+              <span class="popular-badge" aria-hidden="true" style="margin-top: 4px;">Populaire</span>
             </div>
-            <div class="library-option" data-library="mui">Material UI</div>
-            <div class="library-option" data-library="ant">Ant Design</div>
-            <div class="library-option" data-library="bootstrap">Bootstrap</div>
-            <div class="library-option" data-library="chakra">Chakra UI</div>
-            <div class="library-option" data-library="custom">Custom</div>
+
+            <div class="library-option" data-library="mui">
+              <span class="icon" style="color: var(--poly-accent);">
+                <svg viewBox="0 0 24 24" role="img" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
+                  <title>Material-UI icon</title>
+                  <path d="M0 2.475v10.39l3 1.733V7.67l6 3.465 6-3.465v3.465l-6 3.463v3.464l6 3.463 9-5.195V9.402l-3 1.733v3.463l-6 3.464-3-1.732 6-3.465V2.475L9 7.67 0 2.475zm24 0l-3 1.73V7.67l3-1.732V2.474Z" />
+                </svg>
+              </span>
+              <span>Material UI</span>
+            </div>
+
+            <div class="library-option" data-library="ant">
+              <span class="icon" style="color: var(--poly-accent);">
+                <svg viewBox="0 0 24 24" role="img" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
+                  <path d="M17.451 6.68c.51-.506.51-1.33 0-1.837L15.578 2.97l.003.002-2.554-2.55a1.463 1.463 0 0 0-2.05.013L.427 10.98a1.443 1.443 0 0 0 0 2.047l10.549 10.54a1.45 1.45 0 0 0 2.05 0l4.423-4.42a1.297 1.297 0 0 0 0-1.838 1.305 1.305 0 0 0-1.84 0l-3.35 3.354a.346.346 0 0 1-.495 0l-8.427-8.419a.346.346 0 0 1 0-.495l8.424-8.42c.01-.01.024-.018.035-.029a.34.34 0 0 1 .46.03l3.354 3.35a1.3 1.3 0 0 0 1.841 0zm-8.245 5.376a2.848 2.846 0 1 0 5.697 0 2.848 2.846 0 1 0-5.697 0zm14.368-1.034L20.28 7.743a1.303 1.303 0 0 0-1.841.003 1.297 1.297 0 0 0 0 1.838l2.224 2.222c.14.139.14.356 0 .495l-2.192 2.19a1.297 1.297 0 0 0 0 1.837 1.305 1.305 0 0 0 1.84 0l3.264-3.26a1.445 1.445 0 0 0-.002-2.047z" />
+                </svg>
+              </span>
+              <span>Ant Design</span>
+            </div>
+
+            <div class="library-option" data-library="bootstrap">
+              <span class="icon" style="color: var(--poly-accent);">
+                <svg viewBox="0 0 24 24" role="img" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
+                  <path d="M11.77 11.24H9.956V8.202h2.152c1.17 0 1.834.522 1.834 1.466 0 1.008-.773 1.572-2.174 1.572zm.324 1.206H9.957v3.348h2.231c1.459 0 2.232-.585 2.232-1.685s-.795-1.663-2.326-1.663zM24 11.39v1.218c-1.128.108-1.817.944-2.226 2.268-.407 1.319-.463 2.937-.42 4.186.045 1.3-.968 2.5-2.337 2.5H4.985c-1.37 0-2.383-1.2-2.337-2.5.043-1.249-.013-2.867-.42-4.186-.41-1.324-1.1-2.16-2.228-2.268V11.39c1.128-.108 1.819-.944 2.227-2.268.408-1.319.464-2.937.42-4.186-.045-1.3.968-2.5 2.338-2.5h14.032c1.37 0 2.382 1.2 2.337 2.5-.043 1.249.013 2.867.42 4.186.409 1.324 1.098 2.16 2.226 2.268zm-7.927 2.817c0-1.354-.953-2.333-2.368-2.488v-.057c1.04-.169 1.856-1.135 1.856-2.213 0-1.537-1.213-2.538-3.062-2.538h-4.16v10.172h4.181c2.218 0 3.553-1.086 3.553-2.876z" />
+                </svg>
+              </span>
+              <span>Bootstrap</span>
+            </div>
+
+            <div class="library-option" data-library="chakra">
+              <span class="icon" style="color: var(--poly-accent);">
+                <svg viewBox="0 0 24 24" role="img" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
+                  <path d="M12 0C5.352 0 0 5.352 0 12s5.352 12 12 12 12-5.352 12-12S18.648 0 12 0zm2.8 4.333c.13-.004.248.136.171.278l-3.044 5.58a.187.187 0 0 0 .164.276h5.26c.17 0 .252.207.128.323l-9.22 8.605c-.165.154-.41-.063-.278-.246l4.364-6.021a.187.187 0 0 0-.151-.296H6.627a.187.187 0 0 1-.131-.32l8.18-8.123a.182.182 0 0 1 .125-.056z" />
+                </svg>
+              </span>
+              <span>Chakra UI</span>
+            </div>
+
+            <div class="library-option" data-library="custom">
+              <span class="icon" style="color: var(--poly-accent);">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M8 3H15V0.5L18.5 4L15 7.5V5H8V7.5L4.5 4L8 0.5V3ZM3 17V6.5H5V17C5 18.1046 5.89543 19 7 19H17.5V21H7C4.79086 21 3 19.2091 3 17ZM21 16V9H23.5L20 5.5L16.5 9H19V16H16.5L20 19.5L23.5 16H21Z" />
+                </svg>
+              </span>
+              <span>Custom</span>
+            </div>
           </div>
         </div>
 
@@ -1098,8 +2156,9 @@
            ============================================ -->
       <div id="wizardStep2" class="wizard-step">
         <div class="card">
-          <h3>Couleur primaire</h3>
-          <p style="margin-bottom: 16px;">Choisissez la couleur principale de votre système de design.</p>
+          <h3>Définissez votre identité de marque</h3>
+          <p style="margin-bottom: 16px;">Cette couleur servira de pivot pour générer toutes vos nuances sémantiques et
+            vos états (hover, active, etc.)</p>
 
           <label>Primary Color</label>
           <div class="color-input-group">
@@ -1107,14 +2166,13 @@
               <div class="color-preview-bg" id="colorPreviewBg"></div>
               <input type="color" id="colorPicker" value="#6366F1">
             </div>
-            <div style="flex: 1;">
+            <div class="color-input-wrapper">
               <input type="text" id="colorInput" value="#6366F1" placeholder="#6366F1">
             </div>
             <button class="btn-secondary" id="randomBtn">Random</button>
           </div>
         </div>
 
-        <!-- Sticky Footer for Vue 2 -->
         <!-- Sticky Footer for Vue 2 -->
         <div class="sticky-footer">
           <div class="sticky-footer-content space-between">
@@ -1134,6 +2192,30 @@
 
         <!-- Card unique contenant les deux vues -->
         <div class="card">
+          <!-- Dashboard Header (Live Color & Library) -->
+          <div class="dashboard-header"
+            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--poly-border-subtle);">
+            <div class="mini-color-control" style="display: flex; align-items: center; gap: 10px;">
+              <div class="color-preview" style="width: 32px; height: 32px; border-radius: 6px;">
+                <div class="color-preview-bg" id="dashboardColorPreviewBg"
+                  style="background-color: var(--poly-accent);"></div>
+                <input type="color" id="dashboardColorPicker">
+              </div>
+              <div>
+                <label style="margin: 0; font-size: 10px; cursor: pointer;" for="dashboardColorPicker">Primary
+                  Color</label>
+                <div id="dashboardColorValue" style="font-family: monospace; font-size: 12px; color: var(--poly-text);">
+                  #6366F1</div>
+              </div>
+            </div>
+
+            <div id="activeLibraryBadge"
+              style="font-size: 11px; background: var(--poly-surface-soft); padding: 4px 8px; border-radius: 6px; border: 1px solid var(--poly-border-subtle); color: var(--poly-text-muted);">
+              Library: <span id="libraryNameDisplay"
+                style="color: var(--poly-accent); font-weight: 600;">Tailwind</span>
+            </div>
+          </div>
+
           <!-- Designer View -->
           <div id="designerView">
             <div class="tabs" id="tokenTabs">
@@ -1151,9 +2233,9 @@
 
           <!-- Developer View -->
           <div id="devView" class="hidden">
-            <h3>Export Tokens</h3>
+            <h3>Handoff Développeur</h3>
             <p style="font-size: 12px; color: var(--poly-text-muted); margin-bottom: 12px;">
-              Export your tokens for development. Compatible with Tailwind, CSS Variables, and JSON.
+              Récupérez le code prêt à copier-coller pour votre projet.
             </p>
 
             <label>Format</label>
@@ -1164,34 +2246,162 @@
               <option value="scss">SCSS Variables</option>
             </select>
 
-            <textarea id="exportOutput"
-              style="width: 100%; height: 200px; padding: 12px; border-radius: 8px; border: 1px solid var(--poly-border-subtle); font-family: monospace; font-size: 12px; margin-bottom: 12px;"
-              readonly></textarea>
-
-            <div style="display: flex; gap: 10px;">
-              <button class="btn-secondary" id="copyBtn" style="flex: 1;">Copy to Clipboard</button>
-              <button class="btn-secondary" id="downloadBtn" style="flex: 1;">Download File</button>
+            <!-- Code Editor Wrapper -->
+            <div class="editor-wrapper">
+              <div id="codeEditor" class="editor-container" tabindex="0"></div>
             </div>
+
+            <!-- Removed old buttons div here, moved to sticky footer -->
           </div>
         </div>
 
         <!-- Action Buttons (Sticky Footer) -->
-        <!-- Action Buttons (Sticky Footer) -->
         <div class="sticky-footer">
 
-          <!-- Checkbox Overwrite (Hidden by default) -->
+          <!-- Checkbox Overwrite (Designer Only) -->
           <div id="overwriteCheckboxContainer" class="hidden"
             style="width: 100%; display: flex; justify-content: center; margin-bottom: 4px;">
             <label
               style="display: flex; align-items: center; cursor: pointer; text-transform: none; color: var(--poly-text); font-weight: 500; font-size: 13px; margin: 0;">
               <input type="checkbox" id="overwriteCheckbox" style="width: auto; margin: 0 8px 0 0;">
-              Écraser les variables déjà existantes
+              Mettre à jour les variables existantes.
             </label>
           </div>
 
-          <div class="sticky-footer-content" style="gap: 10px;">
+          <!-- Footer Content: Designer View -->
+          <div id="footerDesignerOps" class="sticky-footer-content" style="gap: 10px; width: 100%;">
             <button class="btn-secondary" id="backToLibBtn" style="flex: 1;">← Retour</button>
-            <button class="btn-primary" id="importBtn" style="flex: 2;">Import to Figma</button>
+            <button class="btn-primary" id="importBtn" style="flex: 2;">Synchroniser avec Figma</button>
+          </div>
+
+          <!-- Footer Content: Developer View -->
+          <div id="footerDevOps" class="sticky-footer-content hidden" style="gap: 10px; width: 100%;">
+            <button class="btn-secondary" id="downloadBtn" style="flex: 1;">
+              <span class="icon" style="margin-right: 6px;">⬇</span> Télécharger
+            </button>
+            <button class="btn-primary" id="copyBtnFooter" style="flex: 1;">
+              Copier le code
+            </button>
+          </div>
+
+          <div class="footer-signature">
+            Designed and developed by <a href="https://www.linkedin.com/in/emma-jan/" target="_blank">Emma Jan</a>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============================================
+           VUE 4: NETTOYAGE INTELLIGENT - Analyse & Corrections
+           ============================================ -->
+      <div id="wizardStep4" class="wizard-step">
+        <div class="card">
+          <h3 style="margin-bottom: 4px;">🧹 Nettoyage Intelligent</h3>
+          <p style="margin-bottom: 20px;">Analysez vos frames et nettoyez automatiquement les valeurs en dur qui correspondent à vos variables design.</p>
+
+          <!-- État vide (aucune sélection) -->
+          <div id="scanEmptyState" class="empty-state">
+            <div style="text-align: center; padding: 40px 20px;">
+              <div style="margin-bottom: 16px; display: block;">
+                <svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="opacity: 0.5;">
+                  <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2" fill="none"/>
+                  <rect x="7" y="7" width="10" height="10" rx="1" stroke="currentColor" stroke-width="1" fill="none" opacity="0.3"/>
+                  <circle cx="12" cy="12" r="1.5" fill="currentColor" opacity="0.6"/>
+                </svg>
+              </div>
+              <h4 style="margin-bottom: 8px; color: var(--poly-text-muted);">Aucune Frame sélectionnée</h4>
+              <p style="color: var(--poly-text-muted); margin-bottom: 20px;">
+                Sélectionnez une frame dans Figma pour lancer l'analyse et détecter les valeurs en dur.
+              </p>
+            </div>
+          </div>
+
+          <!-- Zone des résultats avec nouvelle hiérarchie -->
+          <div id="scanResults" class="hidden">
+            <!-- Tableau de bord récapitulatif -->
+            <div id="cleaningDashboard" class="cleaning-dashboard" style="display: none;">
+              <div class="dashboard-header">
+                <h4 style="margin: 0; color: var(--poly-text);">📊 État du nettoyage</h4>
+                <div class="dashboard-stats">
+                  <div class="stat-item">
+                    <span class="stat-number" id="totalIssues">0</span>
+                    <span class="stat-label">problèmes</span>
+                  </div>
+                  <div class="stat-item">
+                    <span class="stat-number" id="autoFixable">0</span>
+                    <span class="stat-label">auto-corrigeables</span>
+                  </div>
+                  <div class="stat-item">
+                    <span class="stat-number" id="manualFixes">0</span>
+                    <span class="stat-label">à corriger manuellement</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <!-- Onglets de nettoyage -->
+              <div class="cleaning-tabs" style="margin-bottom: 20px;">
+                <div class="tab-buttons">
+                  <button class="tab-btn active" data-tab="auto">🚀 Auto-nettoyage</button>
+                  <button class="tab-btn" data-tab="manual">🎯 Corrections manuelles</button>
+                </div>
+              </div>
+
+              <!-- Contenu des onglets -->
+              <div class="tab-content">
+                <!-- Onglet Auto-nettoyage -->
+                <div id="autoCleaningTab" class="tab-pane active">
+                  <div class="section-header">
+                    <h5>Corrections automatiques</h5>
+                    <p class="section-desc">Ces valeurs correspondent exactement à vos variables et peuvent être corrigées automatiquement.</p>
+                  </div>
+                  <div id="autoCleaningList">
+                    <!-- Les corrections automatiques seront insérées ici -->
+                  </div>
+                  <div id="autoCleaningActions" class="bulk-actions" style="display: none;">
+                    <button class="btn-primary" id="applyAllAutoBtn">
+                      ✅ Appliquer toutes les corrections automatiques
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Onglet Corrections manuelles -->
+                <div id="manualCleaningTab" class="tab-pane">
+                  <div class="section-header">
+                    <h5>Corrections manuelles requises</h5>
+                    <p class="section-desc">Ces valeurs ont plusieurs correspondances possibles. Choisissez la variable appropriée pour chaque cas.</p>
+                  </div>
+                  <div id="manualCleaningList">
+                    <!-- Les corrections manuelles seront insérées ici -->
+                  </div>
+                  <div id="manualCleaningActions" class="bulk-actions" style="display: none;">
+                    <button class="btn-secondary" id="applyAllManualBtn" disabled>
+                      ⚠️ Appliquer les sélections manuelles
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Actions globales -->
+            <div class="global-actions" style="margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--poly-border-subtle);">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <button class="btn-secondary" id="scanBtnActive">🔄 Relancer l'analyse</button>
+                <div style="display: flex; gap: 8px;">
+                  <button class="btn-outline" id="exportReportBtn" style="display: none;">📄 Exporter le rapport</button>
+                  <button class="btn-primary" id="step4ApplyAll" style="display: none;">✅ Finaliser le nettoyage</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sticky Footer -->
+        <div class="sticky-footer">
+          <div class="sticky-footer-content">
+            <button class="btn-secondary" id="step4Back">← Retour</button>
+            <button class="btn-secondary" id="scanBtn" disabled style="margin-left: 12px;">Lancer l'analyse</button>
+            <button class="btn-primary" id="step4ApplyAll" style="display: none; margin-left: auto;">✅ Valider</button>
           </div>
           <div class="footer-signature">
             Designed and developed by <a href="https://www.linkedin.com/in/emma-jan/" target="_blank">Emma Jan</a>
@@ -1240,15 +2450,25 @@
     var tokenTabs = document.getElementById("tokenTabs");
     var tokenPreview = document.getElementById("tokenPreview");
 
+    // Dashboard Elements
+    var dashboardColorPicker = document.getElementById("dashboardColorPicker");
+    var dashboardColorValue = document.getElementById("dashboardColorValue");
+    var dashboardColorPreviewBg = document.getElementById("dashboardColorPreviewBg");
+    var libraryNameDisplay = document.getElementById("libraryNameDisplay");
+
     // Dev Mode Elements
     var modeDesigner = document.getElementById("modeDesigner");
     var modeDev = document.getElementById("modeDev");
     var designerView = document.getElementById("designerView");
     var devView = document.getElementById("devView");
     var exportFormat = document.getElementById("exportFormat");
-    var exportOutput = document.getElementById("exportOutput");
-    var copyBtn = document.getElementById("copyBtn");
+    // exportOutput is removed, using codeEditor and rawExportContent
+    // copyBtn removed, replaced by copyBtnFooter
+    var copyBtnFooter = document.getElementById("copyBtnFooter");
     var downloadBtn = document.getElementById("downloadBtn");
+
+    var footerDesignerOps = document.getElementById("footerDesignerOps");
+    var footerDevOps = document.getElementById("footerDevOps");
 
     // Overwrite Checkbox
     var overwriteCheckboxContainer = document.getElementById("overwriteCheckboxContainer");
@@ -1259,6 +2479,7 @@
     var wizardStep1 = document.getElementById("wizardStep1");
     var wizardStep2 = document.getElementById("wizardStep2");
     var wizardStep3 = document.getElementById("wizardStep3");
+    var wizardStep4 = document.getElementById("wizardStep4");
 
     // Vue 0 Elements
     var choiceNewSystem = document.getElementById("choiceNewSystem");
@@ -1284,6 +2505,15 @@
     // Vue 3 Elements
     var backToLibBtn = document.getElementById("backToLibBtn");
 
+    // Vue 4 Elements
+    var scanBtn = document.getElementById("scanBtn");
+    var scanBtnActive = document.getElementById("scanBtnActive");
+    var scanResults = document.getElementById("scanResults");
+    var scanEmptyState = document.getElementById("scanEmptyState");
+    var scanResultsList = document.getElementById("scanResultsList");
+    var step4Back = document.getElementById("step4Back");
+    var step4ApplyAll = document.getElementById("step4ApplyAll");
+
     // ============================================
     // STATE VARIABLES
     // ============================================
@@ -1301,6 +2531,7 @@
       wizardStep1.classList.remove("active");
       wizardStep2.classList.remove("active");
       wizardStep3.classList.remove("active");
+      wizardStep4.classList.remove("active");
 
       // Show the target step
       currentStep = stepNumber;
@@ -1317,10 +2548,42 @@
         wizardStep2.classList.add("active");
         // Masquer le toggle sur Vue 2
         modeToggle.classList.add("hidden");
+
+        // FIX: Force sync inputs with state
+        if (colorPicker && colorInput) {
+          colorPicker.value = currentColor;
+          colorInput.value = currentColor;
+          updateColorPreview(currentColor);
+        }
       } else if (stepNumber === 3) {
         wizardStep3.classList.add("active");
         // Afficher le toggle sur Vue 3
         modeToggle.classList.remove("hidden");
+
+        // Init Dashboard Header
+        if (dashboardColorPicker) {
+          dashboardColorPicker.value = currentColor;
+          dashboardColorValue.textContent = currentColor;
+          dashboardColorPreviewBg.style.backgroundColor = currentColor;
+        }
+        if (libraryNameDisplay) {
+          var displayMap = {
+            "tailwind": "Tailwind",
+            "mui": "Material UI",
+            "ant": "Ant Design",
+            "bootstrap": "Bootstrap",
+            "chakra": "Chakra UI",
+            "custom": "Custom"
+          };
+          libraryNameDisplay.textContent = displayMap[currentNaming] || currentNaming || "Custom";
+        }
+      } else if (stepNumber === 4) {
+        wizardStep4.classList.add("active");
+        // Masquer le toggle sur Vue 4
+        modeToggle.classList.add("hidden");
+
+        // Init scan state
+        updateScanUI();
       }
     }
 
@@ -1342,6 +2605,12 @@
       colorPicker.value = currentColor;
       updateColorPreview(currentColor);
 
+      // Reset scan results
+      var scanResults = document.getElementById("scanResults");
+      var scanEmptyState = document.getElementById("scanEmptyState");
+      if (scanResults) scanResults.classList.add("hidden");
+      if (scanEmptyState) scanEmptyState.classList.remove("hidden");
+
       // Go back to step 0
       switchStep(0);
     }
@@ -1357,10 +2626,12 @@
       choiceNewSystem.classList.remove("active");
       choiceImportFile.classList.remove("active");
       choiceManageTokens.classList.remove("active");
+      choiceVerifyFrames.classList.remove("active");
 
       if (option === 'new') choiceNewSystem.classList.add("active");
       if (option === 'import') choiceImportFile.classList.add("active");
       if (option === 'manage') choiceManageTokens.classList.add("active");
+      if (option === 'verify') choiceVerifyFrames.classList.add("active");
 
       // Enable Next Button
       step0Next.disabled = false;
@@ -1378,6 +2649,10 @@
       if (hasExistingTokens && existingTokensData) {
         selectStartOption('manage');
       }
+    });
+
+    choiceVerifyFrames.addEventListener("click", function () {
+      selectStartOption('verify');
     });
 
     // Handle "Continuer" Button Click
@@ -1401,6 +2676,9 @@
         updateExport();
         switchStep(3);
       }
+      else if (currentStartOption === 'verify') {
+        switchStep(4); // Go to frame verification
+      }
     });
 
     realFileInput.addEventListener("change", function (e) {
@@ -1422,12 +2700,16 @@
 
             if (tokensFromFile) {
               // Send explicit import message
-              parent.postMessage({ pluginMessage: { type: "import-from-file", tokens: tokensFromFile } }, "*");
+
 
               currentTokens = tokensFromFile;
               updatePreview();
               updateExport();
               switchStep(3);
+
+              // Petit feedback visuel optionnel pour dire que le fichier est chargé
+              // (Pas figma.notify car le plugin ne sait rien pour l'instant)
+              console.log("Fichier chargé en mémoire, prêt à être importé.");
             }
           } catch (err) {
             alert("Error parsing file: " + err.message);
@@ -1509,6 +2791,30 @@
     // ============================================
     // VUE 3: RÉSULTAT - Event Listeners
     // ============================================
+
+    // Dashboard Color Picker Logic
+    if (dashboardColorPicker) {
+      dashboardColorPicker.addEventListener("input", function () {
+        var val = dashboardColorPicker.value.toUpperCase();
+        dashboardColorValue.textContent = val;
+        dashboardColorPreviewBg.style.backgroundColor = val;
+      });
+
+      dashboardColorPicker.addEventListener("change", function () {
+        var val = dashboardColorPicker.value.toUpperCase();
+        currentColor = val;
+
+        // Regenerate
+        parent.postMessage({
+          pluginMessage: {
+            type: "generate",
+            color: currentColor,
+            naming: currentNaming
+          }
+        }, "*");
+      });
+    }
+
     backToLibBtn.addEventListener("click", function () {
       // Reset library selection
       libraryOptions.forEach(function (opt) {
@@ -1525,10 +2831,951 @@
         pluginMessage: {
           type: "import",
           naming: currentNaming,
-          overwrite: shouldOverwrite
+          overwrite: shouldOverwrite,
+          tokens: currentTokens
         }
       }, "*");
     });
+
+    // ============================================
+    // HELPER FUNCTIONS
+    // ============================================
+    function detectPrimaryColorFromTokens(brandTokens) {
+      if (!brandTokens) return null;
+
+      // Common keys for the base color depending on library
+      var candidates = ['500', 'main', 'primary', 'base', '6'];
+
+      for (var i = 0; i < candidates.length; i++) {
+        if (brandTokens[candidates[i]]) {
+          return brandTokens[candidates[i]];
+        }
+      }
+
+      // Fallback: take the first available color if no standard key found
+      var keys = Object.keys(brandTokens);
+      if (keys.length > 0) return brandTokens[keys[0]];
+
+      return null;
+    }
+
+    // ============================================
+    // VUE 4: VÉRIFICATION DE FRAME - Event Listeners
+    // ============================================
+
+    function updateScanUI() {
+      // Vérifier si une sélection existe dans Figma
+      parent.postMessage({
+        pluginMessage: {
+          type: "check-selection"
+        }
+      }, "*");
+    }
+
+    // Icônes SVG simples et génériques
+    var svgIcons = {
+      fill: '<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>',
+      stroke: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>',
+      radius: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>',
+      spacing: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="1"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="14" y2="12"/><line x1="8" y1="16" x2="12" y2="16"/></svg>'
+    };
+
+    // ============================================
+    // MAGIC FIX FUNCTIONS - Nouvelle UX
+    // ============================================
+
+    function groupResultsByValue(results) {
+      var groups = {};
+      var lastScanResults = results; // Stocker pour les références d'indices
+
+      results.forEach(function(result, index) {
+        result.originalIndex = index;
+
+        // Créer une clé unique basée sur propriété + valeur
+        var groupKey = result.property + '-' + result.value;
+
+        if (!groups[groupKey]) {
+          groups[groupKey] = {
+            property: result.property,
+            value: result.value,
+            originalIndices: [],
+            suggestions: result.colorSuggestions || [{ id: result.suggestedVariableId, name: result.suggestedVariableName, isExact: true }],
+            layerNames: [] // Pour debug si nécessaire
+          };
+        }
+
+        groups[groupKey].originalIndices.push(index);
+        groups[groupKey].layerNames.push(result.layerName);
+
+        // Fusionner les suggestions si elles diffèrent
+        if (result.colorSuggestions) {
+          result.colorSuggestions.forEach(function(suggestion) {
+            var existing = groups[groupKey].suggestions.find(function(s) { return s.id === suggestion.id; });
+            if (!existing) {
+              groups[groupKey].suggestions.push(suggestion);
+            }
+          });
+        }
+      });
+
+      return Object.values(groups);
+    }
+
+    function renderCompactRow(group) {
+      var hasConflicts = group.suggestions.length > 1;
+      var bestSuggestion = group.suggestions[0];
+
+      // Fonction helper pour obtenir l'icône SVG selon le type de propriété
+      function getPropertyIcon(property) {
+        switch(property) {
+          case 'Fill':
+            return '<span class="property-label">Fond</span>';
+          case 'Stroke':
+            return '<span class="property-label">Contour</span>';
+          case 'Radius':
+            return '<span class="property-label">Rayon</span>';
+          case 'Spacing':
+          case 'Width':
+          case 'Height':
+            return '<span class="property-label">Espacement</span>';
+          default:
+            return '<span class="property-label">' + property + '</span>';
+        }
+      }
+
+      var html = '<div class="compact-row" data-indices="' + group.originalIndices.join(',') + '" onclick="highlightLayers([' + group.originalIndices.join(',') + '])" style="cursor: pointer;">';
+
+      // Col 1 : Le "Problème" (Valeur Actuelle)
+      html += '<div class="col-problem" title="Type: ' + group.property + ' | Valeur: ' + group.value + '">';
+
+      // Icône de type
+      html += getPropertyIcon(group.property);
+
+      // Visuel (swatch ou valeur textuelle)
+      if (group.property === "Fill" || group.property === "Stroke") {
+        html += '<div class="mini-swatch" style="background-color: ' + group.value + ';"></div>';
+      } else {
+        html += '<span class="value-display">' + group.value + '</span>';
+      }
+
+      html += '</div>';
+
+      // Col 2 : Le "Lien"
+      html += '<div class="col-arrow">';
+      html += '<div class="arrow-symbol">→</div>';
+      html += '<div class="layer-count-badge" title="' + group.originalIndices.length + ' calque' + (group.originalIndices.length > 1 ? 's' : '') + ' concerné' + (group.originalIndices.length > 1 ? 's' : '') + '">Sur ' + group.originalIndices.length + ' calque' + (group.originalIndices.length > 1 ? 's' : '') + '</div>';
+      html += '</div>';
+
+      // Col 3 : La "Solution" (Variable)
+      html += '<div class="col-solution">';
+      if (hasConflicts) {
+        // Multiple suggestions - select avec bordure orange
+        html += '<select class="conflict-select" onchange="applyGroupFix([' + group.originalIndices.join(',') + '], this.value)">';
+        html += '<option value="">⚠️ Choisir parmi ' + group.suggestions.length + ' variables</option>';
+        group.suggestions.forEach(function(suggestion, idx) {
+          var distanceIndicator = suggestion.isExact ? '' : ' ≈';
+          html += '<option value="' + suggestion.id + '">' + suggestion.name + distanceIndicator + '</option>';
+        });
+        html += '</select>';
+      } else {
+        // Single suggestion - bouton pill vert
+        html += '<button class="variable-pill" onclick="applyGroupFix([' + group.originalIndices.join(',') + '], \'' + bestSuggestion.id + '\')">';
+        html += '<svg class="variable-icon" viewBox="0 0 16 16"><path fill="currentColor" d="M8 2l2.5 5 5.5.5-4 4 .5 5.5L8 12l-4 2 .5-5.5-4-4 5.5-.5L8 2z"/></svg>';
+        html += '<span>' + bestSuggestion.name + '</span>';
+        html += '</button>';
+      }
+      html += '</div>';
+
+      // Col 4 : Bouton ignorer
+      html += '<button class="btn-x" onclick="this.closest(\'.compact-row\').style.display=\'none\'" title="Ignorer ce groupe">×</button>';
+
+      html += '</div>';
+
+      return html;
+    }
+
+    // Fonction pour corriger tous les groupes d'une catégorie
+    function applyAllCategoryFixes(categoryKey) {
+      // Cette fonction sera appelée depuis le HTML généré
+      var categoryRows = document.querySelectorAll('details[open] .compact-row');
+      var allIndices = [];
+      var variableId = null;
+
+      categoryRows.forEach(function(row) {
+        var indices = row.getAttribute('data-indices');
+        if (indices) {
+          var indicesArray = indices.split(',').map(Number);
+          allIndices = allIndices.concat(indicesArray);
+
+          // Pour les conflits, on ne peut pas deviner quelle variable choisir
+          // Donc on ne traite que les lignes sans conflit
+          if (!row.querySelector('.conflict-select')) {
+            var pillBtn = row.querySelector('.btn-fix-pill');
+            if (pillBtn && pillBtn.onclick) {
+              // Extraire le variableId du onclick (c'est un hack, mais ça marche)
+              var onclickStr = pillBtn.getAttribute('onclick');
+              var match = onclickStr.match(/applyGroupFix\(\[([^\]]+)\],\s*'([^']+)'\)/);
+              if (match && match[2]) {
+                variableId = variableId || match[2]; // Prendre le premier variableId trouvé
+              }
+            }
+          }
+        }
+      });
+
+      if (allIndices.length > 0 && variableId) {
+        applyGroupFix(allIndices, variableId);
+      }
+    }
+
+    function highlightLayers(indices) {
+      parent.postMessage({
+        pluginMessage: {
+          type: 'highlight-nodes',
+          indices: indices
+        }
+      }, '*');
+    }
+
+    function selectLayers(indices) {
+      highlightLayers(indices);
+    }
+
+    function applyGroupFix(indices, variableId) {
+      parent.postMessage({
+        pluginMessage: {
+          type: 'apply-group-fix',
+          indices: indices,
+          variableId: variableId
+        }
+      }, '*');
+    }
+
+    function displayScanResults(results) {
+      // Calculer les statistiques
+      var stats = calculateCleaningStats(results);
+
+      // Mettre à jour le tableau de bord
+      updateCleaningDashboard(stats);
+
+      // Générer le contenu des onglets
+      var autoCleaningHtml = generateAutoCleaningContent(results, stats);
+      var manualCleaningHtml = generateManualCleaningContent(results, stats);
+      var statusHtml = generateStatusContent(results, stats);
+
+      // Injecter le contenu dans les onglets
+      document.getElementById('autoCleaningList').innerHTML = autoCleaningHtml;
+      document.getElementById('manualCleaningList').innerHTML = manualCleaningHtml;
+      document.getElementById('statusContent').innerHTML = statusHtml;
+
+      // Afficher/masquer les actions groupées
+      toggleBulkActions(stats);
+
+      // Afficher le tableau de bord et les résultats
+      document.getElementById('cleaningDashboard').style.display = results.length > 0 ? 'block' : 'none';
+      document.getElementById('exportReportBtn').style.display = results.length > 0 ? 'inline-flex' : 'none';
+
+      // Mettre à jour le compteur de problèmes
+      updateProblemCounter(results.length, true);
+    }
+
+    // ============================================
+    // NOUVELLES FONCTIONS POUR L'INTERFACE HIÉRARCHISÉE
+    // ============================================
+
+    function calculateCleaningStats(results) {
+      if (results.length === 0) {
+        return { total: 0, autoFixable: 0, manualFixes: 0, categories: {} };
+      }
+
+      var groups = groupResultsByValue(results);
+      var autoFixable = 0;
+      var manualFixes = 0;
+      var categories = {};
+
+      groups.forEach(function(group) {
+        var isAutoFixable = group.suggestions.length === 1 && group.suggestions[0].isExact;
+
+        if (isAutoFixable) {
+          autoFixable++;
+        } else {
+          manualFixes++;
+        }
+
+        // Comptage par catégorie
+        var category = (group.property === "Fill" || group.property === "Stroke") ? "colors" : "geometry";
+        if (!categories[category]) {
+          categories[category] = { total: 0, auto: 0, manual: 0 };
+        }
+        categories[category].total++;
+        if (isAutoFixable) {
+          categories[category].auto++;
+        } else {
+          categories[category].manual++;
+        }
+      });
+
+      return {
+        total: results.length,
+        autoFixable: autoFixable,
+        manualFixes: manualFixes,
+        categories: categories
+      };
+    }
+
+    function updateCleaningDashboard(stats) {
+      document.getElementById('totalIssues').textContent = stats.total;
+      document.getElementById('autoFixable').textContent = stats.autoFixable;
+      document.getElementById('manualFixes').textContent = stats.manualFixes;
+    }
+
+    function generateAutoCleaningContent(results, stats) {
+      if (stats.autoFixable === 0) {
+        return '<div style="text-align: center; padding: 40px 20px; color: var(--poly-text-muted);"><p>🎉 Toutes les corrections possibles ont déjà été appliquées !</p><p style="font-size: 12px; margin-top: 8px;">Aucune correction automatique disponible pour le moment.</p></div>';
+      }
+
+      var groups = groupResultsByValue(results);
+      var html = '<div class="cleaning-cards-grid">';
+
+      groups.forEach(function(group) {
+        if (group.suggestions.length !== 1 || !group.suggestions[0].isExact) return;
+
+        html += '<div class="cleaning-result-card auto-fixable">';
+
+        // Problème
+        html += '<div style="flex: 1;">';
+
+        // Label de propriété (ligne séparée)
+        var icon = getPropertyIcon(group.property);
+        html += '<div style="margin-bottom: 6px;">';
+        html += icon;
+        html += '</div>';
+
+        // Valeur actuelle et solution
+        html += '<div style="display: flex; align-items: center; gap: 8px;">';
+
+        // Valeur actuelle
+        if (group.property === "Fill" || group.property === "Stroke") {
+          html += '<div class="mini-swatch" style="background-color: ' + group.value + ';"></div>';
+          html += '<span style="font-family: monospace; font-size: 12px;">' + group.value + '</span>';
+        } else {
+          html += '<span style="font-family: monospace; font-size: 12px; font-weight: 500;">' + group.value + '</span>';
+        }
+
+        html += '<span style="color: var(--poly-text-muted); font-size: 11px;">→</span>';
+
+        // Solution
+        html += '<span style="font-family: monospace; font-size: 12px; color: var(--poly-accent); font-weight: 500;">' + group.suggestions[0].name + '</span>';
+
+        html += '</div>';
+        html += '<div style="font-size: 11px; color: var(--poly-text-muted); display: flex; align-items: center; gap: 4px; cursor: pointer;" onclick="selectLayers([' + group.originalIndices.join(',') + '])" title="Sélectionner les calques">';
+        html += '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M7 13C8.5913 13 10.1174 12.3679 11.2426 11.2426C12.3679 10.1174 13 8.5913 13 7C13 5.4087 12.3679 3.88258 11.2426 2.75736C10.1174 1.63214 8.5913 1 7 1C5.4087 1 3.88258 1.63214 2.75736 2.75736C1.63214 3.88258 1 5.4087 1 7C1 8.5913 1.63214 10.1174 2.75736 11.2426C3.88258 12.3679 5.4087 13 7 13ZM7 14C7.91925 14 8.8295 13.8189 9.67878 13.4672C10.5281 13.1154 11.2997 12.5998 11.9497 11.9497C12.5998 11.2997 13.1154 10.5281 13.4672 9.67878C13.8189 8.8295 14 7.91925 14 7C14 6.08075 13.8189 5.17049 13.4672 4.32122C13.1154 3.47194 12.5998 2.70026 11.9497 2.05025C11.2997 1.40024 10.5281 0.884626 9.67878 0.532843C8.8295 0.18106 7.91925 -1.36979e-08 7 0C5.14348 2.76642e-08 3.36301 0.737498 2.05025 2.05025C0.737498 3.36301 0 5.14348 0 7C0 8.85652 0.737498 10.637 2.05025 11.9497C3.36301 13.2625 5.14348 14 7 14ZM7 10C7.79565 10 8.55871 9.68393 9.12132 9.12132C9.68393 8.55871 10 7.79565 10 7C10 6.20435 9.68393 5.44129 9.12132 4.87868C8.55871 4.31607 7.79565 4 7 4C6.20435 4 5.44129 4.31607 4.87868 4.87868C4.31607 5.44129 4 6.20435 4 7C4 7.79565 4.31607 8.55871 4.87868 9.12132C5.44129 9.68393 6.20435 10 7 10ZM7 11C8.06087 11 9.07828 10.5786 9.82843 9.82843C10.5786 9.07828 11 8.06087 11 7C11 5.93913 10.5786 4.92172 9.82843 4.17157C9.07828 3.42143 8.06087 3 7 3C5.93913 3 4.92172 3.42143 4.17157 4.17157C3.42143 4.92172 3 5.93913 3 7C3 8.06087 3.42143 9.07828 4.17157 9.82843C4.92172 10.5786 5.93913 11 7 11ZM8 7C8 7.26522 7.89464 7.51957 7.70711 7.70711C7.51957 7.89464 7.26522 8 7 8C6.73478 8 6.48043 7.89464 6.29289 7.70711C6.10536 7.51957 6 7.26522 6 7C6 6.73478 6.10536 6.48043 6.29289 6.29289C6.48043 6.10536 6.73478 6 7 6C7.26522 6 7.51957 6.10536 7.70711 6.29289C7.89464 6.48043 8 6.73478 8 7Z" fill="white"/></svg>';
+        html += group.originalIndices.length + ' calque' + (group.originalIndices.length > 1 ? 's' : '') + ' concerné' + (group.originalIndices.length > 1 ? 's' : '');
+        html += '</div>';
+        html += '</div>';
+
+        // Bouton appliquer
+        html += '<button class="btn-primary" onclick="applyGroupFix([' + group.originalIndices.join(',') + '], \'' + group.suggestions[0].id + '\')" style="padding: 6px 12px; font-size: 12px;">Appliquer</button>';
+
+        html += '</div>';
+      });
+
+      html += '</div>';
+      return html;
+    }
+
+    function generateManualCleaningContent(results, stats) {
+      if (stats.manualFixes === 0) {
+        return '<div style="text-align: center; padding: 40px 20px; color: var(--poly-text-muted);"><p>✅ Aucune correction manuelle requise !</p><p style="font-size: 12px; margin-top: 8px;">Toutes les valeurs correspondent exactement à vos variables.</p></div>';
+      }
+
+      var groups = groupResultsByValue(results);
+      var html = '<div class="cleaning-cards-grid">';
+
+      groups.forEach(function(group) {
+        if (group.suggestions.length === 1 && group.suggestions[0].isExact) return;
+
+        html += '<div class="cleaning-result-card manual-fix">';
+
+        // Problème
+        html += '<div style="flex: 1;">';
+
+        // Label de propriété (ligne séparée)
+        var icon = getPropertyIcon(group.property);
+        html += '<div style="margin-bottom: 6px;">';
+        html += icon;
+        html += '</div>';
+
+        // Valeur actuelle
+        html += '<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">';
+        if (group.property === "Fill" || group.property === "Stroke") {
+          html += '<div class="mini-swatch" style="background-color: ' + group.value + ';"></div>';
+          html += '<span style="font-family: monospace; font-size: 12px;">' + group.value + '</span>';
+        } else {
+          html += '<span style="font-family: monospace; font-size: 12px; font-weight: 500;">' + group.value + '</span>';
+        }
+
+        html += '</div>';
+        html += '<div style="font-size: 11px; color: var(--poly-text-muted); margin-bottom: 8px; display: flex; align-items: center; gap: 4px; cursor: pointer;" onclick="selectLayers([' + group.originalIndices.join(',') + '])" title="Sélectionner les calques">';
+        html += '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M7 13C8.5913 13 10.1174 12.3679 11.2426 11.2426C12.3679 10.1174 13 8.5913 13 7C13 5.4087 12.3679 3.88258 11.2426 2.75736C10.1174 1.63214 8.5913 1 7 1C5.4087 1 3.88258 1.63214 2.75736 2.75736C1.63214 3.88258 1 5.4087 1 7C1 8.5913 1.63214 10.1174 2.75736 11.2426C3.88258 12.3679 5.4087 13 7 13ZM7 14C7.91925 14 8.8295 13.8189 9.67878 13.4672C10.5281 13.1154 11.2997 12.5998 11.9497 11.9497C12.5998 11.2997 13.1154 10.5281 13.4672 9.67878C13.8189 8.8295 14 7.91925 14 7C14 6.08075 13.8189 5.17049 13.4672 4.32122C13.1154 3.47194 12.5998 2.70026 11.9497 2.05025C11.2997 1.40024 10.5281 0.884626 9.67878 0.532843C8.8295 0.18106 7.91925 -1.36979e-08 7 0C5.14348 2.76642e-08 3.36301 0.737498 2.05025 2.05025C0.737498 3.36301 0 5.14348 0 7C0 8.85652 0.737498 10.637 2.05025 11.9497C3.36301 13.2625 5.14348 14 7 14ZM7 10C7.79565 10 8.55871 9.68393 9.12132 9.12132C9.68393 8.55871 10 7.79565 10 7C10 6.20435 9.68393 5.44129 9.12132 4.87868C8.55871 4.31607 7.79565 4 7 4C6.20435 4 5.44129 4.31607 4.87868 4.87868C4.31607 5.44129 4 6.20435 4 7C4 7.79565 4.31607 8.55871 4.87868 9.12132C5.44129 9.68393 6.20435 10 7 10ZM7 11C8.06087 11 9.07828 10.5786 9.82843 9.82843C10.5786 9.07828 11 8.06087 11 7C11 5.93913 10.5786 4.92172 9.82843 4.17157C9.07828 3.42143 8.06087 3 7 3C5.93913 3 4.92172 3.42143 4.17157 4.17157C3.42143 4.92172 3 5.93913 3 7C3 8.06087 3.42143 9.07828 4.17157 9.82843C4.92172 10.5786 5.93913 11 7 11ZM8 7C8 7.26522 7.89464 7.51957 7.70711 7.70711C7.51957 7.89464 7.26522 8 7 8C6.73478 8 6.48043 7.89464 6.29289 7.70711C6.10536 7.51957 6 7.26522 6 7C6 6.73478 6.10536 6.48043 6.29289 6.29289C6.48043 6.10536 6.73478 6 7 6C7.26522 6 7.51957 6.10536 7.70711 6.29289C7.89464 6.48043 8 6.73478 8 7Z" fill="white"/></svg>';
+        html += group.originalIndices.length + ' calque' + (group.originalIndices.length > 1 ? 's' : '') + ' concerné' + (group.originalIndices.length > 1 ? 's' : '');
+        html += '</div>';
+        html += '</div>';
+
+        // Sélecteur de variable
+        html += '<div style="min-width: 180px;">';
+        if (group.suggestions.length > 1) {
+          html += '<select class="variable-selector manual-select" data-indices="' + group.originalIndices.join(',') + '" style="width: 100%; padding: 6px; border-radius: 6px; border: 1px solid var(--poly-border-subtle); background: var(--poly-surface); color: var(--poly-text); font-size: 12px;">';
+          html += '<option value="">Choisir une variable...</option>';
+          group.suggestions.forEach(function(suggestion, idx) {
+            var distanceIndicator = suggestion.isExact ? '' : ' ≈';
+            html += '<option value="' + suggestion.id + '">' + suggestion.name + distanceIndicator + '</option>';
+          });
+          html += '</select>';
+        } else {
+          html += '<div style="padding: 6px; background: var(--poly-surface-soft); border-radius: 6px; font-size: 12px; color: var(--poly-text-muted);">Variable suggérée : ' + group.suggestions[0].name + '</div>';
+        }
+        html += '</div>';
+
+        html += '</div>';
+      });
+
+      html += '</div>';
+      return html;
+    }
+
+    function generateStatusContent(results, stats) {
+      if (results.length === 0) {
+        return '<div class="status-empty"><span>📈</span><p>Lancez une analyse pour voir l\'état de votre projet</p></div>';
+      }
+
+      var html = '<div style="display: grid; gap: 16px;">';
+
+      // Résumé global
+      html += '<div style="background: var(--poly-surface-soft); padding: 16px; border-radius: 8px; border: 1px solid var(--poly-border-subtle);">';
+      html += '<h6 style="margin: 0 0 12px 0; color: var(--poly-text); font-size: 14px;">📊 Résumé du nettoyage</h6>';
+      html += '<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">';
+
+      // Auto-corrigeable
+      html += '<div style="text-align: center; padding: 12px; background: ' + (stats.autoFixable > 0 ? 'rgba(22, 163, 74, 0.1)' : 'var(--poly-surface)') + '; border-radius: 6px;">';
+      html += '<div style="font-size: 18px; font-weight: 700; color: ' + (stats.autoFixable > 0 ? 'var(--poly-success)' : 'var(--poly-text-muted)') + ';">' + stats.autoFixable + '</div>';
+      html += '<div style="font-size: 11px; color: var(--poly-text-muted);">Auto-corrigeables</div>';
+      html += '</div>';
+
+      // Manuel
+      html += '<div style="text-align: center; padding: 12px; background: ' + (stats.manualFixes > 0 ? 'rgba(245, 158, 11, 0.1)' : 'var(--poly-surface)') + '; border-radius: 6px;">';
+      html += '<div style="font-size: 18px; font-weight: 700; color: ' + (stats.manualFixes > 0 ? 'var(--poly-warning)' : 'var(--poly-text-muted)') + ';">' + stats.manualFixes + '</div>';
+      html += '<div style="font-size: 11px; color: var(--poly-text-muted);">À corriger manuellement</div>';
+      html += '</div>';
+
+      // Total
+      html += '<div style="text-align: center; padding: 12px; background: var(--poly-surface); border-radius: 6px;">';
+      html += '<div style="font-size: 18px; font-weight: 700; color: var(--poly-accent);">' + stats.total + '</div>';
+      html += '<div style="font-size: 11px; color: var(--poly-text-muted);">Total problèmes</div>';
+      html += '</div>';
+
+      html += '</div>';
+      html += '</div>';
+
+      // Détail par catégorie
+      if (Object.keys(stats.categories).length > 0) {
+        html += '<div style="background: var(--poly-surface-soft); padding: 16px; border-radius: 8px; border: 1px solid var(--poly-border-subtle);">';
+        html += '<h6 style="margin: 0 0 12px 0; color: var(--poly-text); font-size: 14px;">🎨 Détail par catégorie</h6>';
+
+        Object.keys(stats.categories).forEach(function(catKey) {
+          var cat = stats.categories[catKey];
+          var catName = catKey === 'colors' ? 'Couleurs' : 'Géométrie';
+          var catIcon = catKey === 'colors' ? '🎨' : '📐';
+
+          html += '<div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--poly-border-subtle);">';
+          html += '<div style="display: flex; align-items: center; gap: 8px;">';
+          html += '<span>' + catIcon + '</span>';
+          html += '<span style="font-weight: 500;">' + catName + '</span>';
+          html += '</div>';
+          html += '<div style="display: flex; gap: 12px; font-size: 12px;">';
+          html += '<span style="color: var(--poly-success);">✓ ' + cat.auto + '</span>';
+          html += '<span style="color: var(--poly-warning);">⚠️ ' + cat.manual + '</span>';
+          html += '<span style="color: var(--poly-text-muted);">Total: ' + cat.total + '</span>';
+          html += '</div>';
+          html += '</div>';
+        });
+
+        html += '</div>';
+      }
+
+      html += '</div>';
+      return html;
+    }
+
+    function toggleBulkActions(stats) {
+      var autoActions = document.getElementById('autoCleaningActions');
+      var manualActions = document.getElementById('manualCleaningActions');
+
+      autoActions.style.display = stats.autoFixable > 0 ? 'block' : 'none';
+      manualActions.style.display = stats.manualFixes > 0 ? 'block' : 'none';
+    }
+
+    function getPropertyIcon(property) {
+      switch(property) {
+        case 'Fill':
+          return '<span class="property-label">Fond</span>';
+        case 'Stroke':
+          return '<span class="property-label">Contour</span>';
+        case 'Radius':
+        case 'Top Left Radius':
+        case 'Top Right Radius':
+        case 'Bottom Left Radius':
+        case 'Bottom Right Radius':
+          return '<span class="property-label">Rayon</span>';
+        case 'Spacing':
+        case 'Item Spacing':
+        case 'Padding':
+          return '<span class="property-label">Espacement</span>';
+        default:
+          return '<span class="property-label">' + property + '</span>';
+      }
+    }
+
+    // ============================================
+    // GESTION DES ONGLETS ET ÉVÉNEMENTS
+    // ============================================
+
+    // Gestionnaire d'onglets
+    function initCleaningTabs() {
+      var tabButtons = document.querySelectorAll('.tab-btn');
+      var tabPanes = document.querySelectorAll('.tab-pane');
+
+      tabButtons.forEach(function(button) {
+        button.addEventListener('click', function() {
+          var targetTab = this.getAttribute('data-tab');
+
+          // Désactiver tous les onglets
+          tabButtons.forEach(function(btn) { btn.classList.remove('active'); });
+          tabPanes.forEach(function(pane) { pane.classList.remove('active'); });
+
+          // Activer l'onglet sélectionné
+          this.classList.add('active');
+          document.getElementById(targetTab + 'CleaningTab').classList.add('active');
+        });
+      });
+    }
+
+    // Gestionnaire pour les sélecteurs manuels
+    function initManualSelectors() {
+      document.addEventListener('change', function(e) {
+        if (e.target.classList.contains('manual-select')) {
+          var indices = e.target.getAttribute('data-indices').split(',');
+          var variableId = e.target.value;
+
+          if (variableId) {
+            // Marquer cette ligne comme prête
+            e.target.closest('.cleaning-result-card').classList.add('ready-to-apply');
+
+            // Activer le bouton d'application groupée si nécessaire
+            updateManualApplyButton();
+          } else {
+            e.target.closest('.cleaning-result-card').classList.remove('ready-to-apply');
+            updateManualApplyButton();
+          }
+        }
+      });
+    }
+
+    function updateManualApplyButton() {
+      var readyCards = document.querySelectorAll('.manual-fix.ready-to-apply');
+      var applyBtn = document.getElementById('applyAllManualBtn');
+
+      if (readyCards.length > 0) {
+        applyBtn.disabled = false;
+        applyBtn.textContent = '✅ Appliquer les ' + readyCards.length + ' sélection' + (readyCards.length > 1 ? 's' : '');
+      } else {
+        applyBtn.disabled = true;
+        applyBtn.textContent = '⚠️ Appliquer les sélections manuelles';
+      }
+    }
+
+    // Application groupée des corrections manuelles
+    function applyAllManualFixes() {
+      var readyCards = document.querySelectorAll('.manual-fix.ready-to-apply');
+      var fixesApplied = 0;
+
+      readyCards.forEach(function(card) {
+        var select = card.querySelector('.manual-select');
+        if (select && select.value) {
+          var indices = select.getAttribute('data-indices').split(',');
+          var variableId = select.value;
+
+          // Simuler l'application (vous devrez adapter selon votre logique existante)
+          applyGroupFix(indices, variableId);
+          fixesApplied++;
+        }
+      });
+
+      if (fixesApplied > 0) {
+        // Feedback utilisateur
+        showNotification(fixesApplied + ' correction' + (fixesApplied > 1 ? 's' : '') + ' manuelle' + (fixesApplied > 1 ? 's' : '') + ' appliquée' + (fixesApplied > 1 ? 's' : '') + ' !', 'success');
+
+        // Relancer l'analyse automatiquement
+        setTimeout(function() {
+          document.getElementById('scanBtnActive').click();
+        }, 1500);
+      }
+    }
+
+    function showNotification(message, type) {
+      // Créer une notification temporaire
+      var notification = document.createElement('div');
+      notification.style.cssText = 'position: fixed; top: 20px; right: 20px; padding: 12px 16px; border-radius: 8px; color: white; font-weight: 500; z-index: 10000; max-width: 300px;';
+      notification.style.background = type === 'success' ? 'var(--poly-success)' : 'var(--poly-warning)';
+      notification.textContent = message;
+
+      document.body.appendChild(notification);
+
+      setTimeout(function() {
+        notification.remove();
+      }, 3000);
+    }
+
+    // Appliquer toutes les corrections automatiques
+    function applyAllAutoFixes() {
+      var autoCards = document.querySelectorAll('.cleaning-result-card.auto-fixable');
+      var fixesApplied = 0;
+
+      autoCards.forEach(function(card) {
+        var applyBtn = card.querySelector('button[onclick*="applyGroupFix"]');
+        if (applyBtn) {
+          // Extraire les paramètres de l'attribut onclick
+          var onclickStr = applyBtn.getAttribute('onclick');
+          var match = onclickStr.match(/applyGroupFix\(\[([^\]]+)\],\s*'([^']+)'\)/);
+          if (match) {
+            var indices = match[1].split(',').map(function(s) { return parseInt(s.trim()); });
+            var variableId = match[2];
+            applyGroupFix(indices, variableId);
+            fixesApplied++;
+          }
+        }
+      });
+
+      if (fixesApplied > 0) {
+        // Désactiver le bouton pendant l'application
+        var applyBtn = document.getElementById('applyAllAutoBtn');
+        applyBtn.disabled = true;
+        applyBtn.textContent = 'Application en cours...';
+
+        // Feedback utilisateur
+        showNotification(fixesApplied + ' correction' + (fixesApplied > 1 ? 's' : '') + ' automatique' + (fixesApplied > 1 ? 's' : '') + ' appliquée' + (fixesApplied > 1 ? 's' : '') + ' !', 'success');
+
+        // Relancer l'analyse automatiquement après un délai
+        setTimeout(function() {
+          document.getElementById('scanBtnActive').click();
+        }, 1500);
+      }
+    }
+
+    // Exporter un rapport de nettoyage
+    function exportCleaningReport() {
+      var stats = {
+        totalIssues: parseInt(document.getElementById('totalIssues').textContent) || 0,
+        autoFixable: parseInt(document.getElementById('autoFixable').textContent) || 0,
+        manualFixes: parseInt(document.getElementById('manualFixes').textContent) || 0,
+        timestamp: new Date().toISOString(),
+        version: '1.0'
+      };
+
+      var report = {
+        title: 'Rapport de nettoyage Emma Plugin',
+        date: new Date().toLocaleDateString('fr-FR'),
+        stats: stats,
+        summary: {
+          total_problems: stats.totalIssues,
+          auto_correctable: stats.autoFixable,
+          manual_required: stats.manualFixes,
+          completion_rate: stats.totalIssues > 0 ? Math.round((stats.autoFixable / stats.totalIssues) * 100) : 100
+        }
+      };
+
+      // Créer un blob avec le rapport JSON
+      var reportJson = JSON.stringify(report, null, 2);
+      var blob = new Blob([reportJson], { type: 'application/json' });
+
+      // Simuler un téléchargement (dans un vrai plugin, ceci serait géré côté plugin principal)
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'emma-cleaning-report-' + new Date().toISOString().split('T')[0] + '.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      showNotification('Rapport exporté avec succès !', 'success');
+    }
+
+    // Initialisation au chargement
+    document.addEventListener('DOMContentLoaded', function() {
+      initCleaningTabs();
+      initManualSelectors();
+    });
+
+    // Fonction helper pour générer le sélecteur de variable
+    function generateVariableSelector(result) {
+      var suggestions = result.colorSuggestions || [{ id: result.suggestedVariableId, name: result.suggestedVariableName, isExact: true }];
+
+      if (suggestions.length === 1 && suggestions[0].isExact) {
+        // Correspondance exacte : badge statique
+        return '<div class="variable-badge exact-match" style="background: var(--poly-accent); color: white; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 500; font-family: monospace;">' + result.suggestedVariableName + '</div>';
+      } else {
+        // Suggestions multiples : dropdown stylisé
+        var selectHtml = '<div style="position: relative;">';
+        selectHtml += '<select class="variable-selector" data-index="' + result.originalIndex + '" style="appearance: none; background: var(--poly-accent); color: white; border: none; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 500; font-family: monospace; cursor: pointer; min-width: 80px;">';
+
+        suggestions.forEach(function(suggestion, idx) {
+          var selected = idx === 0 ? 'selected' : '';
+          var distanceIndicator = suggestion.isExact ? '' : ' ≈';
+          selectHtml += '<option value="' + suggestion.id + '" ' + selected + '>' + suggestion.name + distanceIndicator + '</option>';
+        });
+
+        selectHtml += '</select>';
+        // Flèche du dropdown
+        selectHtml += '<span style="position: absolute; right: 6px; top: 50%; transform: translateY(-50%); pointer-events: none; color: white; font-size: 8px;">▼</span>';
+        selectHtml += '</div>';
+        return selectHtml;
+      }
+    }
+
+    function generateColorCard(result) {
+      var icon = result.property === "Fill" ? svgIcons.fill : svgIcons.stroke;
+      var cardHtml = '<div class="scan-result-card" data-index="' + result.originalIndex + '" style="display: flex; align-items: center; padding: 12px 16px; margin-bottom: 8px; background: var(--poly-surface-soft); border: 1px solid var(--poly-border-subtle); border-radius: 8px; transition: all 0.2s ease;">';
+
+      // Icône et nom de la propriété
+      cardHtml += '<div style="display: flex; align-items: center; min-width: 80px; margin-right: 16px;">';
+      cardHtml += '<span style="color: var(--poly-accent); margin-right: 6px;">' + icon + '</span>';
+      cardHtml += '<span style="font-size: 12px; color: var(--poly-text-muted); font-weight: 500;">' + result.property + '</span>';
+      cardHtml += '</div>';
+
+      // Nom du layer
+      cardHtml += '<div style="flex: 1; margin-right: 16px;">';
+      cardHtml += '<div style="font-weight: 500; font-size: 13px; color: var(--poly-text-primary); margin-bottom: 2px;">' + result.layerName + '</div>';
+      cardHtml += '</div>';
+
+      // Transformation visuelle couleur
+      cardHtml += '<div style="display: flex; align-items: center; margin-right: 16px;">';
+      // Rond avec la couleur brute
+      cardHtml += '<div style="width: 20px; height: 20px; border-radius: 50%; background-color: ' + result.value + '; border: 1px solid var(--poly-border-subtle); margin-right: 8px;"></div>';
+      // Flèche
+      cardHtml += '<span style="color: var(--poly-text-muted); margin-right: 8px;">→</span>';
+      // Sélecteur de variable (badge ou dropdown)
+      cardHtml += generateVariableSelector(result);
+      cardHtml += '</div>';
+
+      // Boutons d'action
+      cardHtml += '<div style="display: flex; gap: 4px;">';
+      cardHtml += '<button class="action-btn apply-btn" data-action="apply" data-index="' + result.originalIndex + '" style="width: 28px; height: 28px; border: none; border-radius: 4px; background: var(--poly-success); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; transition: all 0.2s ease;" title="Appliquer">✓</button>';
+      cardHtml += '<button class="action-btn ignore-btn" data-action="ignore" data-index="' + result.originalIndex + '" style="width: 28px; height: 28px; border: none; border-radius: 4px; background: var(--poly-error); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; transition: all 0.2s ease;" title="Ignorer">✕</button>';
+      cardHtml += '</div>';
+
+      cardHtml += '</div>';
+      return cardHtml;
+    }
+
+    function generateGeometryCard(result) {
+      var icon = result.property.includes("Radius") ? svgIcons.radius : svgIcons.spacing;
+      var cardHtml = '<div class="scan-result-card" data-index="' + result.originalIndex + '" style="display: flex; align-items: center; padding: 12px 16px; margin-bottom: 8px; background: var(--poly-surface-soft); border: 1px solid var(--poly-border-subtle); border-radius: 8px; transition: all 0.2s ease;">';
+
+      // Icône et nom de la propriété
+      cardHtml += '<div style="display: flex; align-items: center; min-width: 80px; margin-right: 16px;">';
+      cardHtml += '<span style="color: var(--poly-accent); margin-right: 6px;">' + icon + '</span>';
+      cardHtml += '<span style="font-size: 12px; color: var(--poly-text-muted); font-weight: 500;">' + result.property + '</span>';
+      cardHtml += '</div>';
+
+      // Nom du layer
+      cardHtml += '<div style="flex: 1; margin-right: 16px;">';
+      cardHtml += '<div style="font-weight: 500; font-size: 13px; color: var(--poly-text-primary); margin-bottom: 2px;">' + result.layerName + '</div>';
+      cardHtml += '</div>';
+
+      // Transformation visuelle mesure
+      cardHtml += '<div style="display: flex; align-items: center; margin-right: 16px;">';
+      // Valeur en px
+      cardHtml += '<span style="font-family: monospace; font-size: 13px; color: var(--poly-text-primary); margin-right: 8px;">' + result.value + '</span>';
+      // Flèche
+      cardHtml += '<span style="color: var(--poly-text-muted); margin-right: 8px;">→</span>';
+      // Variable suggérée
+      cardHtml += '<span style="font-family: monospace; font-size: 13px; color: var(--poly-accent); font-weight: 500;">' + result.suggestedVariableName + '</span>';
+      cardHtml += '</div>';
+
+      // Boutons d'action
+      cardHtml += '<div style="display: flex; gap: 4px;">';
+      cardHtml += '<button class="action-btn apply-btn" data-action="apply" data-index="' + result.originalIndex + '" style="width: 28px; height: 28px; border: none; border-radius: 4px; background: var(--poly-success); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; transition: all 0.2s ease;" title="Appliquer">✓</button>';
+      cardHtml += '<button class="action-btn ignore-btn" data-action="ignore" data-index="' + result.originalIndex + '" style="width: 28px; height: 28px; border: none; border-radius: 4px; background: var(--poly-error); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; transition: all 0.2s ease;" title="Ignorer">✕</button>';
+      cardHtml += '</div>';
+
+      cardHtml += '</div>';
+      return cardHtml;
+    }
+
+    function attachActionHandlers() {
+      // Gestionnaire pour les boutons d'action
+      var actionButtons = document.querySelectorAll('.action-btn');
+      actionButtons.forEach(function(btn) {
+        btn.addEventListener('click', function(e) {
+          e.preventDefault();
+          var action = this.getAttribute('data-action');
+          var index = parseInt(this.getAttribute('data-index'));
+
+          if (action === 'apply') {
+            // Récupérer la variable sélectionnée depuis le dropdown si elle existe
+            var selectedVariableId = null;
+            var card = this.closest('.scan-result-card');
+            if (card) {
+              var selector = card.querySelector('.variable-selector');
+              if (selector) {
+                selectedVariableId = selector.value;
+              }
+            }
+
+            // Envoyer le message apply-single-fix avec la variable sélectionnée
+            parent.postMessage({
+              pluginMessage: {
+                type: "apply-single-fix",
+                index: index,
+                selectedVariableId: selectedVariableId
+              }
+            }, "*");
+
+            // Masquer la carte immédiatement
+            if (card) {
+              card.style.display = 'none';
+              updateProblemCounter(-1);
+            }
+          } else if (action === 'ignore') {
+            // Masquer la carte visuellement
+            var card = this.closest('.scan-result-card');
+            if (card) {
+              card.style.display = 'none';
+              updateProblemCounter(-1);
+            }
+          }
+        });
+      });
+    }
+
+    function updateProblemCounter(change, reset) {
+      var counterElement = document.getElementById('problemCounter');
+      if (!counterElement) {
+        // Créer le compteur s'il n'existe pas
+        var scanResultsContainer = document.querySelector('.scan-results-container') || scanResultsList.parentElement;
+        if (scanResultsContainer) {
+          var counterHtml = '<div id="problemCounter" style="text-align: center; margin-bottom: 16px; font-size: 14px; color: var(--poly-text-muted);">';
+          counterHtml += 'Problèmes restants : <span id="problemCount" style="font-weight: 600; color: var(--poly-accent);">0</span>';
+          counterHtml += '</div>';
+          scanResultsContainer.insertBefore(document.createRange().createContextualFragment(counterHtml), scanResultsList);
+          counterElement = document.getElementById('problemCounter');
+        }
+      }
+
+      if (counterElement) {
+        var countElement = document.getElementById('problemCount');
+        if (countElement) {
+          var currentCount;
+          if (reset) {
+            currentCount = 0;
+          } else {
+            currentCount = parseInt(countElement.textContent) || 0;
+          }
+          var newCount = Math.max(0, currentCount + change);
+          countElement.textContent = newCount;
+
+          // Masquer le compteur si aucun problème
+          counterElement.style.display = newCount > 0 ? 'block' : 'none';
+        }
+      }
+    }
+
+    function applyAllFixes() {
+      parent.postMessage({
+        pluginMessage: {
+          type: "apply-all-fixes"
+        }
+      }, "*");
+
+      // Désactiver les boutons pendant l'application
+      var applyAllBtn = document.getElementById("applyAllBtn");
+      var step4ApplyAll = document.getElementById("step4ApplyAll");
+
+      if (applyAllBtn) {
+        applyAllBtn.disabled = true;
+        applyAllBtn.textContent = "Application en cours...";
+      }
+      if (step4ApplyAll) {
+        step4ApplyAll.disabled = true;
+        step4ApplyAll.textContent = "⏳ Application...";
+      }
+    }
+
+    // Scan buttons
+    scanBtn.addEventListener("click", function () {
+      parent.postMessage({
+        pluginMessage: {
+          type: "scan-frame"
+        }
+      }, "*");
+    });
+
+    scanBtnActive.addEventListener("click", function () {
+      parent.postMessage({
+        pluginMessage: {
+          type: "scan-frame"
+        }
+      }, "*");
+    });
+
+    // Apply all fixes button
+    var applyAllBtn = document.getElementById("applyAllBtn");
+    if (applyAllBtn) {
+      applyAllBtn.addEventListener("click", function () {
+        applyAllFixes();
+      });
+    }
+
+    // Back button
+    step4Back.addEventListener("click", function () {
+      switchStep(0);
+    });
+
+    // Apply all button (sticky footer)
+    if (step4ApplyAll) {
+      step4ApplyAll.addEventListener("click", function () {
+        applyAllFixes();
+      });
+    }
+
+    // ============================================
+    // NOUVEAUX GESTIONNAIRES POUR L'INTERFACE HIÉRARCHISÉE
+    // ============================================
+
+    // Bouton appliquer toutes les corrections automatiques
+    var applyAllAutoBtn = document.getElementById("applyAllAutoBtn");
+    if (applyAllAutoBtn) {
+      applyAllAutoBtn.addEventListener("click", function () {
+        applyAllAutoFixes();
+      });
+    }
+
+    // Bouton appliquer les sélections manuelles
+    var applyAllManualBtn = document.getElementById("applyAllManualBtn");
+    if (applyAllManualBtn) {
+      applyAllManualBtn.addEventListener("click", function () {
+        applyAllManualFixes();
+      });
+    }
+
+    // Bouton exporter le rapport
+    var exportReportBtn = document.getElementById("exportReportBtn");
+    if (exportReportBtn) {
+      exportReportBtn.addEventListener("click", function () {
+        exportCleaningReport();
+      });
+    }
 
     // ============================================
     // MESSAGES FROM PLUGIN
@@ -1537,16 +3784,32 @@
       var msg = event.data.pluginMessage;
       if (!msg) return;
 
+
       if (msg.type === "tokens-generated") {
         currentTokens = msg.tokens;
         updatePreview();
         updateExport();
+
+        // Afficher la section ANALYSER & CORRIGER maintenant qu'il y a des tokens
+        var sectionAnalyze = document.querySelector('.section-analyze');
+        if (sectionAnalyze) {
+          sectionAnalyze.style.display = '';
+        }
+
+        // Activer l'option "Gérer les variables locales" puisqu'il y a des tokens
+        if (choiceManageTokens) {
+          choiceManageTokens.classList.remove("hidden");
+        }
+
         switchStep(3); // Show preview
       }
 
       if (msg.type === "has-variables") {
         if (msg.value === true) {
-          overwriteCheckboxContainer.classList.remove("hidden");
+          // Only show if in Designer mode
+          if (!designerView.classList.contains("hidden")) {
+            overwriteCheckboxContainer.classList.remove("hidden");
+          }
         } else {
           overwriteCheckboxContainer.classList.add("hidden");
         }
@@ -1561,6 +3824,27 @@
           existingTokensData = msg.tokens;
           existingLibrary = msg.library || "tailwind";
 
+          // 🚨 FIX: Detect and Update Primary Color State
+          if (existingTokensData.brand) {
+            var detectedColor = detectPrimaryColorFromTokens(existingTokensData.brand);
+            if (detectedColor) {
+              console.log("Couleur primaire détectée:", detectedColor);
+              currentColor = detectedColor;
+
+              // Update Inputs
+              if (colorInput) colorInput.value = currentColor;
+              if (colorPicker) colorPicker.value = currentColor;
+
+              // Update Dashboard Inputs if they exist
+              if (dashboardColorPicker) dashboardColorPicker.value = currentColor;
+              if (dashboardColorValue) dashboardColorValue.textContent = currentColor;
+              if (dashboardColorPreviewBg) dashboardColorPreviewBg.style.backgroundColor = currentColor;
+
+              // Update Wizard Step 2 Preview
+              updateColorPreview(currentColor);
+            }
+          }
+
           console.log("Tokens stockés dans existingTokensData:", existingTokensData);
 
           // Compter le nombre total de tokens
@@ -1573,8 +3857,18 @@
 
           console.log("Nombre total de tokens:", totalTokens);
 
-          // Afficher la 3ème carte
+          // Afficher la 3ème carte et s'assurer que la section est visible
           choiceManageTokens.classList.remove("hidden");
+          var sectionAnalyze = document.querySelector('.section-analyze');
+          if (sectionAnalyze) {
+            sectionAnalyze.style.display = '';
+          }
+
+          // Gérer l'affichage de la grille (deux cartes visibles)
+          var analyzeChoiceGrid = choiceManageTokens.closest('.choice-grid');
+          if (analyzeChoiceGrid) {
+            analyzeChoiceGrid.classList.remove("single-card");
+          }
 
           // Mettre à jour les informations
           var libraryNames = {
@@ -1589,9 +3883,70 @@
           existingTokensInfo.textContent = "Librairie : " + (libraryNames[existingLibrary] || existingLibrary);
           existingTokensCount.textContent = totalTokens + " token" + (totalTokens > 1 ? "s" : "");
         } else {
-          // Pas de tokens existants
+          // Pas de tokens existants - masquer toute la section ANALYSER & CORRIGER
           hasExistingTokens = false;
-          choiceManageTokens.classList.add("hidden");
+          var sectionAnalyze = document.querySelector('.section-analyze');
+          if (sectionAnalyze) {
+            sectionAnalyze.style.display = 'none';
+          }
+        }
+      }
+
+      // Gestion des messages de vérification de frame
+      if (msg.type === "scan-results") {
+        scanResults.classList.remove("hidden");
+        scanEmptyState.classList.add("hidden");
+        displayScanResults(msg.results);
+      }
+
+      if (msg.type === "selection-checked") {
+        if (msg.hasSelection) {
+          scanBtn.disabled = false;
+          scanBtn.textContent = "Lancer l'analyse";
+
+          // Afficher le nom de la frame sélectionnée au lieu de l'état vide
+          scanEmptyState.classList.add("hidden");
+          if (msg.selectedFrameName) {
+            scanEmptyState.innerHTML = '<div style="text-align: center; padding: 40px 20px;"><div style="margin-bottom: 16px; display: block;"><svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="opacity: 0.5;"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><rect x="7" y="7" width="10" height="10" rx="1" stroke="currentColor" stroke-width="1" fill="none" opacity="0.3"/><circle cx="12" cy="12" r="1.5" fill="currentColor" opacity="0.6"/></svg></div><h4 style="margin-bottom: 8px; color: var(--poly-text);">Frame sélectionnée</h4><p style="color: var(--poly-text-muted); margin-bottom: 20px; font-weight: 500;">' + msg.selectedFrameName + '</p></div>';
+            scanEmptyState.classList.remove("hidden");
+          }
+        } else {
+          scanBtn.disabled = true;
+          scanBtn.textContent = "Lancer l'analyse";
+
+          // Remettre l'état vide original
+          scanEmptyState.innerHTML = '<div style="text-align: center; padding: 40px 20px;"><div style="margin-bottom: 16px; display: block;"><svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="opacity: 0.5;"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><rect x="7" y="7" width="10" height="10" rx="1" stroke="currentColor" stroke-width="1" fill="none" opacity="0.3"/><circle cx="12" cy="12" r="1.5" fill="currentColor" opacity="0.6"/></svg></div><h4 style="margin-bottom: 8px; color: var(--poly-text-muted);">Aucune Frame sélectionnée</h4><p style="color: var(--poly-text-muted); margin-bottom: 20px;">Sélectionnez une frame dans Figma pour lancer l\'analyse et détecter les valeurs en dur.</p></div>';
+          scanEmptyState.classList.remove("hidden");
+        }
+      }
+
+      if (msg.type === "all-fixes-applied") {
+        // Masquer les boutons d'application
+        var applyAllSection = document.getElementById("applyAllSection");
+        var step4ApplyAll = document.getElementById("step4ApplyAll");
+
+        if (applyAllSection) {
+          applyAllSection.style.display = 'none';
+        }
+        if (step4ApplyAll) {
+          step4ApplyAll.style.display = 'none';
+        }
+
+        // Réactiver les boutons pour une future utilisation
+        var applyAllBtn = document.getElementById("applyAllBtn");
+        if (applyAllBtn) {
+          applyAllBtn.disabled = false;
+          applyAllBtn.textContent = "✅ Appliquer toutes les corrections";
+        }
+        if (step4ApplyAll) {
+          step4ApplyAll.disabled = false;
+          step4ApplyAll.textContent = "✅ Valider";
+        }
+
+        // Afficher un message de succès
+        var scanResultsList = document.getElementById("scanResultsList");
+        if (scanResultsList) {
+          scanResultsList.innerHTML = '<div style="text-align: center; padding: 40px 20px; color: var(--poly-success);"><p>✅ ' + msg.appliedCount + ' correction(s) appliquée(s) avec succès !</p><p style="font-size: 12px; color: var(--poly-text-muted); margin-top: 8px;">Relancez l\'analyse pour vérifier qu\'il n\'y a plus d\'éléments à corriger.</p></div>';
         }
       }
     };
@@ -1604,15 +3959,33 @@
     modeDesigner.addEventListener("click", function () {
       modeDesigner.classList.add("active");
       modeDev.classList.remove("active");
+
       designerView.classList.remove("hidden");
       devView.classList.add("hidden");
+
+      // Footer Switch
+      footerDesignerOps.classList.remove("hidden");
+      footerDevOps.classList.add("hidden");
+
+      // Toggle Overwrite checkbox visibility logic (restore if needed)
+      if (hasExistingTokens) {
+        overwriteCheckboxContainer.classList.remove("hidden");
+      }
     });
 
     modeDev.addEventListener("click", function () {
       modeDev.classList.add("active");
       modeDesigner.classList.remove("active");
+
       devView.classList.remove("hidden");
       designerView.classList.add("hidden");
+
+      // Footer Switch
+      footerDevOps.classList.remove("hidden");
+      footerDesignerOps.classList.add("hidden");
+
+      // Hide Overwrite checkbox in Dev mode (irrelevant)
+      overwriteCheckboxContainer.classList.add("hidden");
     });
 
     // Token Category Tabs
@@ -1637,10 +4010,38 @@
 
       var isColor = (activeCategory === "brand" || activeCategory === "system" || activeCategory === "gray");
 
-      var html = "<table class='token-table'>";
+      // Logic to Determine Lock State
+      var isCustomLib = (currentNaming === "custom");
+      var isLocked = !isCustomLib && !isColor; // Lock if Standard Lib AND Non-Color structure
+
+      var html = "";
+
+      // Stylish Banner for Locked State (Placed at Top)
+      if (isLocked) {
+        var libName = (currentNaming ? currentNaming.charAt(0).toUpperCase() + currentNaming.slice(1) : "Standard");
+        html += "<div class='locked-banner' style='margin-bottom: 12px; margin-top: 0;'>";
+        html += "<span class='icon'>🔒</span>";
+        html += "<div>";
+        html += "<div class='locked-banner-text'>" + libName + " standards are active.</div>";
+        html += "<span class='locked-banner-sub'>Structure tokens are locked to ensure code compatibility.</span>";
+        html += "</div>";
+        html += "</div>";
+      }
+
+      html += "<table class='token-table'>";
       html += "<thead><tr>";
-      if (isColor) html += "<th>Color</th>";
-      html += "<th>Name</th><th>Value</th><th style='width: 60px;'>Actions</th>";
+      if (isColor) {
+        html += "<th style='width: 60px;'>Color</th>";
+        html += "<th style='width: 120px;'>Name</th>"; // Fixed width
+      } else {
+        html += "<th style='width: 180px;'>Name</th>"; // Wider name if no color
+      }
+      html += "<th>Value</th>"; // Flexible width
+
+      // ONLY show Actions header if Custom
+      if (isCustomLib) {
+        html += "<th style='width: 60px;'>Actions</th>";
+      }
       html += "</tr></thead><tbody>";
 
       for (var key in categoryData) {
@@ -1651,18 +4052,38 @@
         if (isColor) {
           html += "<td><div class='color-swatch' style='background-color: " + value + ";'></div></td>";
         }
-        html += "<td class='token-name'>" + key + "</td>";
-        html += "<td><input type='text' class='table-input' data-token-key='" + key + "' value='" + value + "' /></td>";
-        html += "<td style='text-align: center;'>";
-        html += "<button class='btn-icon' onclick='deleteToken(\"" + key + "\")' title='Delete' style='color: var(--poly-error);'><svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-linecap='round' stroke-linejoin='round'><path d='M3 6h18'/><path d='M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6'/><path d='M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2'/></svg></button>";
+        html += "<td class='token-name'>" + activeCategory + "-" + key + "</td>";
+
+        // Value Column (Conditional Render)
+        html += "<td>";
+        if (isLocked) {
+          // LOCKED DISPLAY (Disabled Input, no Icon)
+          // We keep the <input> tag to ensure perfect alignment with editable rows
+          html += "<input type='text' class='table-input locked' value='" + value + "' disabled />";
+        } else {
+          // EDITABLE INPUT (Standard)
+          html += "<input type='text' class='table-input' data-token-key='" + key + "' value='" + value + "' />";
+        }
         html += "</td>";
+
+        // Action Column: ONLY if Custom
+        if (isCustomLib) {
+          html += "<td style='text-align: center;'>";
+          html += "<button class='btn-icon' onclick='deleteToken(\"" + key + "\")' title='Delete' style='color: var(--poly-error);'><svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 6h18'/><path d='M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6'/><path d='M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2'/></svg></button>";
+          html += "</td>";
+        }
         html += "</tr>";
       }
 
       html += "</tbody></table>";
-      html += "<div class='add-token-sticky'>";
-      html += "<button class='btn-secondary' onclick='addToken()' style='width: 100%;'>+ Add Token</button>";
-      html += "</div>";
+
+      // Only show "Add Token" if we are in "Custom" mode
+      if (isCustomLib) {
+        html += "<div class='add-token-sticky'>";
+        html += "<button class='btn-secondary' onclick='addToken()' style='width: 100%;'>+ Add Token</button>";
+        html += "</div>";
+      }
+
       tokenPreview.innerHTML = html;
 
       // Add event listeners to all inputs for inline editing
@@ -1682,6 +4103,51 @@
         });
       });
     }
+
+    function highlightSyntax(code, lang) {
+      if (!code) return "";
+
+      // Basic HTML Escape
+      code = code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+      if (lang === 'json') {
+        return code.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+          var cls = 'syn-number';
+          if (/^"/.test(match)) {
+            if (/:$/.test(match)) {
+              cls = 'syn-key';
+            } else {
+              cls = 'syn-string';
+            }
+          } else if (/true|false|null/.test(match)) {
+            cls = 'syn-kwd';
+          }
+          return '<span class="' + cls + '">' + match + '</span>';
+        });
+      }
+
+      if (lang === 'css' || lang === 'scss') {
+        return code
+          .replace(/(\/\*[\s\S]*?\*\/)/g, '<span class="syn-comment">$1</span>') // Comments
+          .replace(/([a-zA-Z-]+)(?=:)/g, '<span class="syn-key">$1</span>') // Props
+          .replace(/(:)([^;]+)(;)/g, function (m, p1, p2, p3) {
+            return '<span class="syn-punc">:</span><span class="syn-number">' + p2 + '</span><span class="syn-punc">;</span>';
+          });
+      }
+
+      if (lang === 'js' || lang === 'tailwind') {
+        return code
+          .replace(/(\/\/.*)/g, '<span class="syn-comment">$1</span>')
+          .replace(/('.*?')|(".*?")/g, '<span class="syn-string">$1</span>')
+          .replace(/\b(module|exports|const|var|let|return|function|theme|extend)\b/g, '<span class="syn-kwd">$1</span>')
+          .replace(/(\b\d+\b)/g, '<span class="syn-number">$1</span>');
+      }
+
+      return code;
+    }
+
+    var rawExportContent = "";
+    var codeEditor = document.getElementById("codeEditor");
 
     function updateExport() {
       if (!currentTokens) return;
@@ -1723,23 +4189,54 @@
         }
       }
 
-      exportOutput.value = output;
+      rawExportContent = output;
+
+      // Determine syntax lang
+      var lang = 'css'; // default
+      if (format === 'json') lang = 'json';
+      if (format === 'tailwind') lang = 'js';
+      if (format === 'scss') lang = 'scss';
+
+      codeEditor.innerHTML = highlightSyntax(output, lang);
     }
 
     exportFormat.addEventListener("change", updateExport);
 
-    copyBtn.addEventListener("click", function () {
-      exportOutput.select();
-      document.execCommand("copy");
-      copyBtn.textContent = "Copied!";
+    function copyCheck(btn) {
+      var originalHTML = btn.innerHTML;
+      // Simple visual feedback
+      btn.classList.add("copied"); // Optional: add a class for CSS styling
+      // Try to find text node or just set innerHTML
+      var textSpan = btn.querySelector("span:not(.icon)"); // Try to find text part
+
+      btn.innerHTML = '<span class="icon">✓</span> Copied!';
+
       setTimeout(function () {
-        copyBtn.textContent = "Copy to Clipboard";
+        btn.innerHTML = originalHTML;
+        btn.classList.remove("copied");
       }, 2000);
-    });
+    }
+
+    function doCopy(btnTrigger) {
+      if (!rawExportContent) return;
+
+      var ta = document.createElement("textarea");
+      ta.value = rawExportContent;
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+
+      copyCheck(btnTrigger);
+    }
+
+    copyBtnFooter.addEventListener("click", function () { doCopy(copyBtnFooter); });
 
     // Download File Logic
     downloadBtn.addEventListener("click", function () {
-      const content = exportOutput.value;
+      const content = rawExportContent;
       const format = exportFormat.value;
       if (!content) return;
 
@@ -1888,10 +4385,125 @@
       return tokens;
     }
 
+
+
     // ============================================
     // INITIALIZATION
     // ============================================
     updateColorPreview(currentColor);
+    // INITIALIZATION
+    colorInput.value = currentColor;
+    colorPicker.value = currentColor;
+    updateColorPreview(currentColor);
+
+    // ============================================
+    // WINDOW RESIZE FUNCTIONALITY
+    // ============================================
+
+    // Resize handle element
+    const resizeHandle = document.createElement('div');
+    resizeHandle.id = 'resize-handle';
+    resizeHandle.innerHTML = '↗';
+    resizeHandle.style.cssText = `
+      position: fixed;
+      bottom: 0;
+      right: 0;
+      width: 16px;
+      height: 16px;
+      cursor: nw-resize;
+      background: var(--poly-surface);
+      color: var(--poly-text-muted);
+      border: 1px solid var(--poly-border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 8px;
+      font-weight: normal;
+      border-radius: 3px 0 0 0;
+      user-select: none;
+      z-index: 1000;
+      opacity: 0.7;
+      transition: all 0.2s ease;
+    `;
+
+    resizeHandle.addEventListener('mouseenter', function() {
+      this.style.backgroundColor = 'var(--poly-accent)';
+      this.style.color = 'var(--poly-bg)';
+      this.style.opacity = '1';
+      this.style.transform = 'scale(1.1)';
+    });
+
+    resizeHandle.addEventListener('mouseleave', function() {
+      this.style.backgroundColor = 'var(--poly-surface)';
+      this.style.color = 'var(--poly-text-muted)';
+      this.style.opacity = '0.7';
+      this.style.transform = 'scale(1)';
+    });
+
+    document.body.appendChild(resizeHandle);
+
+    // Resize functionality
+    let isResizing = false;
+    let startX, startY, startWidth, startHeight;
+
+    function startResize(e) {
+      isResizing = true;
+      startX = e.clientX;
+      startY = e.clientY;
+
+      // Get current window size
+      startWidth = window.innerWidth;
+      startHeight = window.innerHeight;
+
+      document.body.classList.add('resizing');
+      document.body.style.cursor = 'nw-resize';
+
+      document.addEventListener('mousemove', resize);
+      document.addEventListener('mouseup', stopResize);
+      e.preventDefault();
+    }
+
+    function resize(e) {
+      if (!isResizing) return;
+
+      const deltaX = e.clientX - startX;
+      const deltaY = e.clientY - startY;
+
+      // Contraintes de taille pour une bonne UX
+      const MIN_WIDTH = 400;
+      const MAX_WIDTH = 1600;
+      const MIN_HEIGHT = 500;
+      const MAX_HEIGHT = 1400;
+
+      const newWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, startWidth + deltaX));
+      const newHeight = Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, startHeight + deltaY));
+
+      // Send resize message to main thread
+      parent.postMessage({
+        pluginMessage: {
+          type: 'resize',
+          width: newWidth,
+          height: newHeight
+        }
+      }, '*');
+    }
+
+    function stopResize() {
+      isResizing = false;
+      document.body.classList.remove('resizing');
+      document.body.style.cursor = '';
+
+      document.removeEventListener('mousemove', resize);
+      document.removeEventListener('mouseup', stopResize);
+    }
+
+    resizeHandle.addEventListener('mousedown', startResize);
+
+    // Prevent text selection during resize
+    resizeHandle.addEventListener('selectstart', function(e) {
+      e.preventDefault();
+    });
+
   </script>
 </body>
 
