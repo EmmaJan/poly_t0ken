@@ -923,7 +923,10 @@ function getScopesForProperty(propertyType) {
     "Padding Left": ["GAP", "ALL_SCOPES"],
     "Padding Right": ["GAP", "ALL_SCOPES"],
     "Padding Top": ["GAP", "ALL_SCOPES"],
-    "Padding Bottom": ["GAP", "ALL_SCOPES"]
+    "Padding Bottom": ["GAP", "ALL_SCOPES"],
+
+    // Typographie accepte FONT_SIZE + ALL_SCOPES
+    "Font Size": ["FONT_SIZE", "ALL_SCOPES"]
   };
 
   return propertyScopes[propertyType] || [];
