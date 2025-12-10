@@ -2600,10 +2600,6 @@
     var step4Back = document.getElementById("step4Back");
     var step4ApplyAll = document.getElementById("step4ApplyAll");
 
-    console.log("DOM elements initialized:");
-    console.log("- scanBtn:", scanBtn);
-    console.log("- scanBtnActive:", scanBtnActive);
-    console.log("- scanResults:", scanResults);
 
     // ============================================
     // STATE VARIABLES
@@ -3858,9 +3854,6 @@
 
     // Scan buttons - logique simplifiée
     function handleScanBtnClick() {
-      console.log('Main scan button clicked - starting analysis');
-      console.log('scanBtn element:', document.getElementById('scanBtn'));
-
       parent.postMessage({
         pluginMessage: {
           type: "scan-frame"
@@ -3892,22 +3885,11 @@
       }
     }
 
-    console.log("Setting up scan button listeners");
-    console.log("scanBtn element:", scanBtn);
-    console.log("scanBtnActive element:", scanBtnActive);
-
     if (scanBtn) {
-      console.log("Adding click listener to scanBtn");
       scanBtn.addEventListener("click", handleScanBtnClick);
-    } else {
-      console.error("scanBtn not found!");
     }
-
     if (scanBtnActive) {
-      console.log("Adding click listener to scanBtnActive");
       scanBtnActive.addEventListener("click", handleScanBtnActiveClick);
-    } else {
-      console.error("scanBtnActive not found!");
     }
 
     // Apply all fixes button
@@ -3962,15 +3944,8 @@
     // MESSAGES FROM PLUGIN
     // ============================================
     window.onmessage = function (event) {
-      console.log("UI received message:", event.data);
-
       var msg = event.data.pluginMessage;
-      if (!msg) {
-        console.log("No pluginMessage in event data");
-        return;
-      }
-
-      console.log("Processing pluginMessage:", msg);
+      if (!msg) return;
 
 
       if (msg.type === "tokens-generated") {
@@ -4088,13 +4063,9 @@
       }
 
       if (msg.type === "selection-checked") {
-        console.log("UI received selection-checked:", msg);
-
         // Vérifier si les résultats d'analyse sont affichés
         var scanResults = document.getElementById('scanResults');
         var hasResultsDisplayed = scanResults && scanResults.classList && !scanResults.classList.contains('hidden');
-
-        console.log("hasResultsDisplayed:", hasResultsDisplayed);
 
         if (msg.hasSelection) {
           scanBtn.disabled = false;
