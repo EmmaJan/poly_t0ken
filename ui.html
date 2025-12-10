@@ -42,7 +42,7 @@
 
     /* Mise à jour du sélecteur pour cibler la nouvelle liste unifiée */
     #unifiedCleaningList {
-      max-height: 500px; /* Donne une hauteur max */
+      max-height: calc(100vh - 300px); /* Hauteur adaptative basée sur la fenêtre */
       overflow-y: auto;  /* Active le scroll si nécessaire */
       padding-right: 8px;
       display: block;    /* Force l'affichage */
@@ -184,9 +184,16 @@
     /* Allow specific steps to scroll the page body */
     #wizardStep0.active,
     #wizardStep1.active,
-    #wizardStep2.active,
-    #wizardStep4.active {
+    #wizardStep2.active {
       overflow-y: auto;
+      height: 100%;
+      display: block;
+      padding-bottom: 120px;
+      /* Clear footer */
+    }
+
+    #wizardStep4.active {
+      overflow-y: visible;
       height: 100%;
       display: block;
       padding-bottom: 120px;
@@ -242,6 +249,7 @@
       border-bottom-right-radius: 0;
       border-bottom: none;
       padding-bottom: 0;
+      overflow: visible; /* Remove scroll from card container */
     }
 
     /* ============================================
@@ -254,9 +262,8 @@
       flex-direction: column;
       flex: 1;
       min-height: 0;
-      /* CRITICAL for scroll */
-      overflow-y: auto;
-      /* Internal scroll */
+      /* Remove scroll from designer view - only unified list should scroll */
+      overflow: visible;
       padding: 0 4px 120px 0;
       /* Bottom padding for footer */
     }
@@ -533,19 +540,23 @@
     }
 
     /* Tabs */
-    .tabs {
+
+    /* Onglets de génération de tokens - style original restauré */
+    #tokenTabs {
       display: flex;
-      gap: 8px;
-      margin-bottom: 12px;
+      gap: 4px;
+      margin-bottom: 16px;
       background: var(--poly-surface);
-      padding: 4px;
-      border-radius: 10px;
+      padding: 6px;
+      border: 1px solid rgba(138, 213, 63, 0.3);
+      border-radius: 12px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
 
-    .tab {
+    #tokenTabs .tab {
       flex: 1;
-      padding: 8px 12px;
-      border-radius: 7px;
+      padding: 10px 16px;
+      border-radius: 8px;
       cursor: pointer;
       font-size: 13px;
       font-weight: 500;
@@ -553,19 +564,30 @@
       border: none;
       background: transparent;
       color: var(--poly-text-muted);
+      transition: all 0.2s ease;
+      position: relative;
+      text-transform: none;
+      letter-spacing: normal;
     }
 
-    .tab.active {
-      background: var(--poly-surface-soft);
-      color: var(--poly-accent);
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    #tokenTabs .tab.active {
+      background: var(--poly-accent);
+      color: var(--poly-bg);
+      font-weight: 600;
+      box-shadow: 0 2px 8px rgba(138, 213, 63, 0.3);
     }
 
-    .tab:hover:not(.active),
-    .tab:focus:not(.active) {
+    #tokenTabs .tab:hover:not(.active) {
       color: var(--poly-accent);
       background: rgba(138, 213, 63, 0.1);
-      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      transform: translateY(-1px);
+    }
+
+    #tokenTabs .tab:focus:not(.active) {
+      outline: none;
+      color: var(--poly-accent);
+      background: rgba(138, 213, 63, 0.1);
+      box-shadow: 0 0 0 2px rgba(138, 213, 63, 0.2);
     }
 
     /* Locked Banner */
@@ -1035,6 +1057,14 @@
        FILTER SYSTEM (remplace les onglets)
        ============================================ */
 
+    .content-header {
+      margin-bottom: 16px;
+    }
+
+    .content-header h5 {
+      margin-bottom: 4px;
+    }
+
     .filter-system {
       display: flex;
       justify-content: space-between;
@@ -1045,36 +1075,45 @@
 
     .filter-buttons {
       display: flex;
-      gap: 8px;
-      background: var(--poly-surface-soft);
-      border-radius: 8px;
-      padding: 4px;
+      gap: 4px;
+      background: var(--poly-surface);
+      padding: 6px;
+      border: 1px solid rgba(138, 213, 63, 0.3);
+      border-radius: 12px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
 
     .filter-btn {
-      position: relative;
-      padding: 8px 16px;
+      flex: 1;
+      padding: 10px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 500;
+      text-align: center;
       border: none;
       background: transparent;
       color: var(--poly-text-muted);
-      border-radius: 6px;
-      font-size: 13px;
-      font-weight: 500;
-      cursor: pointer;
       transition: all 0.2s ease;
+      position: relative;
+      text-transform: none;
+      letter-spacing: normal;
       display: flex;
       align-items: center;
+      justify-content: center;
       gap: 6px;
     }
 
     .filter-btn:hover:not(.active) {
-      background: rgba(255, 255, 255, 0.05);
-      color: var(--poly-text);
+      color: var(--poly-accent);
+      background: rgba(138, 213, 63, 0.1);
+      transform: translateY(-1px);
     }
 
     .filter-btn.active {
       background: var(--poly-accent);
       color: var(--poly-bg);
+      font-weight: 600;
       box-shadow: 0 2px 8px rgba(138, 213, 63, 0.3);
     }
 
@@ -1316,6 +1355,11 @@
       transform: translateY(-1px);
     }
 
+    /* Padding supplémentaire pour la première carte au hover pour éviter le crop */
+    .cleaning-result-card:first-child:hover {
+      margin-top: 4px;
+    }
+
     .cleaning-result-card.selected {
       border-color: var(--poly-accent);
       background: rgba(138, 213, 63, 0.05);
@@ -1355,10 +1399,6 @@
         padding: 12px;
       }
 
-      .cleaning-result-card .action-btn {
-        width: 100%;
-        max-width: none;
-      }
     }
 
     /* Contenu des onglets */
@@ -1423,15 +1463,14 @@
       margin-bottom: 8px;
     }
 
-    /* Amélioration des cartes de résultats */
+    /* Amélioration des cartes de résultats - Structure Header + Body */
     .cleaning-result-card {
       display: flex;
-      align-items: center;
+      flex-direction: column;
       padding: 12px 16px;
-      background: var(--poly-surface-soft);
-      border: 1px solid var(--poly-border-subtle);
-      border-radius: var(--poly-radius);
-      box-shadow: var(--poly-shadow-sm);
+      background: var(--poly-surface);
+      border: 1px solid rgba(138, 213, 63, 0.3);
+      border-radius: 12px;
       transition: all 0.2s ease;
     }
 
@@ -1457,29 +1496,40 @@
     }
 
     .cleaning-result-card:hover {
-      background: rgba(255, 255, 255, 0.02);
       border-color: var(--poly-accent);
+    }
+
+    /* Styles pour la structure Header + Body */
+    .cleaning-result-card .card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .cleaning-result-card .card-body {
+      display: flex;
+      align-items: center;
+      gap: 12px;
     }
 
     /* Style spécifique pour les cartes Auto-Fix (Design Row) */
     .cleaning-result-card.auto-fixable {
       display: flex;
-      align-items: center;
-      justify-content: space-between;
+      flex-direction: column;
       padding: 12px 16px;
-      background: #0D1F12; /* Fond très sombre teinté vert */
-      border: 1px solid rgba(138, 213, 63, 0.1);
-      border-left: 4px solid var(--poly-accent); /* Barre verte */
-      border-radius: 8px;
+      background: var(--poly-surface);
+      border: 1px solid rgba(138, 213, 63, 0.3);
+      border-radius: 12px;
       margin-bottom: 8px;
-      gap: 16px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     }
+
 
     .auto-card-content {
       display: flex;
       flex-direction: column;
       gap: 4px;
+      align-items: flex-start;
     }
 
     .property-badge {
@@ -1490,9 +1540,10 @@
       font-weight: 700;
       text-transform: uppercase;
       letter-spacing: 0.8px;
-      padding: 2px 6px;
+      padding: 3px 6px 1px 6px;
       border-radius: 4px;
-      margin-bottom: 2px;
+      margin-bottom: 0;
+      line-height: 1;
     }
 
     .transformation-row {
@@ -1583,22 +1634,6 @@
       opacity: 0.6;
     }
 
-    .btn-apply-fix {
-      background: var(--poly-accent); /* Vert vif */
-      color: #000; /* Texte noir pour contraste */
-      border: none;
-      padding: 6px 16px;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: transform 0.1s;
-    }
-
-    .btn-apply-fix:hover {
-      transform: translateY(-1px);
-      filter: brightness(1.1);
-    }
 
     .cleaning-result-card.manual-fix {
       border-left: 4px solid var(--poly-warning);
@@ -1647,6 +1682,94 @@
     .global-actions .btn-outline:hover {
       background: var(--poly-surface);
       border-color: var(--poly-accent);
+    }
+
+    /* Bouton Voir avec fond légèrement vert */
+    .btn-view {
+      background: rgba(138, 213, 63, 0.1) !important;
+      border-color: rgba(138, 213, 63, 0.3) !important;
+      color: var(--poly-accent) !important;
+    }
+
+    .btn-view:hover {
+      background: rgba(138, 213, 63, 0.2) !important;
+      border-color: var(--poly-accent) !important;
+    }
+
+    /* Jauge de progression circulaire */
+    .progress-gauge {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .progress-circle {
+      position: relative;
+      width: 80px;
+      height: 80px;
+    }
+
+    .progress-circle svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .progress-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      font-weight: 600;
+      color: var(--poly-text);
+    }
+
+    #progressPercentage {
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .percent-symbol {
+      font-size: 12px;
+      color: var(--poly-text-muted);
+    }
+
+    .progress-label {
+      font-size: 11px;
+      color: var(--poly-text-muted);
+      text-align: center;
+      font-weight: 500;
+    }
+
+    /* Responsive pour la jauge de progression */
+    @media (max-width: 600px) {
+      .content-header {
+        flex-direction: column !important;
+        gap: 16px !important;
+      }
+
+      .progress-gauge {
+        align-self: center;
+      }
+
+      .progress-circle {
+        width: 70px;
+        height: 70px;
+      }
+
+      .progress-circle svg {
+        width: 100%;
+        height: 100%;
+      }
+
+      #progressPercentage {
+        font-size: 16px;
+      }
+
+      .percent-symbol {
+        font-size: 10px;
+      }
     }
 
     /* Mini-swatches pour les couleurs */
@@ -1706,15 +1829,30 @@
       }
     }
 
-    /* Boutons d'application individuels - largeur fixe */
-    .cleaning-result-card .btn-primary {
-      width: auto;
-      min-width: 80px;
-      max-width: 120px;
+    /* Boutons d'action dans les cartes de correction et scan */
+    .cleaning-result-card .btn-primary,
+    .cleaning-result-card .btn-outline,
+    .cleaning-result-card .btn-x,
+    .scan-result-card .btn-primary,
+    .scan-result-card .btn-outline,
+    .scan-result-card .btn-x {
+      width: 32px;
+      height: 32px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       flex-shrink: 0;
-      padding: 6px 12px;
-      font-size: 12px;
-      font-weight: 500;
+    }
+
+    .cleaning-result-card .btn-primary svg,
+    .cleaning-result-card .btn-outline svg,
+    .cleaning-result-card .btn-x svg,
+    .scan-result-card .btn-primary svg,
+    .scan-result-card .btn-outline svg,
+    .scan-result-card .btn-x svg {
+      width: 16px;
+      height: 16px;
     }
 
     /* Améliorations responsive */
@@ -2721,7 +2859,7 @@
           
 
           <!-- État de chargement -->
-          <div id="scanLoadingState" class="empty-state-enhanced" style="display: none;">
+          <div id="scanLoadingState" class="empty-state-enhanced hidden">
             <div class="empty-icon pulse">🔍</div>
             <h3>Analyse en cours...</h3>
             <p>Nous examinons votre design pour détecter les valeurs qui peuvent être remplacées par des variables.</p>
@@ -2746,45 +2884,19 @@
 
           <!-- Zone des résultats avec nouvelle hiérarchie -->
           <div id="scanResults" class="hidden">
-            <!-- Status Bar Compact -->
-            <div id="cleaningDashboard" class="status-bar" style="display: none; position: sticky; top: 0; z-index: 10; background: var(--poly-bg); border-bottom: 1px solid var(--poly-border-subtle); padding: 8px 16px; margin: -16px -16px 16px -16px;">
-              <div class="status-bar-content" style="display: flex; align-items: center; justify-content: space-between; max-width: none;">
-                <div class="status-stats" style="display: flex; gap: 16px;">
-                  <div class="stat-item" style="display: flex; align-items: center; gap: 4px;">
-                    <span style="font-size: 14px;">🔧</span>
-                    <span class="stat-number" id="totalIssues" style="font-weight: 600; color: var(--poly-text);">0</span>
-                    <span class="stat-label" style="font-size: 12px; color: var(--poly-text-muted);">problèmes</span>
-                  </div>
-                  <div class="stat-item" style="display: flex; align-items: center; gap: 4px;">
-                    <span style="font-size: 14px;">⚡</span>
-                    <span class="stat-number" id="autoFixable" style="font-weight: 600; color: var(--poly-success);">0</span>
-                    <span class="stat-label" style="font-size: 12px; color: var(--poly-text-muted);">auto</span>
-                  </div>
-                  <div class="stat-item" style="display: flex; align-items: center; gap: 4px;">
-                    <span style="font-size: 14px;">🎯</span>
-                    <span class="stat-number" id="manualFixes" style="font-weight: 600; color: var(--poly-warning);">0</span>
-                    <span class="stat-label" style="font-size: 12px; color: var(--poly-text-muted);">manuel</span>
-                  </div>
-                </div>
-                <div id="bulkActionsContainer" style="display: none;">
-                  <button class="btn-primary" id="bulkFixBtn" style="font-size: 12px; padding: 6px 12px;">
-                    <span style="margin-right: 4px;">⚡</span>
-                    Tout corriger
-                  </button>
-                </div>
-              </div>
-            </div>
 
             <div class="card">
               <!-- Système de filtrage simplifié -->
-              <div class="filter-system" style="margin-bottom: 20px;">
+              <div class="filter-system" style="margin-bottom: 24px;">
                 <div class="filter-buttons">
                   <button class="filter-btn active" data-filter="auto">
-                    ⚡ Automatique
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 20 20" fill="none" style="margin-right: 6px;"><path d="M12.7179 13.0019L10.5052 17.6521C10.3628 17.9513 10.0048 18.0784 9.70564 17.936C9.63894 17.9043 9.57864 17.8605 9.52784 17.8069L5.98643 14.0681C5.89163 13.968 5.76527 13.9036 5.62859 13.8858L0.522299 13.2183C0.193719 13.1754 -0.0378213 12.8742 0.00512872 12.5456C0.0146987 12.4724 0.0377289 12.4015 0.0730389 12.3366L2.53445 7.81322C2.60034 7.69212 2.62253 7.55202 2.59728 7.41655L1.65414 2.35393C1.59345 2.02816 1.80834 1.71488 2.13411 1.65419C2.20674 1.64066 2.28125 1.64066 2.35388 1.65419L7.41651 2.59733C7.55204 2.62257 7.69214 2.60039 7.81314 2.5345L12.3365 0.0730896C12.6276 -0.0853004 12.992 0.0222695 13.1503 0.313329C13.1857 0.378229 13.2087 0.44909 13.2182 0.52235L13.8857 5.62864C13.9036 5.76532 13.968 5.89168 14.068 5.98647L17.8068 9.52782C18.0474 9.75572 18.0577 10.1355 17.8298 10.3761C17.779 10.4297 17.7187 10.4735 17.652 10.5052L13.0019 12.718C12.8774 12.7772 12.7771 12.8775 12.7179 13.0019ZM13.5147 14.929L14.9289 13.5148L19.1716 17.7574L17.7574 19.1716L13.5147 14.929Z" fill="black"/></svg>
+                    Automatique
                     <span class="filter-count" id="autoCount">0</span>
                   </button>
                   <button class="filter-btn" data-filter="manual">
-                    🎯 Manuel
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 19 23" fill="none" style="margin-right: 6px;"><path d="M10.0026 2C9.72654 2 9.50264 2.22386 9.50264 2.5V12H7.50264V4.5C7.50264 4.22386 7.27878 4 7.00264 4C6.72649 4 6.50264 4.22386 6.50264 4.5V14C6.14897 14 4.50268 14 4.50268 14C4.12155 12.3792 3.1448 11.4407 2.09784 11.3216C2.3817 12.0664 2.86361 13.2592 3.66878 15.0995C4.52755 17.0622 5.39372 18.5218 6.50618 19.4986C7.58074 20.442 8.96104 21 11.0026 21C14.0402 21 16.5026 18.5377 16.5026 15.5002V7C16.5026 6.72386 16.2787 6.5 16.0026 6.5C15.7265 6.5 15.5026 6.72386 15.5026 7V12H13.5026V4C13.5026 3.72386 13.2787 3.5 13.0026 3.5C12.7265 3.5 12.5026 3.72386 12.5026 4V12H10.5026V2.5C10.5026 2.22386 10.2787 2 10.0026 2ZM18.5026 15.5002C18.5026 19.6424 15.1447 23 11.0026 23C8.54414 23 6.67458 22.308 5.1866 21.0015C3.73655 19.7283 2.72772 17.9381 1.83649 15.9012C0.906371 13.7753 0.392481 12.4804 0.112351 11.7235C-0.244379 10.7597 0.248601 9.41212 1.58827 9.31846C2.7432 9.23771 3.72305 9.61249 4.50264 10.2587V4.5C4.50264 3.11929 5.62193 2 7.00264 2C7.18766 2 7.36798 2.0201 7.54154 2.05823C7.75014 0.888227 8.77264 0 10.0026 0C11.0626 0 11.9685 0.659694 12.3322 1.59091C12.5455 1.53167 12.7704 1.5 13.0026 1.5C14.3833 1.5 15.5026 2.61929 15.5026 4V4.55001C15.6642 4.51722 15.8314 4.5 16.0026 4.5C17.3833 4.5 18.5026 5.61929 18.5026 7V15.5002Z" fill="white"/></svg>
+                    Manuel
                     <span class="filter-count" id="manualCount">0</span>
                   </button>
                 </div>
@@ -2792,9 +2904,25 @@
 
               <!-- Contenu unifié avec filtrage -->
               <div class="cleaning-content">
-                <div class="content-header">
-                  <h5 id="contentTitle">Corrections disponibles</h5>
-                  <p class="section-desc" id="contentDesc">Découvrez et appliquez les corrections suggérées pour vos variables de design.</p>
+                <div class="content-header" style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+                  <div class="title-section">
+                    <h5 id="contentTitle">Corrections disponibles</h5>
+                    <p class="section-desc" id="contentDesc">Découvrez et appliquez les corrections suggérées pour vos variables de design.</p>
+                  </div>
+                  <div class="progress-gauge">
+                    <div class="progress-circle">
+                      <svg width="80" height="80" viewBox="0 0 80 80">
+                        <circle cx="40" cy="40" r="35" stroke="var(--poly-border-subtle)" stroke-width="4" fill="none"/>
+                        <circle cx="40" cy="40" r="35" stroke="var(--poly-accent)" stroke-width="4" fill="none"
+                                stroke-dasharray="219.91" stroke-dashoffset="219.91" stroke-linecap="round"
+                                transform="rotate(-90 40 40)" id="progressRing"/>
+                      </svg>
+                      <div class="progress-text">
+                        <span id="progressPercentage">0</span><span class="percent-symbol">%</span>
+                      </div>
+                    </div>
+                    <div class="progress-label">Nettoyage</div>
+                  </div>
                 </div>
 
                 <!-- Liste unifiée des corrections -->
@@ -2889,6 +3017,7 @@
     var activeCategory = "brand";
     var currentStep = 0;
     var lastScanResults = null; // Stockage global des résultats du dernier scan
+    var initialProblemCount = 0; // Stockage du nombre initial de problèmes pour la jauge
 
     // ============================================
     // DOM ELEMENTS
@@ -3315,6 +3444,15 @@
     // ============================================
 
     function updateScanUI() {
+      // Masquer tous les états par défaut
+      var scanResults = document.getElementById("scanResults");
+      var scanEmptyState = document.getElementById("scanEmptyState");
+      var scanLoadingState = document.getElementById("scanLoadingState");
+
+      if (scanResults) scanResults.classList.add('hidden');
+      if (scanEmptyState) scanEmptyState.classList.remove('hidden'); // Afficher l'état vide par défaut
+      if (scanLoadingState) scanLoadingState.classList.add('hidden');
+
       // Vérifier si une sélection existe dans Figma
       parent.postMessage({
         pluginMessage: {
@@ -3335,6 +3473,23 @@
     // MAGIC FIX FUNCTIONS - Nouvelle UX
     // ============================================
 
+    // Fonction pour enrichir les suggestions avec leur valeur résolue
+    function enrichSuggestionsWithValues(suggestions, property, currentValue) {
+      return suggestions.map(function(suggestion) {
+        var enriched = Object.assign({}, suggestion);
+        if (!enriched.resolvedValue) {
+          // Pour les couleurs, la valeur hex est déjà dans suggestion.hex
+          if (property === 'Fill' || property === 'Stroke') {
+            enriched.resolvedValue = suggestion.hex || currentValue;
+          } else {
+            // Pour les autres propriétés, on utilise la valeur actuelle comme approximation
+            enriched.resolvedValue = currentValue;
+          }
+        }
+        return enriched;
+      });
+    }
+
     function groupResultsByValue(results) {
       var groups = {};
 
@@ -3345,11 +3500,12 @@
         var groupKey = result.property + '-' + result.value;
 
         if (!groups[groupKey]) {
+          var suggestions = result.colorSuggestions || result.numericSuggestions || [{ id: result.suggestedVariableId, name: result.suggestedVariableName, isExact: true }];
           groups[groupKey] = {
             property: result.property,
             value: result.value,
             originalIndices: [],
-            suggestions: result.colorSuggestions || result.numericSuggestions || [{ id: result.suggestedVariableId, name: result.suggestedVariableName, isExact: true }],
+            suggestions: enrichSuggestionsWithValues(suggestions, result.property, result.value),
             layerNames: [] // Pour debug si nécessaire
           };
         }
@@ -3363,7 +3519,8 @@
           suggestionsToMerge.forEach(function(suggestion) {
             var existing = groups[groupKey].suggestions.find(function(s) { return s.id === suggestion.id; });
             if (!existing) {
-              groups[groupKey].suggestions.push(suggestion);
+              var enrichedSuggestions = enrichSuggestionsWithValues([suggestion], result.property, result.value);
+              groups[groupKey].suggestions.push(enrichedSuggestions[0]);
             }
           });
         }
@@ -3525,9 +3682,25 @@
     function displayScanResults(results) {
       console.log('[displayScanResults] Démarrage affichage de', results.length, 'résultats');
 
+      // Cas spécial : aucun résultat
+      if (!results || results.length === 0) {
+        console.log('[displayScanResults] Aucun résultat à afficher');
+        // Afficher l'état vide
+        if (scanEmptyState) {
+          scanEmptyState.classList.remove("hidden");
+        }
+        if (scanResults) {
+          scanResults.classList.add("hidden");
+        }
+        return;
+      }
+
       // Stocker les résultats globalement pour les corrections individuelles
       lastScanResults = results;
       console.log('[DEBUG displayScanResults] lastScanResults défini avec', results.length, 'résultats');
+
+      // Stocker le nombre initial de problèmes pour la jauge de progression
+      initialProblemCount = results.length;
 
       // 1. Masquer le chargement
       hideScanLoading();
@@ -3535,7 +3708,6 @@
       // 2. Calculer les stats
       var stats = calculateCleaningStats(results);
       updateFilterCounts(stats);
-      updateCleaningDashboard(stats);
 
       // 3. Générer le HTML
       var unifiedHtml = generateUnifiedCleaningContent(results, stats);
@@ -3544,10 +3716,14 @@
       var listContainer = document.getElementById('unifiedCleaningList');
       if (listContainer) {
         listContainer.innerHTML = unifiedHtml;
-        console.log('[displayScanResults] HTML injecté dans la liste');
+        console.log('[displayScanResults] HTML injecté dans la liste, longueur:', unifiedHtml.length);
       } else {
         console.error('[displayScanResults] ERREUR CRITIQUE: #unifiedCleaningList introuvable dans le DOM');
       }
+
+      // 4b. Initialiser la jauge de progression
+      console.log('[displayScanResults] Initialisation jauge avec', results.length, 'résultats');
+      updateProgressGauge(results.length);
 
       // 5. Assigner les données aux cartes pour les filtres
       var cards = document.querySelectorAll('.cleaning-result-card');
@@ -3567,8 +3743,6 @@
         scanResultsDiv.style.display = "block"; // Force brute
       }
 
-      var dashboard = document.getElementById('cleaningDashboard');
-      if (dashboard) dashboard.style.display = results.length > 0 ? 'block' : 'none';
 
       // 7. Mettre à jour le compteur (avec la sécurité ajoutée précédemment)
       updateProblemCounter(results.length, true);
@@ -3613,76 +3787,88 @@
           cardClass += ' manual-required';
         }
 
-        html += '<div class="' + cardClass + '" data-indices="' + JSON.stringify(group.originalIndices).replace(/"/g, '&quot;') + '" style="display: flex; align-items: center; padding: 12px; margin-bottom: 8px; background: var(--poly-surface-soft); border: 1px solid var(--poly-border-subtle); border-radius: 8px; transition: all 0.2s ease; cursor: pointer;" title="Cliquer pour sélectionner les calques dans Figma" onmouseover="this.style.backgroundColor=\'var(--poly-surface)\'" onmouseout="this.style.backgroundColor=\'var(--poly-surface-soft)\'">';
+        // Nouvelle structure Header + Body
+        html += '<div class="' + cardClass + '" data-indices="' + JSON.stringify(group.originalIndices).replace(/"/g, '&quot;') + '" data-card-data="' + JSON.stringify({property: group.property, value: group.value, suggestions: group.suggestions}).replace(/"/g, '&quot;') + '" style="display: flex; flex-direction: column; padding: 12px 16px; margin-bottom: 8px; background: var(--poly-surface); border: 1px solid rgba(138, 213, 63, 0.3); border-radius: 12px; transition: all 0.2s ease; cursor: pointer;" title="Cliquer pour sélectionner les calques dans Figma" onmouseover="this.style.borderColor=\'var(--poly-accent)\'" onmouseout="this.style.borderColor=\'rgba(138, 213, 63, 0.3)\'">';
 
-        // GAUCHE: Icône Propriété + Swatch/Valeur
-        html += '<div style="display: flex; align-items: center; min-width: 120px; margin-right: 16px;">';
+        // HEADER: Icône + Nom propriété (gauche) + Boutons d'actions (droite)
+        html += '<div class="card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">';
 
-        // Icône propriété
+        // GAUCHE: Icône propriété uniquement
         var propertyIcon = getPropertyIcon(group.property);
-        html += '<span style="color: var(--poly-accent); margin-right: 8px; font-size: 16px;">' + propertyIcon + '</span>';
-
-        // Swatch ou valeur textuelle
-        if (group.property === 'Fill' || group.property === 'Stroke') {
-          // Swatch coloré
-          html += '<div style="width: 24px; height: 24px; border-radius: 4px; border: 2px solid var(--poly-border-subtle); background-color: ' + group.value + '; margin-right: 8px;"></div>';
-        } else {
-          // Valeur textuelle
-          html += '<div style="font-family: monospace; font-size: 12px; color: var(--poly-text); font-weight: 500; margin-right: 8px;">' + group.value + '</div>';
-        }
-
-        // Compteur de calques avec indication de cliquabilité
-        html += '<span style="font-size: 10px; color: var(--poly-text-muted); background: var(--poly-surface); padding: 2px 6px; border-radius: 10px;">' + layerCount + ' calque' + (layerCount > 1 ? 's' : '') + ' 👆</span>';
-
+        html += '<div style="display: flex; align-items: center;">';
+        html += '<span style="color: var(--poly-accent); font-size: 16px;" title="' + group.property + '">' + propertyIcon + '</span>';
         html += '</div>';
 
-        // CENTRE: Flèche + Dropdown de suggestion
-        html += '<div style="flex: 1; display: flex; align-items: center; margin-right: 16px;">';
-        html += '<span style="color: var(--poly-text-muted); margin-right: 8px;">→</span>';
+        // DROITE: Groupe de 3 boutons d'actions (Voir, Appliquer, Ignorer)
+        html += '<div style="display: flex; gap: 6px;">';
 
+        // Bouton Voir (sélectionner les calques)
+        var viewTitle = 'Voir les ' + layerCount + ' calque' + (layerCount > 1 ? 's' : '') + ' dans Figma';
+        html += '<button class="btn-outline btn-view" data-action="view" data-indices="' + JSON.stringify(group.originalIndices).replace(/"/g, '&quot;') + '" title="' + viewTitle + '">' + '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>' + '</button>';
+
+        // Bouton Appliquer (V) - désactivé pour les orphelins
+        var applyDisabled = isOrphan ? ' disabled' : '';
+        var applyClass = isOrphan ? 'btn-outline' : 'btn-primary';
+        var applyTitle = isOrphan ? 'Aucune variable disponible' : 'Appliquer cette correction aux ' + layerCount + ' calque' + (layerCount > 1 ? 's' : '');
+        html += '<button class="' + applyClass + '" data-action="apply" data-indices="' + JSON.stringify(group.originalIndices).replace(/"/g, '&quot;') + '"' + applyDisabled + ' title="' + applyTitle + '">' + '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20,6 9,17 4,12"/></svg>' + '</button>';
+
+        // Bouton Ignorer (X)
+        var ignoreTitle = 'Ignorer ce problème pour les ' + layerCount + ' calque' + (layerCount > 1 ? 's' : '');
+        html += '<button class="btn-x" data-action="ignore" data-indices="' + JSON.stringify(group.originalIndices).replace(/"/g, '&quot;') + '" title="' + ignoreTitle + '">' + '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>' + '</button>';
+
+        html += '</div>';
+        html += '</div>';
+
+        // BODY: Valeur actuelle + Compteur + Flèche + Nouvelle valeur + Type
+        html += '<div class="card-body" style="display: flex; align-items: center; gap: 12px;">';
+
+        // 1. Valeur actuelle (Swatch ou Texte)
+        if (group.property === 'Fill' || group.property === 'Stroke') {
+          // Swatch coloré
+          html += '<div style="width: 24px; height: 24px; border-radius: 4px; border: 2px solid var(--poly-border-subtle); background-color: ' + group.value + ';"></div>';
+        } else {
+          // Valeur textuelle
+          html += '<div style="font-family: monospace; font-size: 12px; color: var(--poly-text); font-weight: 400;">' + group.value + '</div>';
+        }
+
+        // 2. Compteur de calques (texte gris)
+        html += '<span style="font-size: 11px; color: var(--poly-text-muted);">' + layerCount + ' calque' + (layerCount > 1 ? 's' : '') + '</span>';
+
+        // 3. Séparateur (flèche longue et fine)
+        html += '<span style="color: var(--poly-text-muted); font-size: 14px; margin: 0 4px;">⟶</span>';
+
+        // 4. Nouvelle valeur (Nom de la variable)
         if (isOrphan) {
-          // ORPHELIN: Aucune variable correspondante trouvée
-          html += '<div style="font-size: 12px; color: var(--poly-warning); background: var(--poly-warning-light); padding: 4px 8px; border-radius: 4px; border: 1px solid var(--poly-warning); font-style: italic;">';
-          html += '🚫 Aucune variable trouvée';
-          html += '</div>';
+          html += '<span style="font-size: 12px; color: var(--poly-warning); font-style: italic;">Aucune variable trouvée</span>';
         } else if (hasConflicts) {
           // Conflit: dropdown pour choisir
           html += '<div style="position: relative;">';
-          html += '<select class="variable-selector" style="padding: 6px 8px; border: 1px solid var(--poly-border-subtle); border-radius: 4px; background: var(--poly-bg); font-size: 12px; min-width: 150px;">';
-          html += '<option value="" disabled selected>⚠️ Conflit - Choisir...</option>';
+          html += '<select class="variable-selector" style="padding: 4px 8px; border: 1px solid var(--poly-border-subtle); border-radius: 4px; background: var(--poly-bg); font-size: 12px; min-width: 120px;">';
+          html += '<option value="" disabled selected>Choisir une variable...</option>';
           group.suggestions.forEach(function(suggestion) {
             var selected = suggestion.id === bestSuggestion.id ? ' selected' : '';
-            var valuePreview = suggestion.hex ? suggestion.hex : (suggestion.value !== undefined ? suggestion.value : "");
-            html += '<option value="' + suggestion.id + '"' + selected + '>' + suggestion.name + ' (' + valuePreview + ')' + '</option>';
+            var displayValue = suggestion.resolvedValue || suggestion.hex || '';
+            var optionText = displayValue ? suggestion.name + ' (' + displayValue + ')' : suggestion.name;
+            html += '<option value="' + suggestion.id + '"' + selected + '>' + suggestion.name + '</option>';
           });
           html += '</select>';
           html += '</div>';
         } else {
-          // Suggestion unique: afficher directement
-          html += '<div style="font-size: 12px; color: var(--poly-text); background: var(--poly-success-light); padding: 4px 8px; border-radius: 4px; border: 1px solid var(--poly-success);">';
-          html += bestSuggestion.name;
-          html += '</div>';
+          // Suggestion unique: nom de la variable
+          html += '<span style="font-size: 12px; color: var(--poly-accent); font-weight: 500;">' + bestSuggestion.name + '</span>';
+        }
+
+        // 5. Valeur de la variable (entre parenthèses, texte gris)
+        if (!isOrphan) {
+          var displayValue = bestSuggestion.resolvedValue || bestSuggestion.hex || 'valeur';
+          // Pour les couleurs, afficher le hex, pour les autres afficher la valeur
+          if (group.property === 'Fill' || group.property === 'Stroke') {
+            displayValue = displayValue; // Le hex est déjà correct
+          }
+          html += '<span class="variable-value-display" style="font-size: 11px; color: var(--poly-text-muted); font-style: italic;">(' + displayValue + ')</span>';
         }
 
         html += '</div>';
-
-        // DROITE: Actions (Appliquer + Ignorer)
-        html += '<div style="display: flex; gap: 6px;">';
-
-        // Bouton Appliquer (V) - désactivé pour les orphelins
-        var applyDisabled = isOrphan ? ' disabled style="opacity: 0.4; cursor: not-allowed;"' : '';
-        var applyStyle = isOrphan ?
-          'width: 32px; height: 32px; border: none; border-radius: 6px; background: var(--poly-text-muted); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold;' :
-          'width: 32px; height: 32px; border: none; border-radius: 6px; background: var(--poly-success); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; transition: all 0.2s ease; transform: scale(1);';
-        var applyTitle = isOrphan ? 'Aucune variable disponible' : 'Appliquer cette correction aux ' + layerCount + ' calque' + (layerCount > 1 ? 's' : '');
-        html += '<button class="action-btn apply-btn" data-action="apply" data-indices="' + JSON.stringify(group.originalIndices).replace(/"/g, '&quot;') + '"' + applyDisabled + ' style="' + applyStyle + '" title="' + applyTitle + '">✓</button>';
-
-        // Bouton Ignorer (X)
-        var ignoreTitle = 'Ignorer ce problème pour les ' + layerCount + ' calque' + (layerCount > 1 ? 's' : '');
-        html += '<button class="action-btn ignore-btn" data-action="ignore" data-indices="' + JSON.stringify(group.originalIndices).replace(/"/g, '&quot;') + '" style="width: 32px; height: 32px; border: none; border-radius: 6px; background: var(--poly-error); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; transition: all 0.2s ease;" title="' + ignoreTitle + '">✕</button>';
-
-        html += '</div>';
-
         html += '</div>';
       });
 
@@ -3696,7 +3882,7 @@
       cards.forEach(function(card) {
         card.addEventListener('click', function(event) {
           // Ne pas déclencher si on clique sur les boutons ou les sélecteurs
-          if (event.target.closest('.action-btn') ||
+          if (event.target.closest('button[data-action]') ||
               event.target.closest('.variable-selector')) {
             return;
           }
@@ -3716,36 +3902,41 @@
           var card = this.closest('.cleaning-result-card');
           var selectedVariableId = this.value;
           card._selectedVariableId = selectedVariableId;
+
+          // Mettre à jour l'affichage de la valeur
+          updateCardValueDisplay(card, selectedVariableId);
         });
       });
 
       // Gestionnaires d'actions groupées
       attachGroupedActionHandlers();
 
-      // Effets de survol pour les boutons d'action
-      var actionButtons = document.querySelectorAll('.action-btn:not([disabled])');
-      actionButtons.forEach(function(btn) {
-        btn.addEventListener('mouseenter', function() {
-          if (!this.disabled) {
-            this.style.transform = 'scale(1.1)';
-            if (this.classList.contains('apply-btn')) {
-              this.style.backgroundColor = 'var(--poly-success-hover)';
-            } else if (this.classList.contains('ignore-btn')) {
-              this.style.backgroundColor = 'var(--poly-error-hover)';
-            }
-          }
+      // Fonction pour mettre à jour l'affichage de la valeur dans une carte
+      function updateCardValueDisplay(card, selectedVariableId) {
+        // Trouver l'élément qui affiche la valeur
+        var valueDisplay = card.querySelector('.variable-value-display');
+        if (!valueDisplay) return;
+
+        // Chercher la valeur de la variable sélectionnée dans les données de la carte
+        var cardDataAttr = card.getAttribute('data-card-data');
+        if (!cardDataAttr) return;
+
+        var cardData = JSON.parse(cardDataAttr.replace(/&quot;/g, '"'));
+
+        // Chercher la suggestion correspondante
+        var selectedSuggestion = cardData.suggestions.find(function(s) {
+          return s.id === selectedVariableId;
         });
 
-        btn.addEventListener('mouseleave', function() {
-          if (!this.disabled) {
-            this.style.transform = 'scale(1)';
-            if (this.classList.contains('apply-btn')) {
-              this.style.backgroundColor = 'var(--poly-success)';
-            } else if (this.classList.contains('ignore-btn')) {
-              this.style.backgroundColor = 'var(--poly-error)';
-            }
-          }
-        });
+        if (selectedSuggestion) {
+          var displayValue = selectedSuggestion.resolvedValue || selectedSuggestion.hex || 'valeur';
+          valueDisplay.textContent = '(' + displayValue + ')';
+        }
+      }
+
+      // Effets de survol pour les boutons d'action
+      var actionButtons = document.querySelectorAll('.cleaning-result-card button:not([disabled])');
+      actionButtons.forEach(function(btn) {
       });
 
       // Gestionnaire pour le bouton "Tout corriger"
@@ -3875,7 +4066,7 @@
     // Gestionnaires d'actions pour les cartes groupées
     function attachGroupedActionHandlers() {
       // Boutons Appliquer groupés
-      var applyButtons = document.querySelectorAll('.apply-btn');
+      var applyButtons = document.querySelectorAll('button[data-action="apply"]');
       applyButtons.forEach(function(btn) {
         btn.addEventListener('click', function() {
           var indices = JSON.parse(this.getAttribute('data-indices'));
@@ -3906,11 +4097,22 @@
       });
 
       // Boutons Ignorer groupés
-      var ignoreButtons = document.querySelectorAll('.ignore-btn');
+      var ignoreButtons = document.querySelectorAll('button[data-action="ignore"]');
       ignoreButtons.forEach(function(btn) {
         btn.addEventListener('click', function() {
           var indices = JSON.parse(this.getAttribute('data-indices'));
           ignoreGroupedItems(indices);
+        });
+      });
+
+      // Boutons Voir groupés (sélectionner les calques dans Figma)
+      var viewButtons = document.querySelectorAll('button[data-action="view"]');
+      viewButtons.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          var indices = JSON.parse(this.getAttribute('data-indices'));
+          if (indices && indices.length > 0) {
+            selectNodesInFigma(indices);
+          }
         });
       });
     }
@@ -3932,7 +4134,7 @@
 
         // Désactiver temporairement les contrôles
         var checkbox = card.querySelector('.item-checkbox');
-        var buttons = card.querySelectorAll('.action-btn');
+        var buttons = card.querySelectorAll('button[data-action]');
         if (checkbox) checkbox.disabled = true;
         buttons.forEach(function(btn) { btn.disabled = true; });
       }
@@ -3943,7 +4145,7 @@
         card.style.backgroundColor = 'var(--poly-success-light)';
         card.style.borderColor = 'var(--poly-success)';
 
-        var buttons = card.querySelectorAll('.action-btn');
+        var buttons = card.querySelectorAll('button[data-action]');
         buttons.forEach(function(btn) { btn.disabled = true; });
       }
 
@@ -3982,7 +4184,7 @@
 
         // Désactiver temporairement les contrôles
         var checkbox = card.querySelector('.item-checkbox');
-        var buttons = card.querySelectorAll('.action-btn');
+        var buttons = card.querySelectorAll('button[data-action]');
         if (checkbox) checkbox.disabled = true;
         buttons.forEach(function(btn) { btn.disabled = true; });
 
@@ -4271,7 +4473,7 @@
           targetCard.style.borderColor = 'var(--poly-success)';
 
           // Désactiver les contrôles
-          var buttons = targetCard.querySelectorAll('.action-btn');
+          var buttons = targetCard.querySelectorAll('button[data-action]');
           buttons.forEach(function(btn) { btn.disabled = true; });
 
           // Marquer cette correction comme réussie
@@ -4316,7 +4518,7 @@
             setTimeout(function() {
               card.style.backgroundColor = '';
               card.style.borderColor = '';
-              var buttons = card.querySelectorAll('.action-btn');
+              var buttons = card.querySelectorAll('button[data-action]');
               buttons.forEach(function(btn) { btn.disabled = false; });
             }, 1000);
           }
@@ -4437,7 +4639,7 @@
           html += '</button>';
 
           // Bouton Appliquer
-          html += '<button class="btn-apply-fix" onclick="applyGroupFix([' + group.originalIndices.join(',') + '], \'' + suggestion.id + '\')">';
+          html += '<button class="btn-primary" onclick="applyGroupFix([' + group.originalIndices.join(',') + '], \'' + suggestion.id + '\')">';
           html += 'Appliquer';
           html += '</button>';
 
@@ -4508,7 +4710,7 @@
           html += '</button>';
 
           // Bouton Appliquer (désactivé par défaut)
-          html += '<button class="btn-apply-fix manual-apply-btn" onclick="applyManualGroupFix([' + group.originalIndices.join(',') + '], this)" disabled>';
+          html += '<button class="btn-primary manual-apply-btn" onclick="applyManualGroupFix([' + group.originalIndices.join(',') + '], this)" disabled>';
           html += 'Appliquer';
           html += '</button>';
 
@@ -4593,21 +4795,25 @@
     }
 
     function getPropertyIcon(property) {
+      console.log('[getPropertyIcon] Propriété demandée:', '"' + property + '"');
       switch(property) {
         case 'Fill':
-          return '<span class="property-label">Fond</span>';
+          return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 10 10" fill="none" style="margin-right: 3px; vertical-align: middle;"><path d="M2.5 2.5H7.5V7.5H2.5V2.5Z" fill="currentColor"/><path fill-rule="evenodd" clip-rule="evenodd" d="M2 1.5H8C8.13261 1.5 8.25979 1.55268 8.35355 1.64645C8.44732 1.74021 8.5 1.86739 8.5 2V8C8.5 8.13261 8.44732 8.25979 8.35355 8.35355C8.25979 8.44732 8.13261 8.5 8 8.5H2C1.86739 8.5 1.74021 8.44732 1.64645 8.35355C1.55268 8.25979 1.5 8.13261 1.5 8V2C1.5 1.86739 1.55268 1.74021 1.64645 1.64645C1.74021 1.55268 1.86739 1.5 2 1.5ZM0.5 2C0.5 1.46957 0.710714 0.960859 1.08579 0.585786C1.46086 0.210714 1.96957 0 2.5 0H7.5C8.03043 0 8.53914 0.210714 8.91421 0.585786C9.28929 0.960859 9.5 1.46957 9.5 2V8C9.5 8.53043 9.28929 9.03914 8.91421 9.41421C8.53914 9.78929 8.03043 10 7.5 10H2.5C1.96957 10 1.46086 9.78929 1.08579 9.41421C0.710714 9.03914 0.5 8.53043 0.5 8V2ZM2.5 7.5V2.5H7.5V7.5H2.5ZM2 2.25C2 2.11193 2.11193 2 2.25 2H7.75C7.88807 2 8 2.11193 8 2.25V7.75C8 7.88807 7.88807 8 7.75 8H2.25C2.11193 8 2 7.88807 2 7.75V2.25Z" fill="currentColor"/></svg><span class="property-label">Fond</span>';
         case 'Stroke':
-          return '<span class="property-label">Contour</span>';
+          return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 10 10" fill="none" style="margin-right: 3px; vertical-align: middle;"><path d="M2.5 2.5H7.5V7.5H2.5V2.5Z" fill="none" stroke="currentColor" stroke-width="0.5"/><path fill-rule="evenodd" clip-rule="evenodd" d="M2 1.5H8C8.13261 1.5 8.25979 1.55268 8.35355 1.64645C8.44732 1.74021 8.5 1.86739 8.5 2V8C8.5 8.13261 8.44732 8.25979 8.35355 8.35355C8.25979 8.44732 8.13261 8.5 8 8.5H2C1.86739 8.5 1.74021 8.44732 1.64645 8.35355C1.55268 8.25979 1.5 8.13261 1.5 8V2C1.5 1.86739 1.55268 1.74021 1.64645 1.64645C1.74021 1.55268 1.86739 1.5 2 1.5ZM0.5 2C0.5 1.46957 0.710714 0.960859 1.08579 0.585786C1.46086 0.210714 1.96957 0 2.5 0H7.5C8.03043 0 8.53914 0.210714 8.91421 0.585786C9.28929 0.960859 9.5 1.46957 9.5 2V8C9.5 8.53043 9.28929 9.03914 8.91421 9.41421C8.53914 9.78929 8.03043 10 7.5 10H2.5C1.96957 10 1.46086 9.78929 1.08579 9.41421C0.710714 9.03914 0.5 8.53043 0.5 8V2Z" fill="none" stroke="currentColor" stroke-width="0.5"/></svg><span class="property-label">Contour</span>';
+        case 'Font Size':
+          return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 10 10" fill="none" style="margin-right: 3px; vertical-align: middle;"><path d="M3.5 6.5H1.2L0.6 8.5H0L2.1 0H2.8L5 8.5H4.4L3.5 6.5ZM3.1 5.5L2.4 1.8L1.7 5.5H3.1ZM6.5 4.5V4.2H6.9V8.5H6.5V8.2C6.3 8.4 6.1 8.5 5.8 8.5C5.1 8.5 4.5 7.9 4.5 7C4.5 6.1 5.1 5.5 5.8 5.5C6.1 5.5 6.3 5.6 6.5 5.8V4.5ZM5.8 7.5C6.1 7.5 6.2 7.3 6.2 7C6.2 6.7 6.1 6.5 5.8 6.5C5.5 6.5 5.4 6.7 5.4 7C5.4 7.3 5.5 7.5 5.8 7.5Z" fill="currentColor"/></svg><span class="property-label">Taille police</span>';
         case 'Radius':
         case 'Top Left Radius':
         case 'Top Right Radius':
         case 'Bottom Left Radius':
         case 'Bottom Right Radius':
-          return '<span class="property-label">Rayon</span>';
+          return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 10 10" fill="none" style="margin-right: 3px; vertical-align: middle;"><path d="M1 8V5C1 3.5 1 2.7 1.3 2.3C1.6 1.9 2.1 1.6 2.6 1.3C3.3 1 4.5 1 6 1H8" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="property-label">Rayon</span>';
         case 'Spacing':
         case 'Item Spacing':
+          return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 10 10" fill="none" style="margin-right: 3px; vertical-align: middle;"><path fill-rule="evenodd" clip-rule="evenodd" d="M1 0.5C1 0.367392 0.947321 0.240215 0.853553 0.146447C0.759785 0.0526785 0.632608 0 0.5 0C0.367392 0 0.240215 0.0526785 0.146447 0.146447C0.0526785 0.240215 0 0.367392 0 0.5V9.5C0 9.63261 0.0526785 9.75979 0.146447 9.85355C0.240215 9.94732 0.367392 10 0.5 10C0.632608 10 0.759785 9.94732 0.853553 9.85355C0.947321 9.75979 1 9.63261 1 9.5V0.5ZM9.5 0C9.63261 0 9.75979 0.0526785 9.85355 0.146447C9.94732 0.240215 10 0.367392 10 0.5V9.5C10 9.63261 9.94732 9.75979 9.85355 9.85355C9.75979 9.94732 9.63261 10 9.5 10C9.36739 10 9.24021 9.94732 9.14645 9.85355C9.05268 9.75979 9 9.63261 9 9.5V0.5C9 0.367392 9.05268 0.240215 9.14645 0.146447C9.24021 0.0526785 9.36739 0 9.5 0ZM6 6V4H4V6H6ZM7 4C7 3.73478 6.89464 3.48043 6.70711 3.29289C6.51957 3.10536 6.26522 3 6 3H4C3.73478 3 3.48043 3.10536 3.29289 3.29289C3.10536 3.48043 3 3.73478 3 4V6C3 6.26522 3.10536 6.51957 3.29289 6.70711C3.48043 6.89464 3.73478 7 4 7H6C6.26522 7 6.51957 6.89464 6.70711 6.70711C6.89464 6.51957 7 6.26522 7 6V4Z" fill="currentColor"/></svg><span class="property-label">Espacement</span>';
         case 'Padding':
-          return '<span class="property-label">Espacement</span>';
+          return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 10 10" fill="none" style="margin-right: 3px; vertical-align: middle;"><path fill-rule="evenodd" clip-rule="evenodd" d="M1 0.5C1 0.367392 0.947321 0.240215 0.853553 0.146447C0.759785 0.0526785 0.632608 0 0.5 0C0.367392 0 0.240215 0.0526785 0.146447 0.146447C0.0526785 0.240215 0 0.367392 0 0.5V9.5C0 9.63261 0.0526785 9.75979 0.146447 9.85355C0.240215 9.94732 0.367392 10 0.5 10C0.632608 10 0.759785 9.94732 0.853553 9.85355C0.947321 9.75979 1 9.63261 1 9.5V0.5ZM9.5 0C9.63261 0 9.75979 0.0526785 9.85355 0.146447C9.94732 0.240215 10 0.367392 10 0.5V9.5C10 9.63261 9.94732 9.75979 9.85355 9.85355C9.75979 9.94732 9.63261 10 9.5 10C9.36739 10 9.24021 9.94732 9.14645 9.85355C9.05268 9.75979 9 9.63261 9 9.5V0.5C9 0.367392 9.05268 0.240215 9.14645 0.146447C9.24021 0.0526785 9.36739 0 9.5 0ZM6 6V4H4V6H6ZM7 4C7 3.73478 6.89464 3.48043 6.70711 3.29289C6.51957 3.10536 6.26522 3 6 3H4C3.73478 3 3.48043 3.10536 3.29289 3.29289C3.10536 3.48043 3 3.73478 3 4V6C3 6.26522 3.10536 6.51957 3.29289 6.70711C3.48043 6.89464 3.73478 7 4 7H6C6.26522 7 6.51957 6.89464 6.70711 6.70711C6.89464 6.51957 7 6.26522 7 6V4Z" fill="currentColor"/></svg><span class="property-label">Padding</span>';
         default:
           return '<span class="property-label">' + property + '</span>';
       }
@@ -4868,14 +5074,21 @@
 
     // Afficher l'état de chargement pendant l'analyse
     function showScanLoading() {
-      document.getElementById('scanEmptyState').style.display = 'none';
-      document.getElementById('scanResults').style.display = 'none';
-      document.getElementById('scanLoadingState').style.display = 'block';
+      var scanEmptyState = document.getElementById('scanEmptyState');
+      var scanResults = document.getElementById('scanResults');
+      var scanLoadingState = document.getElementById('scanLoadingState');
+
+      if (scanEmptyState) scanEmptyState.classList.add('hidden');
+      if (scanResults) scanResults.classList.add('hidden');
+      if (scanLoadingState) scanLoadingState.classList.remove('hidden');
+
     }
 
     // Masquer l'état de chargement
     function hideScanLoading() {
-      document.getElementById('scanLoadingState').style.display = 'none';
+      var scanLoadingState = document.getElementById('scanLoadingState');
+      if (scanLoadingState) scanLoadingState.classList.add('hidden');
+
     }
 
     // Fonction pour mettre à jour le bouton principal selon l'onglet actif
@@ -5132,8 +5345,8 @@
 
       // Boutons d'action
       cardHtml += '<div style="display: flex; gap: 4px;">';
-      cardHtml += '<button class="action-btn apply-btn" data-action="apply" data-index="' + result.originalIndex + '" style="width: 28px; height: 28px; border: none; border-radius: 4px; background: var(--poly-success); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; transition: all 0.2s ease;" title="Appliquer">✓</button>';
-      cardHtml += '<button class="action-btn ignore-btn" data-action="ignore" data-index="' + result.originalIndex + '" style="width: 28px; height: 28px; border: none; border-radius: 4px; background: var(--poly-error); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; transition: all 0.2s ease;" title="Ignorer">✕</button>';
+      cardHtml += '<button class="btn-primary" data-action="apply" data-index="' + result.originalIndex + '" title="Appliquer"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20,6 9,17 4,12"/></svg></button>';
+      cardHtml += '<button class="btn-x" data-action="ignore" data-index="' + result.originalIndex + '" title="Ignorer"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>';
       cardHtml += '</div>';
 
       cardHtml += '</div>';
@@ -5167,8 +5380,8 @@
 
       // Boutons d'action
       cardHtml += '<div style="display: flex; gap: 4px;">';
-      cardHtml += '<button class="action-btn apply-btn" data-action="apply" data-index="' + result.originalIndex + '" style="width: 28px; height: 28px; border: none; border-radius: 4px; background: var(--poly-success); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; transition: all 0.2s ease;" title="Appliquer">✓</button>';
-      cardHtml += '<button class="action-btn ignore-btn" data-action="ignore" data-index="' + result.originalIndex + '" style="width: 28px; height: 28px; border: none; border-radius: 4px; background: var(--poly-error); color: white; cursor: pointer; display: flex; align-items: center; justify-content: center; font-weight: bold; transition: all 0.2s ease;" title="Ignorer">✕</button>';
+      cardHtml += '<button class="btn-primary" data-action="apply" data-index="' + result.originalIndex + '" title="Appliquer"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20,6 9,17 4,12"/></svg></button>';
+      cardHtml += '<button class="btn-x" data-action="ignore" data-index="' + result.originalIndex + '" title="Ignorer"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>';
       cardHtml += '</div>';
 
       cardHtml += '</div>';
@@ -5177,7 +5390,7 @@
 
     function attachActionHandlers() {
       // Gestionnaire pour les boutons d'action
-      var actionButtons = document.querySelectorAll('.action-btn');
+      var actionButtons = document.querySelectorAll('button[data-action]');
       actionButtons.forEach(function(btn) {
         btn.addEventListener('click', function(e) {
           e.preventDefault();
@@ -5232,7 +5445,7 @@
         var scanResultsContainer = document.querySelector('.cleaning-content') || scanResultsList.parentElement;
         if (scanResultsContainer) {
           var counterHtml = '<div id="problemCounter" style="text-align: center; margin-bottom: 16px; font-size: 14px; color: var(--poly-text-muted);">';
-          counterHtml += 'Problèmes restants : <span id="problemCount" style="font-weight: 600; color: var(--poly-accent);">0</span>';
+          counterHtml += '<span id="problemCount" style="font-weight: 600; color: var(--poly-accent); font-size: 18px;">0</span>';
           counterHtml += '</div>';
           // Insertion sécurisée
           var fragment = document.createRange().createContextualFragment(counterHtml);
@@ -5286,6 +5499,46 @@
       if (totalIssues) totalIssues.textContent = total;
       if (autoFixableEl) autoFixableEl.textContent = autoFixable;
       if (manualFixes) manualFixes.textContent = manual;
+
+      // Mettre à jour la jauge de progression
+      updateProgressGauge(total);
+    }
+
+    function updateProgressGauge(remainingProblems) {
+      var progressPercentage = document.getElementById('progressPercentage');
+      var progressRing = document.getElementById('progressRing');
+
+      if (!progressPercentage || !progressRing) return;
+
+      // Calculer le pourcentage de progression
+      // On considère que le nettoyage initial a 100% de problèmes
+      // Le pourcentage représente le nettoyage effectué (problèmes résolus)
+      var initialTotal = initialProblemCount || 0;
+
+      // Si on n'a pas de total initial ou qu'il n'y a plus de problèmes, considérer comme 100%
+      if (initialTotal === 0 || remainingProblems === 0) {
+        var progressPercent = 100;
+      } else {
+        progressPercent = Math.round(((initialTotal - remainingProblems) / initialTotal) * 100);
+        progressPercent = Math.max(0, Math.min(100, progressPercent)); // S'assurer que c'est entre 0 et 100
+      }
+
+      // Mettre à jour le texte du pourcentage
+      progressPercentage.textContent = progressPercent;
+
+      // Mettre à jour l'animation du cercle
+      var circumference = 219.91; // 2 * π * 35 (rayon du cercle)
+      var offset = circumference - (progressPercent / 100) * circumference;
+      progressRing.style.strokeDashoffset = offset;
+
+      // Changer la couleur selon le progrès
+      if (progressPercent === 100) {
+        progressRing.style.stroke = 'var(--poly-success)';
+      } else if (progressPercent > 50) {
+        progressRing.style.stroke = 'var(--poly-accent)';
+      } else {
+        progressRing.style.stroke = 'var(--poly-warning)';
+      }
     }
 
     function applyAllFixes() {
@@ -5474,19 +5727,34 @@
           existingTokensInfo.textContent = "Librairie : " + (libraryNames[existingLibrary] || existingLibrary);
           existingTokensCount.textContent = totalTokens + " token" + (totalTokens > 1 ? "s" : "");
         } else {
-          // Pas de tokens existants - masquer toute la section ANALYSER & CORRIGER
+          // Pas de tokens existants - mais on garde la section ANALYSER & CORRIGER visible
+          // pour permettre l'analyse même sans tokens pré-existants
           hasExistingTokens = false;
-          var sectionAnalyze = document.querySelector('.section-analyze');
-          if (sectionAnalyze) {
-            sectionAnalyze.style.display = 'none';
-          }
+          console.log('[UI] Pas de tokens existants, mais section d\'analyse gardée visible');
         }
       }
 
       // Gestion des messages de vérification de frame
       if (msg.type === "scan-results") {
-        scanResults.classList.remove("hidden");
-        scanEmptyState.classList.add("hidden");
+        // Masquer l'état de chargement d'abord
+        hideScanLoading();
+
+        // S'assurer qu'on est sur l'étape d'analyse (4)
+        if (currentStep !== 4) {
+          switchStep(4);
+        }
+
+        // Afficher les résultats
+        var scanResults = document.getElementById("scanResults");
+        var scanEmptyState = document.getElementById("scanEmptyState");
+
+        if (scanResults) {
+          scanResults.classList.remove("hidden");
+        }
+        if (scanEmptyState) {
+          scanEmptyState.classList.add("hidden");
+        }
+
         displayScanResults(msg.results);
       }
 
