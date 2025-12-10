@@ -2776,14 +2776,10 @@
             </div>
 
             <div class="card">
-              <!-- Système de filtrage intelligent -->
+              <!-- Système de filtrage simplifié -->
               <div class="filter-system" style="margin-bottom: 20px;">
                 <div class="filter-buttons">
-                  <button class="filter-btn active" data-filter="all">
-                    📋 Tout
-                    <span class="filter-count" id="allCount">0</span>
-                  </button>
-                  <button class="filter-btn" data-filter="auto">
+                  <button class="filter-btn active" data-filter="auto">
                     ⚡ Automatique
                     <span class="filter-count" id="autoCount">0</span>
                   </button>
@@ -3594,7 +3590,6 @@
 
     // Mettre à jour les compteurs de filtres
     function updateFilterCounts(stats) {
-      document.getElementById('allCount').textContent = stats.total;
       document.getElementById('autoCount').textContent = stats.autoFixable;
       document.getElementById('manualCount').textContent = stats.manualFixes;
     }
@@ -4630,7 +4625,7 @@
     // GESTION DES FILTRES ET SÉLECTIONS
     // ============================================
 
-    var currentFilter = 'all';
+    var currentFilter = 'auto';
     var selectedItems = new Set();
 
     // Initialisation du système de filtrage
@@ -4734,8 +4729,6 @@
       var hasVariable = !!result.suggestedVariableId;
 
       switch (filterType) {
-        case 'all':
-          return true;
         case 'auto':
           // Correction automatique : a une variable suggérée ET 0 ou 1 suggestion
           return hasVariable && suggestions.length <= 1;
@@ -4753,10 +4746,6 @@
       var descElement = document.getElementById('contentDesc');
 
       switch (filterType) {
-        case 'all':
-          titleElement.textContent = 'Toutes les corrections';
-          descElement.textContent = 'Découvrez et appliquez toutes les corrections suggérées pour vos variables de design.';
-          break;
         case 'auto':
           titleElement.textContent = 'Corrections automatiques';
           descElement.textContent = 'Ces valeurs correspondent exactement à vos variables et peuvent être corrigées automatiquement.';
