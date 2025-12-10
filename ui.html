@@ -3477,39 +3477,24 @@
       });
     }
 
-    // Fonction pour mettre à jour le bouton principal selon l'onglet actif
+    // Fonction pour mettre à jour le texte des boutons selon l'onglet actif
     function updateMainActionButton(activeTab) {
       var scanBtn = document.getElementById('scanBtn');
       var scanBtnActive = document.getElementById('scanBtnActive');
       if (!scanBtn) return;
 
-      // Supprimer les anciens event listeners
-      scanBtn.onclick = null;
-      if (scanBtnActive) {
-        scanBtnActive.onclick = null;
-      }
+      // Les event listeners sont déjà configurés pour gérer la logique dynamiquement
+      // On ne change que le texte des boutons
 
       if (activeTab === 'auto') {
         scanBtn.textContent = '✅ Appliquer toutes les corrections auto';
-        scanBtn.onclick = function() {
-          applyAllAutoFixes();
-        };
         if (scanBtnActive) {
           scanBtnActive.textContent = '✅ Appliquer toutes les corrections auto';
-          scanBtnActive.onclick = function() {
-            applyAllAutoFixes();
-          };
         }
       } else if (activeTab === 'manual') {
         scanBtn.textContent = '🎯 Appliquer les corrections manuelles';
-        scanBtn.onclick = function() {
-          applyAllManualFixes();
-        };
         if (scanBtnActive) {
           scanBtnActive.textContent = '🎯 Appliquer les corrections manuelles';
-          scanBtnActive.onclick = function() {
-            applyAllManualFixes();
-          };
         }
       }
     }
@@ -3866,22 +3851,33 @@
       }
     }
 
-    // Scan buttons
-    scanBtn.addEventListener("click", function () {
-      parent.postMessage({
-        pluginMessage: {
-          type: "scan-frame"
-        }
-      }, "*");
-    });
+    // Scan buttons - logique dynamique selon l'état
+    function handleScanBtnClick() {
+      var scanResults = document.getElementById('scanResults');
+      var hasResultsDisplayed = scanResults && !scanResults.classList.contains('hidden');
 
-    scanBtnActive.addEventListener("click", function () {
-      parent.postMessage({
-        pluginMessage: {
-          type: "scan-frame"
+      if (hasResultsDisplayed) {
+        // Si résultats affichés, appliquer selon l'onglet actif
+        var activeTab = document.querySelector('.tab-btn.active');
+        var tabType = activeTab ? activeTab.getAttribute('data-tab') : 'auto';
+
+        if (tabType === 'auto') {
+          applyAllAutoFixes();
+        } else if (tabType === 'manual') {
+          applyAllManualFixes();
         }
-      }, "*");
-    });
+      } else {
+        // Si pas de résultats, lancer l'analyse
+        parent.postMessage({
+          pluginMessage: {
+            type: "scan-frame"
+          }
+        }, "*");
+      }
+    }
+
+    scanBtn.addEventListener("click", handleScanBtnClick);
+    scanBtnActive.addEventListener("click", handleScanBtnClick);
 
     // Apply all fixes button
     var applyAllBtn = document.getElementById("applyAllBtn");
@@ -4059,35 +4055,20 @@
         var hasResultsDisplayed = scanResults && !scanResults.classList.contains('hidden');
 
         if (msg.hasSelection) {
+          scanBtn.disabled = false;
+          scanBtn.className = "btn-primary"; // Bouton vert quand frame sélectionnée
+
           if (!hasResultsDisplayed) {
             // Si pas de résultats affichés, montrer "Lancer l'analyse"
-            scanBtn.disabled = false;
             scanBtn.textContent = "Lancer l'analyse";
-            scanBtn.className = "btn-primary"; // Bouton vert quand frame sélectionnée
-
-            // Remettre la fonction d'origine (lancer l'analyse)
-            scanBtn.onclick = function() {
-              parent.postMessage({
-                pluginMessage: {
-                  type: 'scan-frame'
-                }
-              }, '*');
-            };
 
             // Remettre le bouton scanBtnActive à son état original
             var scanBtnActive = document.getElementById('scanBtnActive');
             if (scanBtnActive) {
               scanBtnActive.textContent = '🔄 Relancer l\'analyse';
-              scanBtnActive.onclick = function() {
-                parent.postMessage({
-                  pluginMessage: {
-                    type: 'scan-frame'
-                  }
-                }, '*');
-              };
             }
           }
-          // Si résultats affichés, ne pas changer les boutons (ils sont déjà configurés par updateMainActionButton)
+          // Si résultats affichés, le texte est déjà géré par updateMainActionButton
 
           // Afficher le nom de la frame sélectionnée au lieu de l'état vide
           scanEmptyState.classList.add("hidden");
@@ -4096,11 +4077,12 @@
             scanEmptyState.classList.remove("hidden");
           }
         } else {
+          scanBtn.disabled = true;
+          scanBtn.className = "btn-secondary"; // Bouton gris quand aucune frame sélectionnée
+
           if (!hasResultsDisplayed) {
-            // Si pas de résultats affichés, désactiver les boutons
-            scanBtn.disabled = true;
+            // Si pas de résultats affichés, montrer "Lancer l'analyse"
             scanBtn.textContent = "Lancer l'analyse";
-            scanBtn.className = "btn-secondary"; // Bouton gris quand aucune frame sélectionnée
 
             // Remettre le bouton scanBtnActive à son état original
             var scanBtnActive = document.getElementById('scanBtnActive');
@@ -4110,7 +4092,7 @@
               scanBtnActive.className = "btn-secondary";
             }
           }
-          // Si résultats affichés, ne pas changer les boutons (ils gardent leur configuration d'onglet)
+          // Si résultats affichés, le texte reste géré par updateMainActionButton
 
           // Remettre l'état vide original
           scanEmptyState.innerHTML = '<div style="text-align: center; padding: 40px 20px;"><div style="margin-bottom: 16px; display: block;"><svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="opacity: 0.5;"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><rect x="7" y="7" width="10" height="10" rx="1" stroke="currentColor" stroke-width="1" fill="none" opacity="0.3"/><circle cx="12" cy="12" r="1.5" fill="currentColor" opacity="0.6"/></svg></div><h4 style="margin-bottom: 8px; color: var(--poly-text-muted);">Aucune Frame sélectionnée</h4><p style="color: var(--poly-text-muted); margin-bottom: 20px;">Sélectionnez une frame dans Figma pour lancer l\'analyse et détecter les valeurs en dur.</p></div>';
