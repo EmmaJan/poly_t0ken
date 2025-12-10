@@ -3851,8 +3851,18 @@
       }
     }
 
-    // Scan buttons - logique dynamique selon l'état
+    // Scan buttons - logique simplifiée
     function handleScanBtnClick() {
+      // Toujours lancer l'analyse pour le moment - logique simplifiée
+      console.log('Scan button clicked - starting analysis');
+      parent.postMessage({
+        pluginMessage: {
+          type: "scan-frame"
+        }
+      }, "*");
+    }
+
+    function handleScanBtnActiveClick() {
       var scanResults = document.getElementById('scanResults');
       var hasResultsDisplayed = scanResults && !scanResults.classList.contains('hidden');
 
@@ -3876,8 +3886,12 @@
       }
     }
 
-    scanBtn.addEventListener("click", handleScanBtnClick);
-    scanBtnActive.addEventListener("click", handleScanBtnClick);
+    if (scanBtn) {
+      scanBtn.addEventListener("click", handleScanBtnClick);
+    }
+    if (scanBtnActive) {
+      scanBtnActive.addEventListener("click", handleScanBtnActiveClick);
+    }
 
     // Apply all fixes button
     var applyAllBtn = document.getElementById("applyAllBtn");
