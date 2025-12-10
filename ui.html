@@ -1251,6 +1251,40 @@
       background: rgba(255, 255, 255, 0.2);
     }
 
+    /* Styles pour les cartes manuelles */
+    .manual-card-content {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex: 1;
+    }
+
+    .value-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      color: #fff;
+    }
+
+    .variable-selector-row {
+      margin-top: 4px;
+    }
+
+    .manual-card-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .manual-apply-btn:disabled {
+      background: #374151 !important;
+      color: #6B7280 !important;
+      cursor: not-allowed !important;
+      opacity: 0.6;
+    }
+
     .btn-apply-fix {
       background: var(--poly-accent); /* Vert vif */
       color: #000; /* Texte noir pour contraste */
@@ -1270,6 +1304,10 @@
 
     .cleaning-result-card.manual-fix {
       border-left: 4px solid var(--poly-warning);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
     }
 
     /* Indicateurs de priorité */
@@ -2600,7 +2638,6 @@
     var step4Back = document.getElementById("step4Back");
     var step4ApplyAll = document.getElementById("step4ApplyAll");
 
-
     // ============================================
     // STATE VARIABLES
     // ============================================
@@ -3138,6 +3175,25 @@
       }, '*');
     }
 
+    function applyManualGroupFix(indices, buttonElement) {
+      // Trouver le sélecteur dans la même carte
+      var card = buttonElement.closest('.cleaning-result-card');
+      var selector = card.querySelector('.manual-select');
+      var variableId = selector.value;
+
+      if (!variableId) {
+        return; // Ne rien faire si aucune variable sélectionnée
+      }
+
+      parent.postMessage({
+        pluginMessage: {
+          type: 'apply-group-fix',
+          indices: indices,
+          variableId: variableId
+        }
+      }, '*');
+    }
+
     function displayScanResults(results) {
       // Calculer les statistiques
       var stats = calculateCleaningStats(results);
@@ -3148,10 +3204,12 @@
       // Générer le contenu des onglets
       var autoCleaningHtml = generateAutoCleaningContent(results, stats);
       var manualCleaningHtml = generateManualCleaningContent(results, stats);
+      var statusHtml = generateStatusContent(results, stats);
 
       // Injecter le contenu dans les onglets
       document.getElementById('autoCleaningList').innerHTML = autoCleaningHtml;
       document.getElementById('manualCleaningList').innerHTML = manualCleaningHtml;
+      document.getElementById('statusContent').innerHTML = statusHtml;
 
       // Afficher/masquer les actions groupées
       toggleBulkActions(stats);
@@ -3160,16 +3218,11 @@
       document.getElementById('cleaningDashboard').style.display = results.length > 0 ? 'block' : 'none';
       document.getElementById('exportReportBtn').style.display = results.length > 0 ? 'inline-flex' : 'none';
 
-      // Mettre à jour le bouton principal selon l'onglet actif (avec un délai pour s'assurer que le DOM est rendu)
-      setTimeout(function() {
-        var activeTab = document.querySelector('.tab-btn.active');
-        if (activeTab) {
-          updateMainActionButton(activeTab.getAttribute('data-tab'));
-        } else {
-          // Si aucun onglet actif trouvé, utiliser 'auto' par défaut
-          updateMainActionButton('auto');
-        }
-      }, 100);
+      // Mettre à jour le bouton principal selon l'onglet actif
+      var activeTab = document.querySelector('.tab-btn.active');
+      if (activeTab) {
+        updateMainActionButton(activeTab.getAttribute('data-tab'));
+      }
 
       // Mettre à jour le compteur de problèmes
       updateProblemCounter(results.length, true);
@@ -3302,53 +3355,63 @@
       }
 
       var groups = groupResultsByValue(results);
-      var html = '<div class="cleaning-cards-grid">';
+      var html = '<div class="cleaning-cards-list">';
 
       groups.forEach(function(group) {
         if (group.suggestions.length === 1) return;
 
+        // Début Carte
         html += '<div class="cleaning-result-card manual-fix">';
 
-        // Problème
-        html += '<div style="flex: 1;">';
+        // --- COLONNE GAUCHE (Infos) ---
+        html += '<div class="manual-card-content">';
 
-        // Label de propriété (ligne séparée)
-        var icon = getPropertyIcon(group.property);
-        html += '<div style="margin-bottom: 6px;">';
-        html += icon;
-        html += '</div>';
+          // Badge Propriété (ex: CORNER RADIUS)
+          html += '<div class="property-badge">' + group.property + '</div>';
 
-        // Valeur actuelle
-        html += '<div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">';
-        if (group.property === "Fill" || group.property === "Stroke") {
-          html += '<div class="mini-swatch" style="background-color: ' + group.value + ';"></div>';
-          html += '<span style="font-family: monospace; font-size: 12px;">' + group.value + '</span>';
-        } else {
-          html += '<span style="font-family: monospace; font-size: 12px; font-weight: 500;">' + group.value + '</span>';
-        }
+          // Valeur actuelle
+          html += '<div class="value-row">';
+            if (group.property === "Fill" || group.property === "Stroke") {
+               html += '<div class="mini-swatch" style="background-color: ' + group.value + ';"></div>';
+               html += '<span>' + group.value + '</span>';
+            } else {
+               html += '<span>' + group.value + '</span>';
+            }
+          html += '</div>';
 
-        html += '</div>';
-        html += '<div style="font-size: 11px; color: var(--poly-text-muted); margin-bottom: 8px; display: flex; align-items: center; gap: 4px; cursor: pointer;" onclick="selectLayers([' + group.originalIndices.join(',') + '])" title="Sélectionner les calques">';
-        html += '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M7 13C8.5913 13 10.1174 12.3679 11.2426 11.2426C12.3679 10.1174 13 8.5913 13 7C13 5.4087 12.3679 3.88258 11.2426 2.75736C10.1174 1.63214 8.5913 1 7 1C5.4087 1 3.88258 1.63214 2.75736 2.75736C1.63214 3.88258 1 5.4087 1 7C1 8.5913 1.63214 10.1174 2.75736 11.2426C3.88258 12.3679 5.4087 13 7 13ZM7 14C7.91925 14 8.8295 13.8189 9.67878 13.4672C10.5281 13.1154 11.2997 12.5998 11.9497 11.9497C12.5998 11.2997 13.1154 10.5281 13.4672 9.67878C13.8189 8.8295 14 7.91925 14 7C14 6.08075 13.8189 5.17049 13.4672 4.32122C13.1154 3.47194 12.5998 2.70026 11.9497 2.05025C11.2997 1.40024 10.5281 0.884626 9.67878 0.532843C8.8295 0.18106 7.91925 -1.36979e-08 7 0C5.14348 2.76642e-08 3.36301 0.737498 2.05025 2.05025C0.737498 3.36301 0 5.14348 0 7C0 8.85652 0.737498 10.637 2.05025 11.9497C3.36301 13.2625 5.14348 14 7 14ZM7 10C7.79565 10 8.55871 9.68393 9.12132 9.12132C9.68393 8.55871 10 7.79565 10 7C10 6.20435 9.68393 5.44129 9.12132 4.87868C8.55871 4.31607 7.79565 4 7 4C6.20435 4 5.44129 4.31607 4.87868 4.87868C4.31607 5.44129 4 6.20435 4 7C4 7.79565 4.31607 8.55871 4.87868 9.12132C5.44129 9.68393 6.20435 10 7 10ZM7 11C8.06087 11 9.07828 10.5786 9.82843 9.82843C10.5786 9.07828 11 8.06087 11 7C11 5.93913 10.5786 4.92172 9.82843 4.17157C9.07828 3.42143 8.06087 3 7 3C5.93913 3 4.92172 3.42143 4.17157 4.17157C3.42143 4.92172 3 5.93913 3 7C3 8.06087 3.42143 9.07828 4.17157 9.82843C4.92172 10.5786 5.93913 11 7 11ZM8 7C8 7.26522 7.89464 7.51957 7.70711 7.70711C7.51957 7.89464 7.26522 8 7 8C6.73478 8 6.48043 7.89464 6.29289 7.70711C6.10536 7.51957 6 7.26522 6 7C6 6.73478 6.10536 6.48043 6.29289 6.29289C6.48043 6.10536 6.73478 6 7 6C7.26522 6 7.51957 6.10536 7.70711 6.29289C7.89464 6.48043 8 6.73478 8 7Z" fill="white"/></svg>';
-        html += group.originalIndices.length + ' calque' + (group.originalIndices.length > 1 ? 's' : '') + ' concerné' + (group.originalIndices.length > 1 ? 's' : '');
-        html += '</div>';
-        html += '</div>';
+          // Sélecteur de variable
+          html += '<div class="variable-selector-row">';
+          if (group.suggestions.length > 1) {
+            html += '<select class="variable-selector manual-select" data-indices="' + group.originalIndices.join(',') + '" style="width: 100%; padding: 6px; border-radius: 6px; border: 1px solid var(--poly-border-subtle); background: var(--poly-surface); color: var(--poly-text); font-size: 12px;">';
+            html += '<option value="">Choisir une variable...</option>';
+            group.suggestions.forEach(function(suggestion, idx) {
+              var distanceIndicator = suggestion.isExact ? '' : ' ≈';
+              var valuePreview = suggestion.hex ? suggestion.hex : (suggestion.value || "");
+              html += '<option value="' + suggestion.id + '">' + suggestion.name + ' (' + valuePreview + ')' + distanceIndicator + '</option>';
+            });
+            html += '</select>';
+          } else {
+            html += '<div style="padding: 6px; background: var(--poly-surface-soft); border-radius: 6px; font-size: 12px; color: var(--poly-text-muted);">Variable suggérée : ' + group.suggestions[0].name + '</div>';
+          }
+          html += '</div>';
 
-        // Sélecteur de variable
-        html += '<div style="min-width: 180px;">';
-        if (group.suggestions.length > 1) {
-          html += '<select class="variable-selector manual-select" data-indices="' + group.originalIndices.join(',') + '" style="width: 100%; padding: 6px; border-radius: 6px; border: 1px solid var(--poly-border-subtle); background: var(--poly-surface); color: var(--poly-text); font-size: 12px;">';
-          html += '<option value="">Choisir une variable...</option>';
-          group.suggestions.forEach(function(suggestion, idx) {
-            var distanceIndicator = suggestion.isExact ? '' : ' ≈';
-            var valuePreview = suggestion.hex ? suggestion.hex : (suggestion.value || "");
-            html += '<option value="' + suggestion.id + '">' + suggestion.name + ' (' + valuePreview + ')' + distanceIndicator + '</option>';
-          });
-          html += '</select>';
-        } else {
-          html += '<div style="padding: 6px; background: var(--poly-surface-soft); border-radius: 6px; font-size: 12px; color: var(--poly-text-muted);">Variable suggérée : ' + group.suggestions[0].name + '</div>';
-        }
-        html += '</div>';
+        html += '</div>'; // Fin manual-card-content
+
+        // --- COLONNE DROITE (Boutons) ---
+        html += '<div class="manual-card-actions">';
+
+          // Bouton Voir les calques
+          html += '<button class="btn-see-layers" onclick="selectLayers([' + group.originalIndices.join(',') + '])" title="Voir ' + group.originalIndices.length + ' calque(s)">';
+          html += '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+          html += 'Voir les calques';
+          html += '</button>';
+
+          // Bouton Appliquer (désactivé par défaut)
+          html += '<button class="btn-apply-fix manual-apply-btn" onclick="applyManualGroupFix([' + group.originalIndices.join(',') + '], this)" disabled>';
+          html += 'Appliquer';
+          html += '</button>';
+
+        html += '</div>'; // Fin manual-card-actions';
 
         html += '</div>';
       });
@@ -3469,32 +3532,28 @@
           // Activer l'onglet sélectionné
           this.classList.add('active');
           document.getElementById(targetTab + 'CleaningTab').classList.add('active');
-
-          // Mettre à jour les boutons selon le nouvel onglet actif
-          updateMainActionButton(targetTab);
         });
       });
     }
 
-    // Fonction pour mettre à jour le texte des boutons selon l'onglet actif
+    // Fonction pour mettre à jour le bouton principal selon l'onglet actif
     function updateMainActionButton(activeTab) {
       var scanBtn = document.getElementById('scanBtn');
-      var scanBtnActive = document.getElementById('scanBtnActive');
       if (!scanBtn) return;
 
-      // Les event listeners sont déjà configurés pour gérer la logique dynamiquement
-      // On ne change que le texte des boutons
+      // Supprimer les anciens event listeners
+      scanBtn.onclick = null;
 
       if (activeTab === 'auto') {
         scanBtn.textContent = '✅ Appliquer toutes les corrections auto';
-        if (scanBtnActive) {
-          scanBtnActive.textContent = '✅ Appliquer toutes les corrections auto';
-        }
+        scanBtn.onclick = function() {
+          applyAllAutoFixes();
+        };
       } else if (activeTab === 'manual') {
         scanBtn.textContent = '🎯 Appliquer les corrections manuelles';
-        if (scanBtnActive) {
-          scanBtnActive.textContent = '🎯 Appliquer les corrections manuelles';
-        }
+        scanBtn.onclick = function() {
+          applyAllManualFixes();
+        };
       }
     }
 
@@ -3504,15 +3563,25 @@
         if (e.target.classList.contains('manual-select')) {
           var indices = e.target.getAttribute('data-indices').split(',');
           var variableId = e.target.value;
+          var card = e.target.closest('.cleaning-result-card');
+          var applyBtn = card.querySelector('.manual-apply-btn');
 
           if (variableId) {
             // Marquer cette ligne comme prête
-            e.target.closest('.cleaning-result-card').classList.add('ready-to-apply');
+            card.classList.add('ready-to-apply');
+            // Activer le bouton individuel
+            if (applyBtn) {
+              applyBtn.disabled = false;
+            }
 
             // Activer le bouton d'application groupée si nécessaire
             updateManualApplyButton();
           } else {
-            e.target.closest('.cleaning-result-card').classList.remove('ready-to-apply');
+            card.classList.remove('ready-to-apply');
+            // Désactiver le bouton individuel
+            if (applyBtn) {
+              applyBtn.disabled = true;
+            }
             updateManualApplyButton();
           }
         }
@@ -3850,45 +3919,22 @@
       }
     }
 
-    // Scan buttons - logique simplifiée
-    function handleScanBtnClick() {
+    // Scan buttons
+    scanBtn.addEventListener("click", function () {
       parent.postMessage({
         pluginMessage: {
           type: "scan-frame"
         }
       }, "*");
-    }
+    });
 
-    function handleScanBtnActiveClick() {
-      var scanResults = document.getElementById('scanResults');
-      var hasResultsDisplayed = scanResults && scanResults.classList && !scanResults.classList.contains('hidden');
-
-      if (hasResultsDisplayed) {
-        // Si résultats affichés, appliquer selon l'onglet actif
-        var activeTab = document.querySelector('.tab-btn.active');
-        var tabType = activeTab ? activeTab.getAttribute('data-tab') : 'auto';
-
-        if (tabType === 'auto') {
-          applyAllAutoFixes();
-        } else if (tabType === 'manual') {
-          applyAllManualFixes();
+    scanBtnActive.addEventListener("click", function () {
+      parent.postMessage({
+        pluginMessage: {
+          type: "scan-frame"
         }
-      } else {
-        // Si pas de résultats, lancer l'analyse
-        parent.postMessage({
-          pluginMessage: {
-            type: "scan-frame"
-          }
-        }, "*");
-      }
-    }
-
-    if (scanBtn) {
-      scanBtn.addEventListener("click", handleScanBtnClick);
-    }
-    if (scanBtnActive) {
-      scanBtnActive.addEventListener("click", handleScanBtnActiveClick);
-    }
+      }, "*");
+    });
 
     // Apply all fixes button
     var applyAllBtn = document.getElementById("applyAllBtn");
@@ -4055,31 +4101,25 @@
 
       // Gestion des messages de vérification de frame
       if (msg.type === "scan-results") {
-        if (scanResults) scanResults.classList.remove("hidden");
-        if (scanEmptyState) scanEmptyState.classList.add("hidden");
+        scanResults.classList.remove("hidden");
+        scanEmptyState.classList.add("hidden");
         displayScanResults(msg.results);
       }
 
       if (msg.type === "selection-checked") {
-        // Vérifier si les résultats d'analyse sont affichés
-        var scanResults = document.getElementById('scanResults');
-        var hasResultsDisplayed = scanResults && scanResults.classList && !scanResults.classList.contains('hidden');
-
         if (msg.hasSelection) {
           scanBtn.disabled = false;
+          scanBtn.textContent = "Lancer l'analyse";
           scanBtn.className = "btn-primary"; // Bouton vert quand frame sélectionnée
 
-          if (!hasResultsDisplayed) {
-            // Si pas de résultats affichés, montrer "Lancer l'analyse"
-            scanBtn.textContent = "Lancer l'analyse";
-
-            // Remettre le bouton scanBtnActive à son état original
-            var scanBtnActive = document.getElementById('scanBtnActive');
-            if (scanBtnActive) {
-              scanBtnActive.textContent = '🔄 Relancer l\'analyse';
-            }
-          }
-          // Si résultats affichés, le texte est déjà géré par updateMainActionButton
+          // Remettre la fonction d'origine (lancer l'analyse)
+          scanBtn.onclick = function() {
+            parent.postMessage({
+              pluginMessage: {
+                type: 'scan-frame'
+              }
+            }, '*');
+          };
 
           // Afficher le nom de la frame sélectionnée au lieu de l'état vide
           scanEmptyState.classList.add("hidden");
@@ -4089,21 +4129,8 @@
           }
         } else {
           scanBtn.disabled = true;
+          scanBtn.textContent = "Lancer l'analyse";
           scanBtn.className = "btn-secondary"; // Bouton gris quand aucune frame sélectionnée
-
-          if (!hasResultsDisplayed) {
-            // Si pas de résultats affichés, montrer "Lancer l'analyse"
-            scanBtn.textContent = "Lancer l'analyse";
-
-            // Remettre le bouton scanBtnActive à son état original
-            var scanBtnActive = document.getElementById('scanBtnActive');
-            if (scanBtnActive) {
-              scanBtnActive.textContent = '🔄 Relancer l\'analyse';
-              scanBtnActive.disabled = true;
-              scanBtnActive.className = "btn-secondary";
-            }
-          }
-          // Si résultats affichés, le texte reste géré par updateMainActionButton
 
           // Remettre l'état vide original
           scanEmptyState.innerHTML = '<div style="text-align: center; padding: 40px 20px;"><div style="margin-bottom: 16px; display: block;"><svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="opacity: 0.5;"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><rect x="7" y="7" width="10" height="10" rx="1" stroke="currentColor" stroke-width="1" fill="none" opacity="0.3"/><circle cx="12" cy="12" r="1.5" fill="currentColor" opacity="0.6"/></svg></div><h4 style="margin-bottom: 8px; color: var(--poly-text-muted);">Aucune Frame sélectionnée</h4><p style="color: var(--poly-text-muted); margin-bottom: 20px;">Sélectionnez une frame dans Figma pour lancer l\'analyse et détecter les valeurs en dur.</p></div>';
