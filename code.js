@@ -1518,6 +1518,11 @@ function checkAndNotifySelection() {
     }
   }
 
+  console.log("Sending selection-checked message:", {
+    hasSelection: hasValidSelection,
+    selectedFrameName: selectedFrameName
+  });
+
   figma.ui.postMessage({
     type: "selection-checked",
     hasSelection: hasValidSelection,
@@ -1526,9 +1531,11 @@ function checkAndNotifySelection() {
 }
 
 figma.on("selectionchange", function() {
+  console.log("Selection changed in Figma");
   checkAndNotifySelection();
 });
 
+console.log("Plugin initialized, checking initial selection");
 checkAndNotifySelection();
 
 figma.ui.onmessage = function (msg) {
@@ -1581,8 +1588,11 @@ figma.ui.onmessage = function (msg) {
   }
 
   if (msg.type === "scan-frame") {
+    console.log("Received scan-frame message, starting scan");
     try {
       var results = scanSelection();
+      console.log("Scan completed, sending results:", results.length, "items");
+
       figma.ui.postMessage({
         type: "scan-results",
         results: results
