@@ -2788,11 +2788,6 @@
                     <span class="filter-count" id="manualCount">0</span>
                   </button>
                 </div>
-                <div class="filter-actions">
-                  <button id="clearSelectionBtn" class="btn-outline" style="font-size: 12px; padding: 6px 12px; display: none;">
-                    Tout désélectionner
-                  </button>
-                </div>
               </div>
 
               <!-- Contenu unifié avec filtrage -->
@@ -4645,14 +4640,6 @@
         });
       });
 
-      // Gestionnaire "Tout désélectionner"
-      var clearSelectionBtn = document.getElementById('clearSelectionBtn');
-      if (clearSelectionBtn) {
-        clearSelectionBtn.addEventListener('click', function() {
-          clearAllSelections();
-        });
-      }
-
       // Gestionnaire "Appliquer la sélection"
       var applySelectedBtn = document.getElementById('applySelectedBtn');
       if (applySelectedBtn) {
@@ -4781,7 +4768,6 @@
       var ignoreCount = document.getElementById('ignoreCount');
       var applyBtn = document.getElementById('applySelectedBtn');
       var ignoreBtn = document.getElementById('ignoreSelectedBtn');
-      var clearBtn = document.getElementById('clearSelectionBtn');
       var progressFill = document.getElementById('progressFill');
 
       var count = selectedItems.size;
@@ -4793,7 +4779,6 @@
         ignoreCount.textContent = '(' + count + ')';
         applyBtn.disabled = false;
         ignoreBtn.disabled = false;
-        clearBtn.style.display = 'inline-flex';
 
         // Calculer le pourcentage de progression
         var totalCards = document.querySelectorAll('.cleaning-result-card').length;
@@ -4801,7 +4786,6 @@
         progressFill.style.width = progressPercent + '%';
       } else {
         bulkActions.style.display = 'none';
-        clearBtn.style.display = 'none';
       }
     }
 
