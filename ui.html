@@ -3161,11 +3161,16 @@
       document.getElementById('cleaningDashboard').style.display = results.length > 0 ? 'block' : 'none';
       document.getElementById('exportReportBtn').style.display = results.length > 0 ? 'inline-flex' : 'none';
 
-      // Mettre à jour le bouton principal selon l'onglet actif
-      var activeTab = document.querySelector('.tab-btn.active');
-      if (activeTab) {
-        updateMainActionButton(activeTab.getAttribute('data-tab'));
-      }
+      // Mettre à jour le bouton principal selon l'onglet actif (avec un délai pour s'assurer que le DOM est rendu)
+      setTimeout(function() {
+        var activeTab = document.querySelector('.tab-btn.active');
+        if (activeTab) {
+          updateMainActionButton(activeTab.getAttribute('data-tab'));
+        } else {
+          // Si aucun onglet actif trouvé, utiliser 'auto' par défaut
+          updateMainActionButton('auto');
+        }
+      }, 100);
 
       // Mettre à jour le compteur de problèmes
       updateProblemCounter(results.length, true);
@@ -3465,6 +3470,9 @@
           // Activer l'onglet sélectionné
           this.classList.add('active');
           document.getElementById(targetTab + 'CleaningTab').classList.add('active');
+
+          // Mettre à jour les boutons selon le nouvel onglet actif
+          updateMainActionButton(targetTab);
         });
       });
     }
@@ -4046,32 +4054,40 @@
       }
 
       if (msg.type === "selection-checked") {
+        // Vérifier si les résultats d'analyse sont affichés
+        var scanResults = document.getElementById('scanResults');
+        var hasResultsDisplayed = scanResults && !scanResults.classList.contains('hidden');
+
         if (msg.hasSelection) {
-          scanBtn.disabled = false;
-          scanBtn.textContent = "Lancer l'analyse";
-          scanBtn.className = "btn-primary"; // Bouton vert quand frame sélectionnée
+          if (!hasResultsDisplayed) {
+            // Si pas de résultats affichés, montrer "Lancer l'analyse"
+            scanBtn.disabled = false;
+            scanBtn.textContent = "Lancer l'analyse";
+            scanBtn.className = "btn-primary"; // Bouton vert quand frame sélectionnée
 
-          // Remettre la fonction d'origine (lancer l'analyse)
-          scanBtn.onclick = function() {
-            parent.postMessage({
-              pluginMessage: {
-                type: 'scan-frame'
-              }
-            }, '*');
-          };
-
-          // Remettre le bouton scanBtnActive à son état original
-          var scanBtnActive = document.getElementById('scanBtnActive');
-          if (scanBtnActive) {
-            scanBtnActive.textContent = '🔄 Relancer l\'analyse';
-            scanBtnActive.onclick = function() {
+            // Remettre la fonction d'origine (lancer l'analyse)
+            scanBtn.onclick = function() {
               parent.postMessage({
                 pluginMessage: {
                   type: 'scan-frame'
                 }
               }, '*');
             };
+
+            // Remettre le bouton scanBtnActive à son état original
+            var scanBtnActive = document.getElementById('scanBtnActive');
+            if (scanBtnActive) {
+              scanBtnActive.textContent = '🔄 Relancer l\'analyse';
+              scanBtnActive.onclick = function() {
+                parent.postMessage({
+                  pluginMessage: {
+                    type: 'scan-frame'
+                  }
+                }, '*');
+              };
+            }
           }
+          // Si résultats affichés, ne pas changer les boutons (ils sont déjà configurés par updateMainActionButton)
 
           // Afficher le nom de la frame sélectionnée au lieu de l'état vide
           scanEmptyState.classList.add("hidden");
@@ -4080,17 +4096,21 @@
             scanEmptyState.classList.remove("hidden");
           }
         } else {
-          scanBtn.disabled = true;
-          scanBtn.textContent = "Lancer l'analyse";
-          scanBtn.className = "btn-secondary"; // Bouton gris quand aucune frame sélectionnée
+          if (!hasResultsDisplayed) {
+            // Si pas de résultats affichés, désactiver les boutons
+            scanBtn.disabled = true;
+            scanBtn.textContent = "Lancer l'analyse";
+            scanBtn.className = "btn-secondary"; // Bouton gris quand aucune frame sélectionnée
 
-          // Remettre le bouton scanBtnActive à son état original
-          var scanBtnActive = document.getElementById('scanBtnActive');
-          if (scanBtnActive) {
-            scanBtnActive.textContent = '🔄 Relancer l\'analyse';
-            scanBtnActive.disabled = true;
-            scanBtnActive.className = "btn-secondary";
+            // Remettre le bouton scanBtnActive à son état original
+            var scanBtnActive = document.getElementById('scanBtnActive');
+            if (scanBtnActive) {
+              scanBtnActive.textContent = '🔄 Relancer l\'analyse';
+              scanBtnActive.disabled = true;
+              scanBtnActive.className = "btn-secondary";
+            }
           }
+          // Si résultats affichés, ne pas changer les boutons (ils gardent leur configuration d'onglet)
 
           // Remettre l'état vide original
           scanEmptyState.innerHTML = '<div style="text-align: center; padding: 40px 20px;"><div style="margin-bottom: 16px; display: block;"><svg width="64" height="64" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="opacity: 0.5;"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2" fill="none"/><rect x="7" y="7" width="10" height="10" rx="1" stroke="currentColor" stroke-width="1" fill="none" opacity="0.3"/><circle cx="12" cy="12" r="1.5" fill="currentColor" opacity="0.6"/></svg></div><h4 style="margin-bottom: 8px; color: var(--poly-text-muted);">Aucune Frame sélectionnée</h4><p style="color: var(--poly-text-muted); margin-bottom: 20px;">Sélectionnez une frame dans Figma pour lancer l\'analyse et détecter les valeurs en dur.</p></div>';
