@@ -1583,6 +1583,7 @@ figma.ui.onmessage = function (msg) {
   if (msg.type === "scan-frame") {
     try {
       var results = scanSelection();
+      console.log("Scan completed, sending", results.length, "results to UI");
       figma.ui.postMessage({
         type: "scan-results",
         results: results

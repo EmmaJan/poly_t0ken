@@ -3139,6 +3139,8 @@
     }
 
     function displayScanResults(results) {
+      console.log("displayScanResults called with", results ? results.length : 0, "results");
+
       // Calculer les statistiques
       var stats = calculateCleaningStats(results);
 
@@ -3165,10 +3167,14 @@
       // Mettre à jour le bouton principal selon l'onglet actif (avec un délai pour s'assurer que le DOM est rendu)
       setTimeout(function() {
         var activeTab = document.querySelector('.tab-btn.active');
+        console.log("Active tab found:", activeTab);
         if (activeTab) {
-          updateMainActionButton(activeTab.getAttribute('data-tab'));
+          var tabType = activeTab.getAttribute('data-tab');
+          console.log("Updating button for tab:", tabType);
+          updateMainActionButton(tabType);
         } else {
           // Si aucun onglet actif trouvé, utiliser 'auto' par défaut
+          console.log("No active tab found, using 'auto'");
           updateMainActionButton('auto');
         }
       }, 100);
@@ -4057,6 +4063,7 @@
 
       // Gestion des messages de vérification de frame
       if (msg.type === "scan-results") {
+        console.log("Received scan-results with", msg.results ? msg.results.length : 0, "results");
         if (scanResults) scanResults.classList.remove("hidden");
         if (scanEmptyState) scanEmptyState.classList.add("hidden");
         displayScanResults(msg.results);
