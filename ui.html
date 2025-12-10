@@ -3465,9 +3465,6 @@
           // Activer l'onglet sélectionné
           this.classList.add('active');
           document.getElementById(targetTab + 'CleaningTab').classList.add('active');
-
-          // Changer le bouton selon l'onglet actif
-          updateMainActionButton(targetTab);
         });
       });
     }
@@ -4035,22 +4032,17 @@
       if (msg.type === "selection-checked") {
         if (msg.hasSelection) {
           scanBtn.disabled = false;
+          scanBtn.textContent = "Lancer l'analyse";
           scanBtn.className = "btn-primary"; // Bouton vert quand frame sélectionnée
 
-          // Mettre à jour le texte selon l'onglet actif
-          var activeTab = document.querySelector('.tab-btn.active');
-          if (activeTab) {
-            var tabType = activeTab.getAttribute('data-tab');
-            if (tabType === 'auto') {
-              scanBtn.textContent = '✅ Appliquer toutes les corrections auto';
-            } else if (tabType === 'manual') {
-              scanBtn.textContent = '🎯 Appliquer les corrections manuelles';
-            } else {
-              scanBtn.textContent = "Lancer l'analyse";
-            }
-          } else {
-            scanBtn.textContent = "Lancer l'analyse";
-          }
+          // Remettre la fonction d'origine (lancer l'analyse)
+          scanBtn.onclick = function() {
+            parent.postMessage({
+              pluginMessage: {
+                type: 'scan-frame'
+              }
+            }, '*');
+          };
 
           // Afficher le nom de la frame sélectionnée au lieu de l'état vide
           scanEmptyState.classList.add("hidden");
