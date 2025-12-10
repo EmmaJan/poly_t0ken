@@ -563,7 +563,7 @@ var scopesByCategory = {
   border: ["STROKE_FLOAT"],
   radius: ["CORNER_RADIUS"],
   spacing: ["GAP", "WIDTH_HEIGHT"],
-  typography: ["TEXT_CONTENT"]
+  typography: ["FONT_SIZE", "LINE_HEIGHT", "LETTER_SPACING", "TEXT_CONTENT"]
 };
 
 function applyScopesForCategory(variable, category) {
