@@ -1159,8 +1159,106 @@
       border-color: var(--poly-accent);
     }
 
+    /* Style spécifique pour les cartes Auto-Fix (Design Row) */
     .cleaning-result-card.auto-fixable {
-      border-left: 4px solid var(--poly-success);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      background: #0D1F12; /* Fond très sombre teinté vert */
+      border: 1px solid rgba(138, 213, 63, 0.1);
+      border-left: 4px solid var(--poly-accent); /* Barre verte */
+      border-radius: 8px;
+      margin-bottom: 8px;
+      gap: 16px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+
+    .auto-card-content {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .property-badge {
+      align-self: flex-start;
+      background: rgba(138, 213, 63, 0.15);
+      color: var(--poly-accent);
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-bottom: 2px;
+    }
+
+    .transformation-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-family: 'Inter', sans-serif;
+      font-size: 13px;
+      color: #fff;
+    }
+
+    .trans-arrow {
+      color: #6B7280;
+      font-size: 12px;
+    }
+
+    .var-name {
+      color: var(--poly-accent);
+      font-weight: 600;
+      font-family: monospace;
+    }
+
+    .var-value-muted {
+      color: #6B7280;
+      font-size: 12px;
+    }
+
+    /* Zone Actions à droite */
+    .auto-card-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-see-layers {
+      background: rgba(255, 255, 255, 0.1);
+      color: #E5E7EB;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background 0.2s;
+    }
+
+    .btn-see-layers:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-apply-fix {
+      background: var(--poly-accent); /* Vert vif */
+      color: #000; /* Texte noir pour contraste */
+      border: none;
+      padding: 6px 16px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.1s;
+    }
+
+    .btn-apply-fix:hover {
+      transform: translateY(-1px);
+      filter: brightness(1.1);
     }
 
     .cleaning-result-card.manual-fix {
@@ -3094,7 +3192,7 @@
       var categories = {};
 
       groups.forEach(function(group) {
-        var isAutoFixable = group.suggestions.length === 1 && group.suggestions[0].isExact;
+        var isAutoFixable = group.suggestions.length === 1;
 
         if (isAutoFixable) {
           autoFixable++;
@@ -3130,54 +3228,70 @@
     }
 
     function generateAutoCleaningContent(results, stats) {
+      // ... (Garder la vérification stats.autoFixable === 0)
       if (stats.autoFixable === 0) {
-        return '<div style="text-align: center; padding: 40px 20px; color: var(--poly-text-muted);"><p>🎉 Toutes les corrections possibles ont déjà été appliquées !</p><p style="font-size: 12px; margin-top: 8px;">Aucune correction automatique disponible pour le moment.</p></div>';
+         return '<div style="text-align: center; padding: 40px 20px; color: var(--poly-text-muted);"><p>🎉 Tout est propre !</p></div>';
       }
 
       var groups = groupResultsByValue(results);
-      var html = '<div class="cleaning-cards-grid">';
+      var html = '<div class="cleaning-cards-list">';
 
       groups.forEach(function(group) {
-        if (group.suggestions.length !== 1 || !group.suggestions[0].isExact) return;
+        // On prend les groupes à suggestion unique (Exacte OU Approx)
+        if (group.suggestions.length !== 1) return;
 
+        var suggestion = group.suggestions[0];
+
+        // Début Carte
         html += '<div class="cleaning-result-card auto-fixable">';
 
-        // Problème
-        html += '<div style="flex: 1;">';
+        // --- COLONNE GAUCHE (Infos) ---
+        html += '<div class="auto-card-content">';
 
-        // Label de propriété (ligne séparée)
-        var icon = getPropertyIcon(group.property);
-        html += '<div style="margin-bottom: 6px;">';
-        html += icon;
-        html += '</div>';
+          // Badge Propriété (ex: CORNER RADIUS)
+          html += '<div class="property-badge">' + group.property + '</div>';
 
-        // Valeur actuelle et solution
-        html += '<div style="display: flex; align-items: center; gap: 8px;">';
+          // Ligne Transformation: "4px -> spacing-1 (4px)"
+          html += '<div class="transformation-row">';
+            // Valeur actuelle
+            if (group.property === "Fill" || group.property === "Stroke") {
+               html += '<div class="mini-swatch" style="background-color: ' + group.value + ';"></div>';
+               html += '<span>' + group.value + '</span>';
+            } else {
+               html += '<span>' + group.value + '</span>';
+            }
 
-        // Valeur actuelle
-        if (group.property === "Fill" || group.property === "Stroke") {
-          html += '<div class="mini-swatch" style="background-color: ' + group.value + ';"></div>';
-          html += '<span style="font-family: monospace; font-size: 12px;">' + group.value + '</span>';
-        } else {
-          html += '<span style="font-family: monospace; font-size: 12px; font-weight: 500;">' + group.value + '</span>';
-        }
+            html += '<span class="trans-arrow">→</span>';
+            html += '<span class="var-name">' + suggestion.name + '</span>';
 
-        html += '<span style="color: var(--poly-text-muted); font-size: 11px;">→</span>';
+            // Afficher la valeur réelle de la variable entre parenthèses pour confirmation
+            // (Note: on suppose que value est proche, on l'affiche pour info)
+            if (!suggestion.isExact) {
+                 html += '<span class="var-value-muted" title="Légère différence"> (≈)</span>';
+            } else {
+                 // Si c'est exact, on peut afficher la valeur ou rien
+                 html += '<span class="var-value-muted"> (' + group.value + ')</span>';
+            }
+          html += '</div>'; // Fin transformation-row
+        html += '</div>'; // Fin auto-card-content
 
-        // Solution
-        html += '<span style="font-family: monospace; font-size: 12px; color: var(--poly-accent); font-weight: 500;">' + group.suggestions[0].name + '</span>';
+        // --- COLONNE DROITE (Boutons) ---
+        html += '<div class="auto-card-actions">';
 
-        html += '</div>';
-        html += '<div style="font-size: 11px; color: var(--poly-text-muted); display: flex; align-items: center; gap: 4px; cursor: pointer;" onclick="selectLayers([' + group.originalIndices.join(',') + '])" title="Sélectionner les calques">';
-        html += '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 14 14" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M7 13C8.5913 13 10.1174 12.3679 11.2426 11.2426C12.3679 10.1174 13 8.5913 13 7C13 5.4087 12.3679 3.88258 11.2426 2.75736C10.1174 1.63214 8.5913 1 7 1C5.4087 1 3.88258 1.63214 2.75736 2.75736C1.63214 3.88258 1 5.4087 1 7C1 8.5913 1.63214 10.1174 2.75736 11.2426C3.88258 12.3679 5.4087 13 7 13ZM7 14C7.91925 14 8.8295 13.8189 9.67878 13.4672C10.5281 13.1154 11.2997 12.5998 11.9497 11.9497C12.5998 11.2997 13.1154 10.5281 13.4672 9.67878C13.8189 8.8295 14 7.91925 14 7C14 6.08075 13.8189 5.17049 13.4672 4.32122C13.1154 3.47194 12.5998 2.70026 11.9497 2.05025C11.2997 1.40024 10.5281 0.884626 9.67878 0.532843C8.8295 0.18106 7.91925 -1.36979e-08 7 0C5.14348 2.76642e-08 3.36301 0.737498 2.05025 2.05025C0.737498 3.36301 0 5.14348 0 7C0 8.85652 0.737498 10.637 2.05025 11.9497C3.36301 13.2625 5.14348 14 7 14ZM7 10C7.79565 10 8.55871 9.68393 9.12132 9.12132C9.68393 8.55871 10 7.79565 10 7C10 6.20435 9.68393 5.44129 9.12132 4.87868C8.55871 4.31607 7.79565 4 7 4C6.20435 4 5.44129 4.31607 4.87868 4.87868C4.31607 5.44129 4 6.20435 4 7C4 7.79565 4.31607 8.55871 4.87868 9.12132C5.44129 9.68393 6.20435 10 7 10ZM7 11C8.06087 11 9.07828 10.5786 9.82843 9.82843C10.5786 9.07828 11 8.06087 11 7C11 5.93913 10.5786 4.92172 9.82843 4.17157C9.07828 3.42143 8.06087 3 7 3C5.93913 3 4.92172 3.42143 4.17157 4.17157C3.42143 4.92172 3 5.93913 3 7C3 8.06087 3.42143 9.07828 4.17157 9.82843C4.92172 10.5786 5.93913 11 7 11ZM8 7C8 7.26522 7.89464 7.51957 7.70711 7.70711C7.51957 7.89464 7.26522 8 7 8C6.73478 8 6.48043 7.89464 6.29289 7.70711C6.10536 7.51957 6 7.26522 6 7C6 6.73478 6.10536 6.48043 6.29289 6.29289C6.48043 6.10536 6.73478 6 7 6C7.26522 6 7.51957 6.10536 7.70711 6.29289C7.89464 6.48043 8 6.73478 8 7Z" fill="white"/></svg>';
-        html += group.originalIndices.length + ' calque' + (group.originalIndices.length > 1 ? 's' : '') + ' concerné' + (group.originalIndices.length > 1 ? 's' : '');
-        html += '</div>';
-        html += '</div>';
+          // Bouton Voir les calques
+          html += '<button class="btn-see-layers" onclick="selectLayers([' + group.originalIndices.join(',') + '])" title="Voir ' + group.originalIndices.length + ' calque(s)">';
+          html += '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+          html += 'Voir les calques';
+          html += '</button>';
 
-        // Bouton appliquer
-        html += '<button class="btn-primary" onclick="applyGroupFix([' + group.originalIndices.join(',') + '], \'' + group.suggestions[0].id + '\')" style="padding: 6px 12px; font-size: 12px;">Appliquer</button>';
+          // Bouton Appliquer
+          html += '<button class="btn-apply-fix" onclick="applyGroupFix([' + group.originalIndices.join(',') + '], \'' + suggestion.id + '\')">';
+          html += 'Appliquer';
+          html += '</button>';
 
-        html += '</div>';
+        html += '</div>'; // Fin auto-card-actions
+
+        html += '</div>'; // Fin Card
       });
 
       html += '</div>';
@@ -3193,7 +3307,7 @@
       var html = '<div class="cleaning-cards-grid">';
 
       groups.forEach(function(group) {
-        if (group.suggestions.length === 1 && group.suggestions[0].isExact) return;
+        if (group.suggestions.length === 1) return;
 
         html += '<div class="cleaning-result-card manual-fix">';
 
