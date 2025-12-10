@@ -1078,7 +1078,11 @@
 
     /* En-têtes de section */
     .section-header {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
       margin-bottom: 16px;
+      align-items: flex-start;
     }
 
     .section-header h5 {
@@ -1238,6 +1242,8 @@
       align-items: center;
       gap: 6px;
       transition: background 0.2s;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
 
     .btn-see-layers:hover {
@@ -1746,24 +1752,6 @@
   width: 18px;
   height: 20px;
 }
-
-
-      /* Dimensions (Match Step 0) */
-      width: 40px !important;
-      height: 40px !important;
-      min-width: 40px !important;
-      min-height: 40px !important;
-
-      /* Shape & Color */
-      border-radius: 50%;
-      background: var(--poly-surface-soft);
-      border: 1px solid var(--poly-border-subtle);
-      color: var(--poly-accent);
-
-      margin-bottom: 8px;
-      flex-shrink: 0 !important;
-      transition: all 0.2s ease;
-    }
 
     /* 4. Hover on Icon (Invert Colors + Scale) */
     .library-option:hover .icon,
@@ -3343,7 +3331,8 @@
           html += '<option value="">Choisir une variable...</option>';
           group.suggestions.forEach(function(suggestion, idx) {
             var distanceIndicator = suggestion.isExact ? '' : ' ≈';
-            html += '<option value="' + suggestion.id + '">' + suggestion.name + distanceIndicator + '</option>';
+            var valuePreview = suggestion.hex ? suggestion.hex : (suggestion.value || "");
+            html += '<option value="' + suggestion.id + '">' + suggestion.name + ' (' + valuePreview + ')' + distanceIndicator + '</option>';
           });
           html += '</select>';
         } else {
