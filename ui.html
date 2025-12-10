@@ -3870,7 +3870,7 @@
 
     function handleScanBtnActiveClick() {
       var scanResults = document.getElementById('scanResults');
-      var hasResultsDisplayed = scanResults && !scanResults.classList.contains('hidden');
+      var hasResultsDisplayed = scanResults && scanResults.classList && !scanResults.classList.contains('hidden');
 
       if (hasResultsDisplayed) {
         // Si résultats affichés, appliquer selon l'onglet actif
@@ -4082,8 +4082,8 @@
 
       // Gestion des messages de vérification de frame
       if (msg.type === "scan-results") {
-        scanResults.classList.remove("hidden");
-        scanEmptyState.classList.add("hidden");
+        if (scanResults) scanResults.classList.remove("hidden");
+        if (scanEmptyState) scanEmptyState.classList.add("hidden");
         displayScanResults(msg.results);
       }
 
@@ -4092,7 +4092,7 @@
 
         // Vérifier si les résultats d'analyse sont affichés
         var scanResults = document.getElementById('scanResults');
-        var hasResultsDisplayed = scanResults && !scanResults.classList.contains('hidden');
+        var hasResultsDisplayed = scanResults && scanResults.classList && !scanResults.classList.contains('hidden');
 
         console.log("hasResultsDisplayed:", hasResultsDisplayed);
 
