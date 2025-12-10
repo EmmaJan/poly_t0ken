@@ -1692,7 +1692,7 @@ figma.ui.onmessage = function (msg) {
       }).filter(function(node) { return node !== null; });
 
       if (nodes.length > 0) {
-        figma.currentPage.selection = nodes;
+        // Ne pas sélectionner les nodes, juste les mettre en vue
         figma.viewport.scrollAndZoomIntoView(nodes);
       }
     } catch (e) {
