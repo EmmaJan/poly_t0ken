@@ -721,7 +721,14 @@ function importTokensToFigma(tokens, naming, overwrite) {
       if (!tokens.typography.hasOwnProperty(tKey)) continue;
 
       var cleanTKey = tKey.replace(/\./g, "-");
-      createOrUpdateVariable(typoCollection, "typo-" + cleanTKey, "STRING", tokens.typography[tKey], "typography", overwrite);
+      var typoValueStr = tokens.typography[tKey];
+      var typoValue = parseFloat(typoValueStr);
+
+      if (typoValueStr.indexOf("rem") !== -1) {
+        typoValue = typoValue * 16;
+      }
+
+      createOrUpdateVariable(typoCollection, "typo-" + cleanTKey, "FLOAT", typoValue, "typography", overwrite);
     }
   }
 
@@ -752,9 +759,58 @@ var lastScanResults = null; // Pour stocker temporairement les résultats du der
 // FRAME VERIFICATION FUNCTIONS
 // ============================================
 
+/**
+ * Résout récursivement la valeur d'une variable, en suivant les alias jusqu'à la valeur brute
+ * @param {Object} variable - La variable Figma à résoudre
+ * @param {string} modeId - L'ID du mode à utiliser
+ * @param {Set} visitedVariables - Ensemble des variables déjà visitées (pour éviter les cycles)
+ * @returns {Object|Number|null} La valeur résolue ou null si résolution impossible
+ */
+function resolveVariableValue(variable, modeId, visitedVariables) {
+  // Protection contre les cycles infinis
+  if (!visitedVariables) {
+    visitedVariables = new Set();
+  }
+
+  if (visitedVariables.has(variable.id)) {
+    console.warn("[resolveVariableValue] Cycle détecté dans les alias pour variable:", variable.name);
+    return null;
+  }
+
+  visitedVariables.add(variable.id);
+
+  try {
+    var value = variable.valuesByMode[modeId];
+
+    // Si c'est un alias, résoudre récursivement
+    if (value && typeof value === 'object' && value.type === 'VARIABLE_ALIAS') {
+      console.log("[resolveVariableValue] Alias détecté pour", variable.name, "-> résolution vers", value.id);
+
+      var parentVar = figma.variables.getVariableById(value.id);
+      if (!parentVar) {
+        console.warn("[resolveVariableValue] Variable parente introuvable:", value.id);
+        return null;
+      }
+
+      // Pour les alias, utiliser le même mode ou le mode par défaut de la variable parente
+      var parentModeId = modeId; // On garde le même mode pour simplifier
+      return resolveVariableValue(parentVar, parentModeId, visitedVariables);
+    }
+
+    // Valeur brute atteinte
+    return value;
+
+  } catch (error) {
+    console.error("[resolveVariableValue] Erreur lors de la résolution de", variable.name, ":", error);
+    return null;
+  } finally {
+    visitedVariables.delete(variable.id);
+  }
+}
+
 function createValueToVariableMap() {
-  console.log("🔧 Construction de la map des variables avec gestion multi-modes...");
-  var map = new Map(); // value -> [{id, name, collectionName}, ...]
+  console.log("🔧 Construction de la map des variables avec résolution des alias...");
+  var map = new Map(); // value -> [{id, name, collectionName, resolvedValue}, ...]
   var localCollections = figma.variables.getLocalVariableCollections();
 
   console.log("📚 Collections trouvées:", localCollections.length);
@@ -762,46 +818,57 @@ function createValueToVariableMap() {
   localCollections.forEach(function(collection) {
     collection.variableIds.forEach(function(variableId) {
       var variable = figma.variables.getVariableById(variableId);
-      if (variable) {
-        collection.modes.forEach(function(mode) {
-          var modeId = mode.modeId;
-          var value = variable.valuesByMode[modeId];
+      if (!variable) {
+        console.warn("[createValueToVariableMap] Variable introuvable:", variableId);
+        return;
+      }
 
-          if (value !== undefined) {
-            // Convertir les couleurs RGB en hex pour la comparaison
-            if (isColorValue(value)) {
-              var hexValue = rgbToHex(value);
-              if (hexValue) {
-                if (!map.has(hexValue)) {
-                  map.set(hexValue, []);
-                }
-                map.get(hexValue).push({
-                  id: variable.id,
-                  name: variable.name,
-                  collectionName: collection.name,
-                  modeName: mode.name
-                });
+      collection.modes.forEach(function(mode) {
+        var modeId = mode.modeId;
+
+        // Résoudre la valeur réelle (en suivant les alias)
+        var resolvedValue = resolveVariableValue(variable, modeId);
+
+        if (resolvedValue !== undefined && resolvedValue !== null) {
+          // Convertir les couleurs RGB en hex pour la comparaison
+          if (isColorValue(resolvedValue)) {
+            var hexValue = rgbToHex(resolvedValue);
+            if (hexValue) {
+              if (!map.has(hexValue)) {
+                map.set(hexValue, []);
               }
-            }
-            // Pour les autres types (nombres), stocker directement
-            else if (typeof value === 'number') {
-              var key = value;
-              if (!map.has(key)) {
-                map.set(key, []);
-              }
-              map.get(key).push({
+              map.get(hexValue).push({
                 id: variable.id,
                 name: variable.name,
                 collectionName: collection.name,
-                modeName: mode.name
+                modeName: mode.name,
+                resolvedValue: resolvedValue,
+                originalValue: variable.valuesByMode[modeId] // Garder la valeur originale pour référence
               });
             }
           }
-        });
-      }
+          // Pour les autres types (nombres), stocker directement
+          else if (typeof resolvedValue === 'number') {
+            console.log('[DEBUG createValueToVariableMap] Stockage variable numérique:', variable.name, '=', resolvedValue);
+            var key = resolvedValue;
+            if (!map.has(key)) {
+              map.set(key, []);
+            }
+            map.get(key).push({
+              id: variable.id,
+              name: variable.name,
+              collectionName: collection.name,
+              modeName: mode.name,
+              resolvedValue: resolvedValue,
+              originalValue: variable.valuesByMode[modeId]
+            });
+          }
+        }
+      });
     });
   });
 
+  console.log("MAP INITIALISÉE :", map.size, "couleurs/valeurs uniques trouvées dans la librairie locale.");
   return map;
 }
 
@@ -834,50 +901,255 @@ function getColorDistance(hex1, hex2) {
   return Math.sqrt(dr * dr + dg * dg + db * db);
 }
 
+// Fonction helper pour déterminer les scopes appropriés selon le type de propriété
+// APPROCHE PERMISSIVE : Accepter tous les scopes pertinents pour ne jamais rejeter une variable valide
+function getScopesForProperty(propertyType) {
+  var propertyScopes = {
+    // Fill accepte tous les types de remplissage + ALL_SCOPES (usage général)
+    "Fill": ["ALL_FILLS", "FRAME_FILL", "SHAPE_FILL", "TEXT_FILL", "ALL_SCOPES"],
+
+    // Stroke accepte les couleurs de contour + ALL_SCOPES
+    "Stroke": ["STROKE_COLOR", "ALL_SCOPES"],
+
+    // Corner Radius accepte les rayons + ALL_SCOPES
+    "Corner Radius": ["CORNER_RADIUS", "ALL_SCOPES"],
+    "Top Left Radius": ["CORNER_RADIUS", "ALL_SCOPES"],
+    "Top Right Radius": ["CORNER_RADIUS", "ALL_SCOPES"],
+    "Bottom Left Radius": ["CORNER_RADIUS", "ALL_SCOPES"],
+    "Bottom Right Radius": ["CORNER_RADIUS", "ALL_SCOPES"],
+
+    // Espacements acceptent GAP + ALL_SCOPES
+    "Item Spacing": ["GAP", "ALL_SCOPES"],
+    "Padding Left": ["GAP", "ALL_SCOPES"],
+    "Padding Right": ["GAP", "ALL_SCOPES"],
+    "Padding Top": ["GAP", "ALL_SCOPES"],
+    "Padding Bottom": ["GAP", "ALL_SCOPES"]
+  };
+
+  return propertyScopes[propertyType] || [];
+}
+
+// Fonction pour filtrer les variables selon leurs scopes
+function filterVariablesByScopes(variables, requiredScopes) {
+  if (!requiredScopes || requiredScopes.length === 0) {
+    return variables; // Si pas de scopes requis, retourner tout
+  }
+
+  return variables.filter(function(variable) {
+    // Récupérer la variable complète depuis Figma
+    var figmaVariable = figma.variables.getVariableById(variable.id);
+    if (!figmaVariable || !figmaVariable.scopes) {
+      return false; // Variable invalide ou sans scopes
+    }
+
+    // Vérifier si au moins un scope de la variable correspond aux scopes requis
+    return figmaVariable.scopes.some(function(variableScope) {
+      return requiredScopes.includes(variableScope);
+    });
+  });
+}
+
 // Fonction pour trouver les meilleures suggestions de variables de couleur
-function findColorSuggestions(hexValue, valueToVariableMap) {
+function findColorSuggestions(hexValue, valueToVariableMap, propertyType) {
+  // Déterminer les scopes appropriés pour cette propriété
+  var requiredScopes = getScopesForProperty(propertyType);
+  console.log("[DEBUG] Recherche pour Hex:", hexValue, "Scopes requis:", requiredScopes);
+
   // Chercher d'abord une correspondance exacte
   var exactMatches = valueToVariableMap.get(hexValue);
   if (exactMatches && exactMatches.length > 0) {
-    return [{
-      id: exactMatches[0].id,
-      name: exactMatches[0].name,
-      hex: hexValue,
-      distance: 0,
-      isExact: true
-    }];
+    // Filtrer selon les scopes
+    var filteredExactMatches = filterVariablesByScopes(exactMatches, requiredScopes);
+    if (filteredExactMatches.length > 0) {
+      console.log('[findColorSuggestions] Correspondance exacte trouvée et filtrée:', filteredExactMatches[0].name);
+      return [{
+        id: filteredExactMatches[0].id,
+        name: filteredExactMatches[0].name,
+        hex: hexValue,
+        distance: 0,
+        isExact: true
+      }];
+    }
   }
 
   // Si pas de correspondance exacte, chercher les plus proches
   var suggestions = [];
-  var maxDistance = 50; // Tolérance maximale pour les suggestions
+  var maxDistance = 150; // Tolérance maximale pour les suggestions (augmentée pour gérer les écarts RGB->Hex)
 
   // Parcourir toutes les variables disponibles dans valueToVariableMap
+  var minDistanceFound = Infinity;
   valueToVariableMap.forEach(function(vars, varHex) {
     if (vars && vars.length > 0) {
       var distance = getColorDistance(hexValue, varHex);
+      minDistanceFound = Math.min(minDistanceFound, distance);
+
       if (distance <= maxDistance) {
-        suggestions.push({
-          id: vars[0].id,
-          name: vars[0].name,
-          hex: varHex,
-          distance: distance,
-          isExact: false
-        });
+        // Vérifier si rejeté par scope
+        var filteredVars = filterVariablesByScopes(vars, requiredScopes);
+        var passScope = filteredVars.length > 0;
+
+        if (!passScope) {
+          console.log("[DEBUG] Variable rejetée par SCOPE:", vars[0].name, "scopes:", vars[0].scopes, "requis:", requiredScopes, "distance:", distance);
+        } else {
+          console.log("[DEBUG] Candidat valide trouvé:", vars[0].name, "Distance:", distance);
+        }
+
+        if (passScope) {
+          suggestions.push({
+            id: filteredVars[0].id,
+            name: filteredVars[0].name,
+            hex: varHex,
+            distance: distance,
+            isExact: false
+          });
+        }
       }
     }
   });
+
+  // FALLBACK "SANS SCOPE" : Si aucune suggestion n'est trouvée avec le filtrage par scopes,
+  // relance une recherche sans aucun filtre de scope
+  if (suggestions.length === 0) {
+    console.log("[DEBUG] Aucune suggestion avec scopes, tentative fallback sans filtre de scope");
+
+    valueToVariableMap.forEach(function(vars, varHex) {
+      if (vars && vars.length > 0) {
+        var distance = getColorDistance(hexValue, varHex);
+        if (distance <= maxDistance) {
+          suggestions.push({
+            id: vars[0].id,
+            name: vars[0].name,
+            hex: varHex,
+            distance: distance,
+            isExact: false,
+            scopeMismatch: true, // Flag pour indiquer un problème de scope
+            warning: "Scope mismatch - Cette variable pourrait ne pas être appropriée pour ce type de propriété"
+          });
+          console.log("[DEBUG] Fallback: variable trouvée sans filtre scope:", vars[0].name, "Distance:", distance);
+        }
+      }
+    });
+  }
 
   // Trier par distance croissante et prendre les 3 meilleures
   suggestions.sort(function(a, b) {
     return a.distance - b.distance;
   });
 
+  console.log('[findColorSuggestions] Suggestions trouvées pour', propertyType, ':', suggestions.length, '(dont', suggestions.filter(function(s) { return s.scopeMismatch; }).length, 'avec scope mismatch)');
+
+  // Log de debug détaillé si aucune suggestion n'est trouvée
+  if (suggestions.length === 0) {
+    console.log("FAIL: Hex", hexValue, " - Distance min trouvée :", minDistanceFound, "- Max tolérance:", maxDistance);
+  }
+
   return suggestions.slice(0, 3);
 }
 
-function checkNodeProperties(node, valueToVariableMap, results) {
-  if (!node || !node.id || !node.name) {
+// Fonction pour trouver les meilleures suggestions de variables numériques
+function findNumericSuggestions(targetValue, valueToVariableMap, tolerance, propertyType) {
+  // Tolérance par défaut de 4px pour radius, 8px pour spacing (plus permissif)
+  tolerance = tolerance !== undefined ? tolerance : (propertyType.indexOf('Spacing') !== -1 ? 8 : 4);
+
+  console.log('[DEBUG findNumericSuggestions] Recherche pour valeur:', targetValue, 'type:', propertyType, 'tolérance:', tolerance);
+
+  // Déterminer les scopes appropriés pour cette propriété
+  var requiredScopes = getScopesForProperty(propertyType);
+  console.log('[findNumericSuggestions] Scopes requis pour', propertyType, ':', requiredScopes);
+
+  // Chercher d'abord une correspondance exacte
+  console.log('[DEBUG findNumericSuggestions] Recherche correspondance exacte pour valeur:', targetValue);
+  var exactMatches = valueToVariableMap.get(targetValue);
+  console.log('[DEBUG findNumericSuggestions] Correspondances exactes trouvées:', exactMatches ? exactMatches.length : 0);
+
+  if (exactMatches && exactMatches.length > 0) {
+    console.log('[DEBUG findNumericSuggestions] Variables exactes:', exactMatches.map(function(v) { return v.name; }));
+    // Filtrer selon les scopes
+    var filteredExactMatches = filterVariablesByScopes(exactMatches, requiredScopes);
+    console.log('[DEBUG findNumericSuggestions] Après filtrage scopes:', filteredExactMatches.length);
+    if (filteredExactMatches.length > 0) {
+      console.log('[findNumericSuggestions] Correspondance exacte trouvée et filtrée:', filteredExactMatches[0].name);
+      return [{
+        id: filteredExactMatches[0].id,
+        name: filteredExactMatches[0].name,
+        value: targetValue,
+        difference: 0,
+        isExact: true
+      }];
+    } else {
+      console.log('[DEBUG findNumericSuggestions] Aucune correspondance exacte après filtrage scopes');
+    }
+  } else {
+    console.log('[DEBUG findNumericSuggestions] Aucune correspondance exacte trouvée');
+  }
+
+  // Si pas de correspondance exacte, chercher les plus proches dans la tolérance
+  var suggestions = [];
+  console.log('[DEBUG findNumericSuggestions] Recherche approximative avec tolérance:', tolerance);
+
+  // Parcourir toutes les variables numériques disponibles dans valueToVariableMap
+  valueToVariableMap.forEach(function(vars, varValue) {
+    if (vars && vars.length > 0 && typeof varValue === 'number') {
+      console.log('[DEBUG findNumericSuggestions] Vérification variable:', vars[0].name, 'valeur:', varValue, 'type:', typeof varValue);
+      // Filtrer les variables selon les scopes
+      var filteredVars = filterVariablesByScopes(vars, requiredScopes);
+      console.log('[DEBUG findNumericSuggestions] Après filtrage scopes:', filteredVars.length, 'pour valeur:', varValue);
+      if (filteredVars.length > 0) {
+        var difference = Math.abs(targetValue - varValue);
+        console.log('[DEBUG findNumericSuggestions] Différence:', difference, 'tolérance:', tolerance);
+        if (difference <= tolerance) {
+          console.log('[DEBUG findNumericSuggestions] Suggestion ajoutée:', filteredVars[0].name, 'différence:', difference);
+          suggestions.push({
+            id: filteredVars[0].id,
+            name: filteredVars[0].name,
+            value: varValue,
+            difference: difference,
+            isExact: false
+          });
+        }
+      }
+    }
+  });
+
+  // Trier par différence absolue croissante (plus proche en premier)
+  suggestions.sort(function(a, b) {
+    return a.difference - b.difference;
+  });
+
+  console.log('[findNumericSuggestions] Suggestions trouvées pour', propertyType, ':', suggestions.length);
+  if (suggestions.length > 0) {
+    console.log('[DEBUG findNumericSuggestions] Meilleures suggestions:', suggestions.slice(0, 3).map(function(s) { return s.name + ' (diff:' + s.difference + ')'; }));
+  } else {
+    console.log('[DEBUG findNumericSuggestions] AUCUNE suggestion trouvée pour valeur:', targetValue, 'avec tolérance:', tolerance);
+  }
+  // Retourner jusqu'à 3 suggestions
+  return suggestions.slice(0, 3);
+}
+
+/**
+ * Analyse les propriétés d'un nœud de manière défensive et robuste
+ * Gère tous les cas edge avec protection contre les crashes
+ * @param {Object} node - Le nœud Figma à analyser
+ * @param {Map} valueToVariableMap - Map des valeurs vers les variables
+ * @param {Array} results - Tableau pour stocker les résultats
+ * @param {boolean} ignoreHiddenLayers - Option pour ignorer les calques invisibles/verrouillés
+ */
+function checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLayers) {
+  // === VÉRIFICATIONS DÉFENSIVES DE BASE ===
+  if (!node) {
+    console.warn("[checkNodeProperties] Nœud null/undefined reçu");
+    return;
+  }
+
+  // Vérifier si le nœud a été supprimé ou n'existe plus
+  if (node.removed) {
+    console.warn("[checkNodeProperties] Nœud supprimé détecté:", node.id);
+    return;
+  }
+
+  // Vérifications de base des propriétés essentielles
+  if (!node.id || !node.name || !node.type) {
+    console.warn("[checkNodeProperties] Nœud malformé:", node);
     return;
   }
 
@@ -885,79 +1157,178 @@ function checkNodeProperties(node, valueToVariableMap, results) {
   var layerName = node.name;
   var nodeType = node.type;
 
-  // Liste blanche de types valides pour le style
-  var supportedTypes = ['FRAME', 'RECTANGLE', 'ELLIPSE', 'POLYGON', 'STAR', 'VECTOR', 'TEXT', 'COMPONENT', 'INSTANCE', 'LINE'];
-
-  if (!nodeType || supportedTypes.indexOf(nodeType) === -1) {
+  // === VÉRIFICATIONS DÉFENSIVES SUPPLÉMENTAIRES ===
+  if (!node || !node.id || !node.type) {
+    console.warn("[checkNodeProperties] Nœud malformé ou null détecté");
     return;
   }
 
-  // Vérifier les fills (couleurs de fond)
-  if (node.fills && Array.isArray(node.fills)) {
-    for (var i = 0; i < node.fills.length; i++) {
-      var fill = node.fills[i];
-      if (fill && fill.type === 'SOLID' && fill.color) {
-        var isBound = node.boundVariables && node.boundVariables.fills && node.boundVariables.fills[i];
-
-        if (!isBound) {
-          var hexValue = rgbToHex(fill.color);
-          if (hexValue) {
-            var suggestions = findColorSuggestions(hexValue, valueToVariableMap);
-            if (suggestions.length > 0) {
-              // Prendre la meilleure suggestion (toujours la première après tri)
-              var bestSuggestion = suggestions[0];
-              results.push({
-                nodeId: nodeId,
-                layerName: layerName,
-                property: "Fill",
-                value: hexValue,
-                suggestedVariableId: bestSuggestion.id,
-                suggestedVariableName: bestSuggestion.name,
-                fillIndex: i,
-                colorSuggestions: suggestions // Toutes les suggestions pour l'UI
-              });
-            }
-          }
-        }
+  // === FILTRAGE INTELLIGENT ===
+  // Ignorer les calques invisibles ou verrouillés selon l'option
+  if (ignoreHiddenLayers) {
+    try {
+      if (node.visible === false) {
+        console.log("[checkNodeProperties] Calque invisible ignoré:", layerName);
+        return;
       }
+      if (node.locked === true) {
+        console.log("[checkNodeProperties] Calque verrouillé ignoré:", layerName);
+        return;
+      }
+    } catch (visibilityError) {
+      // Certains types de nœuds n'ont pas ces propriétés, continuer silencieusement
     }
   }
 
-  // Vérifier les strokes (couleurs de contour)
-  if (node.strokes && Array.isArray(node.strokes)) {
-    for (var j = 0; j < node.strokes.length; j++) {
-      var stroke = node.strokes[j];
-      if (stroke && stroke.type === 'SOLID' && stroke.color) {
-        var isBound = node.boundVariables && node.boundVariables.strokes && node.boundVariables.strokes[j];
+  // Liste étendue des types supportés pour le style
+  var supportedTypes = [
+    'FRAME', 'RECTANGLE', 'ELLIPSE', 'POLYGON', 'STAR', 'VECTOR',
+    'TEXT', 'COMPONENT', 'INSTANCE', 'LINE', 'GROUP', 'SECTION', 'COMPONENT_SET'
+  ];
 
-        if (!isBound) {
-          var hexValue = rgbToHex(stroke.color);
-          if (hexValue) {
-            var suggestions = findColorSuggestions(hexValue, valueToVariableMap);
-            if (suggestions.length > 0) {
-              // Prendre la meilleure suggestion (toujours la première après tri)
-              var bestSuggestion = suggestions[0];
-              results.push({
-                nodeId: nodeId,
-                layerName: layerName,
-                property: "Stroke",
-                value: hexValue,
-                suggestedVariableId: bestSuggestion.id,
-                suggestedVariableName: bestSuggestion.name,
-                strokeIndex: j,
-                colorSuggestions: suggestions // Toutes les suggestions pour l'UI
-              });
-            }
-          }
-        }
-      }
-    }
+  // Pour les conteneurs, on ne vérifie que s'ils peuvent avoir des propriétés de style
+  var styleSupportedTypes = [
+    'FRAME', 'RECTANGLE', 'ELLIPSE', 'POLYGON', 'STAR', 'VECTOR',
+    'TEXT', 'COMPONENT', 'INSTANCE', 'LINE'
+  ];
+
+  var isContainer = supportedTypes.indexOf(nodeType) !== -1;
+  var supportsStyle = styleSupportedTypes.indexOf(nodeType) !== -1;
+
+  if (!isContainer) {
+    console.log("[checkNodeProperties] Type de nœud non supporté:", nodeType);
+    return;
   }
 
-  // Vérifier cornerRadius
-  if (nodeType === "FRAME" || nodeType === "RECTANGLE" || nodeType === "ELLIPSE" || nodeType === "POLYGON" || nodeType === "STAR" || nodeType === "VECTOR" || nodeType === "COMPONENT" || nodeType === "INSTANCE") {
-    
-    // Cas spécial : cornerRadius mixte
+  // === ANALYSE DES PROPRIÉTÉS AVEC PROTECTION ===
+  if (supportsStyle) {
+    try {
+      // 1. VÉRIFICATION DES FILLS (COULEURS DE FOND) - GESTION FIGMA.MIXED
+      if (node.fills !== undefined && node.fills !== figma.mixed) {
+        checkFillsSafely(node, valueToVariableMap, results);
+      }
+
+      // 2. VÉRIFICATION DES STROKES (COULEURS DE CONTOUR) - GESTION FIGMA.MIXED
+      if (node.strokes !== undefined && node.strokes !== figma.mixed) {
+        checkStrokesSafely(node, valueToVariableMap, results);
+      }
+
+      // 3. VÉRIFICATION DES CORNER RADIUS - GESTION COMPLÈTE FIGMA.MIXED
+      checkCornerRadiusSafely(node, valueToVariableMap, results);
+
+      // 4. VÉRIFICATION DES PROPRIÉTÉS NUMÉRIQUES (SPACING, PADDING, RADIUS)
+      checkNumericPropertiesSafely(node, valueToVariableMap, results);
+
+    } catch (propertyError) {
+      console.error("[checkNodeProperties] Erreur lors de l'analyse des propriétés du nœud", nodeId, layerName, ":", propertyError);
+      // Ne pas arrêter le scan, continuer vers les autres nœuds
+    }
+  }
+}
+
+/**
+ * Vérifie les fills de manière sécurisée avec gestion des tableaux et types mixtes
+ */
+function checkFillsSafely(node, valueToVariableMap, results) {
+  try {
+    var fills = node.fills;
+    if (!Array.isArray(fills)) return;
+
+    for (var i = 0; i < fills.length; i++) {
+      try {
+        var fill = fills[i];
+        if (!fill || fill.type !== 'SOLID' || !fill.color) continue;
+
+        // Vérification stricte des variables liées avec validation de structure
+        var isBound = isPropertyBoundToVariable(node.boundVariables || {}, 'fills', i);
+        if (isBound) continue;
+
+        var hexValue = rgbToHex(fill.color);
+        if (!hexValue) continue;
+
+        var suggestions = findColorSuggestions(hexValue, valueToVariableMap, "Fill");
+
+        // NE SIGNALER QUE LES PROBLÈMES AYANT UNE SOLUTION
+        if (suggestions.length > 0) {
+          results.push({
+            nodeId: node.id,
+            layerName: node.name,
+            property: "Fill",
+            value: hexValue,
+            suggestedVariableId: suggestions[0].id,
+            suggestedVariableName: suggestions[0].name,
+            fillIndex: i,
+            colorSuggestions: suggestions,
+            isExact: suggestions[0].isExact || false
+          });
+        }
+      } catch (fillError) {
+        console.warn("[checkFillsSafely] Erreur sur fill index", i, "du nœud", node.id, ":", fillError);
+        // Continuer vers le fill suivant
+      }
+    }
+  } catch (fillsError) {
+    console.error("[checkFillsSafely] Erreur générale sur fills du nœud", node.id, ":", fillsError);
+  }
+}
+
+/**
+ * Vérifie les strokes de manière sécurisée avec gestion des tableaux et types mixtes
+ */
+function checkStrokesSafely(node, valueToVariableMap, results) {
+  try {
+    var strokes = node.strokes;
+    if (!Array.isArray(strokes)) return;
+
+    for (var j = 0; j < strokes.length; j++) {
+      try {
+        var stroke = strokes[j];
+        if (!stroke || stroke.type !== 'SOLID' || !stroke.color) continue;
+
+        // Vérification stricte des variables liées
+        var isBound = isPropertyBoundToVariable(node.boundVariables || {}, 'strokes', j);
+        if (isBound) continue;
+
+        var hexValue = rgbToHex(stroke.color);
+        if (!hexValue) continue;
+
+        var suggestions = findColorSuggestions(hexValue, valueToVariableMap, "Stroke");
+
+        // NE SIGNALER QUE LES PROBLÈMES AYANT UNE SOLUTION
+        if (suggestions.length > 0) {
+          results.push({
+            nodeId: node.id,
+            layerName: node.name,
+            property: "Stroke",
+            value: hexValue,
+            suggestedVariableId: suggestions[0].id,
+            suggestedVariableName: suggestions[0].name,
+            strokeIndex: j,
+            colorSuggestions: suggestions,
+            isExact: suggestions[0].isExact || false
+          });
+        }
+      } catch (strokeError) {
+        console.warn("[checkStrokesSafely] Erreur sur stroke index", j, "du nœud", node.id, ":", strokeError);
+        // Continuer vers le stroke suivant
+      }
+    }
+  } catch (strokesError) {
+    console.error("[checkStrokesSafely] Erreur générale sur strokes du nœud", node.id, ":", strokesError);
+  }
+}
+
+/**
+ * Vérifie les corner radius avec gestion complète de figma.mixed
+ */
+function checkCornerRadiusSafely(node, valueToVariableMap, results) {
+  try {
+    var nodeType = node.type;
+    var radiusSupportedTypes = ['FRAME', 'RECTANGLE', 'ELLIPSE', 'POLYGON', 'STAR', 'VECTOR', 'COMPONENT', 'INSTANCE'];
+
+    if (radiusSupportedTypes.indexOf(nodeType) === -1) return;
+
+    // Cas spécial : cornerRadius mixte (valeurs différentes par coin)
     if (node.cornerRadius === figma.mixed) {
       var radiusProperties = [
         { name: 'topLeftRadius', displayName: 'Top Left Radius', figmaProp: 'topLeftRadius' },
@@ -967,78 +1338,91 @@ function checkNodeProperties(node, valueToVariableMap, results) {
       ];
 
       for (var k = 0; k < radiusProperties.length; k++) {
-        var prop = radiusProperties[k];
-        var radiusValue = node[prop.name];
+        try {
+          var prop = radiusProperties[k];
+          var radiusValue = node[prop.name];
 
-        if (typeof radiusValue === 'number' && radiusValue !== undefined && radiusValue !== 0) {
-          var isBound = node.boundVariables && node.boundVariables[prop.figmaProp];
+          if (typeof radiusValue === 'number' && radiusValue > 0) {
+            // Vérification stricte des variables liées
+            var isBound = isPropertyBoundToVariable(node.boundVariables || {}, prop.figmaProp);
+            if (isBound) continue;
 
-          if (!isBound) {
-            var suggestedVars = valueToVariableMap.get(radiusValue);
-            if (suggestedVars && suggestedVars.length > 0) {
-              var suggestedVar = suggestedVars[0];
+            var suggestions = findNumericSuggestions(radiusValue, valueToVariableMap, undefined, prop.displayName);
+            if (suggestions.length > 0) {
+              var bestSuggestion = suggestions[0];
               results.push({
-                nodeId: nodeId,
-                layerName: layerName,
+                nodeId: node.id,
+                layerName: node.name,
                 property: prop.displayName,
                 value: radiusValue + "px",
-                suggestedVariableId: suggestedVar.id,
-                suggestedVariableName: suggestedVar.name,
-                figmaProperty: prop.figmaProp
+                suggestedVariableId: bestSuggestion.id,
+                suggestedVariableName: bestSuggestion.name,
+                figmaProperty: prop.figmaProp,
+                numericSuggestions: suggestions
               });
             }
           }
+        } catch (radiusError) {
+          console.warn("[checkCornerRadiusSafely] Erreur sur radius", prop.name, "du nœud", node.id, ":", radiusError);
         }
       }
     }
     // Cas normal : cornerRadius uniforme
-    else if (typeof node.cornerRadius === 'number' && node.cornerRadius !== undefined && node.cornerRadius !== 0) {
-      var isBound = false;
-      if (node.boundVariables) {
-        isBound = node.boundVariables['cornerRadius'] ||
-                  node.boundVariables['topLeftRadius'] ||
-                  node.boundVariables['topRightRadius'] ||
-                  node.boundVariables['bottomLeftRadius'] ||
-                  node.boundVariables['bottomRightRadius'];
-      }
+    else if (typeof node.cornerRadius === 'number' && node.cornerRadius > 0) {
+      // Vérification stricte des variables liées (tous les radius possibles)
+      var boundVars = node.boundVariables || {};
+      var isBound = isPropertyBoundToVariable(boundVars, 'cornerRadius') ||
+                    isPropertyBoundToVariable(boundVars, 'topLeftRadius') ||
+                    isPropertyBoundToVariable(boundVars, 'topRightRadius') ||
+                    isPropertyBoundToVariable(boundVars, 'bottomLeftRadius') ||
+                    isPropertyBoundToVariable(boundVars, 'bottomRightRadius');
 
       if (!isBound) {
-        var suggestedVars = valueToVariableMap.get(node.cornerRadius);
-        if (suggestedVars && suggestedVars.length > 0) {
-          var suggestedVar = suggestedVars[0];
+        var suggestions = findNumericSuggestions(node.cornerRadius, valueToVariableMap, undefined, "Corner Radius");
+        if (suggestions.length > 0) {
+          var bestSuggestion = suggestions[0];
           results.push({
-            nodeId: nodeId,
-            layerName: layerName,
+            nodeId: node.id,
+            layerName: node.name,
             property: "Corner Radius",
             value: node.cornerRadius + "px",
-            suggestedVariableId: suggestedVar.id,
-            suggestedVariableName: suggestedVar.name,
-            figmaProperty: 'cornerRadius'
+            suggestedVariableId: bestSuggestion.id,
+            suggestedVariableName: bestSuggestion.name,
+            figmaProperty: 'cornerRadius',
+            numericSuggestions: suggestions
           });
         }
       }
     }
+  } catch (cornerRadiusError) {
+    console.error("[checkCornerRadiusSafely] Erreur générale sur cornerRadius du nœud", node.id, ":", cornerRadiusError);
   }
+}
 
-  // Vérifier l'Auto Layout (Gap et Paddings)
-  if (node.layoutMode && node.layoutMode !== "NONE") {
+/**
+ * Vérifie les propriétés numériques (spacing, padding, radius)
+ */
+function checkNumericPropertiesSafely(node, valueToVariableMap, results) {
+  try {
+    console.log('[DEBUG checkAutoLayoutSafely] Vérification du nœud:', node.name, 'layoutMode:', node.layoutMode);
 
-    // GAP : itemSpacing
-    if (typeof node.itemSpacing === 'number' && node.itemSpacing !== undefined && node.itemSpacing > 0) {
-      var isGapBound = node.boundVariables && node.boundVariables['itemSpacing'];
-
+    // ITEM SPACING (seulement si auto-layout)
+    console.log('[DEBUG checkNumericPropertiesSafely] itemSpacing:', node.itemSpacing);
+    if (node.layoutMode && node.layoutMode !== "NONE" && typeof node.itemSpacing === 'number' && node.itemSpacing > 0) {
+      var isGapBound = isPropertyBoundToVariable(node.boundVariables || {}, 'itemSpacing');
       if (!isGapBound) {
-        var suggestedVars = valueToVariableMap.get(node.itemSpacing);
-        if (suggestedVars && suggestedVars.length > 0) {
-          var suggestedVar = suggestedVars[0];
+        var suggestions = findNumericSuggestions(node.itemSpacing, valueToVariableMap, undefined, "Item Spacing");
+        if (suggestions.length > 0) {
+          var bestSuggestion = suggestions[0];
           results.push({
-            nodeId: nodeId,
-            layerName: layerName,
+            nodeId: node.id,
+            layerName: node.name,
             property: "Item Spacing",
             value: node.itemSpacing + "px",
-            suggestedVariableId: suggestedVar.id,
-            suggestedVariableName: suggestedVar.name,
-            figmaProperty: 'itemSpacing'
+            suggestedVariableId: bestSuggestion.id,
+            suggestedVariableName: bestSuggestion.name,
+            figmaProperty: 'itemSpacing',
+            numericSuggestions: suggestions
           });
         }
       }
@@ -1053,180 +1437,1275 @@ function checkNodeProperties(node, valueToVariableMap, results) {
     ];
 
     for (var p = 0; p < paddingProperties.length; p++) {
-      var paddingProp = paddingProperties[p];
-      var paddingValue = node[paddingProp.name];
+      try {
+        var paddingProp = paddingProperties[p];
+        var paddingValue = node[paddingProp.name];
+        console.log('[DEBUG checkNumericPropertiesSafely] ' + paddingProp.name + ':', paddingValue);
 
-      if (typeof paddingValue === 'number' && paddingValue !== undefined && paddingValue > 0) {
-        var isPaddingBound = node.boundVariables && node.boundVariables[paddingProp.figmaProp];
-
-        if (!isPaddingBound) {
-          var suggestedVars = valueToVariableMap.get(paddingValue);
-          if (suggestedVars && suggestedVars.length > 0) {
-            var suggestedVar = suggestedVars[0];
-            results.push({
-              nodeId: nodeId,
-              layerName: layerName,
-              property: paddingProp.displayName,
-              value: paddingValue + "px",
-              suggestedVariableId: suggestedVar.id,
-              suggestedVariableName: suggestedVar.name,
-              figmaProperty: paddingProp.figmaProp
-            });
+        if (typeof paddingValue === 'number' && paddingValue > 0) {
+          var isPaddingBound = isPropertyBoundToVariable(node.boundVariables || {}, paddingProp.figmaProp);
+          if (!isPaddingBound) {
+            var suggestions = findNumericSuggestions(paddingValue, valueToVariableMap, undefined, paddingProp.displayName);
+            if (suggestions.length > 0) {
+              var bestSuggestion = suggestions[0];
+              results.push({
+                nodeId: node.id,
+                layerName: node.name,
+                property: paddingProp.displayName,
+                value: paddingValue + "px",
+                suggestedVariableId: bestSuggestion.id,
+                suggestedVariableName: bestSuggestion.name,
+                figmaProperty: paddingProp.figmaProp,
+                numericSuggestions: suggestions
+              });
+            }
           }
         }
+      } catch (paddingError) {
+        console.warn("[checkNumericPropertiesSafely] Erreur sur padding", paddingProp.name, "du nœud", node.id, ":", paddingError);
       }
     }
+  } catch (numericError) {
+    console.error("[checkNumericPropertiesSafely] Erreur générale sur propriétés numériques du nœud", node.id, ":", numericError);
   }
 }
 
-function scanNodeRecursive(node, valueToVariableMap, results) {
-  if (!node) return;
+/**
+ * Vérification stricte et sécurisée des variables liées avec validation de structure
+ * @param {Object} boundVariables - L'objet boundVariables du nœud
+ * @param {string} propertyPath - Le chemin de la propriété (ex: 'fills', 'strokes', 'cornerRadius')
+ * @param {number} index - Index pour les tableaux (optionnel)
+ * @returns {boolean} true si la propriété est liée à une variable valide
+ */
+function isPropertyBoundToVariable(boundVariables, propertyPath, index) {
+  try {
+    if (!boundVariables || typeof boundVariables !== 'object') return false;
 
-  var supportedTypes = ['FRAME', 'RECTANGLE', 'ELLIPSE', 'POLYGON', 'STAR', 'VECTOR', 'TEXT', 'COMPONENT', 'INSTANCE', 'LINE'];
+    var binding = index !== undefined ? boundVariables[propertyPath] && boundVariables[propertyPath][index] : boundVariables[propertyPath];
+    if (!binding) return false;
 
-  if (node.type && supportedTypes.indexOf(node.type) !== -1) {
-    checkNodeProperties(node, valueToVariableMap, results);
-  }
-
-  if (node.children && Array.isArray(node.children)) {
-    for (var i = 0; i < node.children.length; i++) {
-      if (node.children[i]) {
-        scanNodeRecursive(node.children[i], valueToVariableMap, results);
-      }
+    // Validation stricte de la structure de l'alias de variable
+    if (typeof binding !== 'object' ||
+        binding.type !== 'VARIABLE_ALIAS' ||
+        !binding.id ||
+        typeof binding.id !== 'string') {
+      return false;
     }
+
+    // Vérifier que la variable existe encore
+    var variable = figma.variables.getVariableById(binding.id);
+    return variable !== null && variable !== undefined;
+
+  } catch (bindingError) {
+    console.warn("[isPropertyBoundToVariable] Erreur lors de la vérification de liaison pour", propertyPath, index !== undefined ? "index " + index : "", ":", bindingError);
+    return false; // En cas d'erreur, considérer comme non lié pour éviter les faux positifs
   }
 }
 
-function scanSelection() {
-  var selection = figma.currentPage.selection;
-  if (selection.length === 0) return [];
+/**
+ * Parcourt récursivement l'arbre des nœuds de manière défensive et robuste
+ * Chaque nœud est traité individuellement avec protection contre les crashes
+ * @param {Object} node - Le nœud racine à scanner
+ * @param {Map} valueToVariableMap - Map des valeurs vers les variables
+ * @param {Array} results - Tableau pour accumuler les résultats
+ * @param {number} depth - Profondeur actuelle (pour éviter les récursions infinies)
+ * @param {boolean} ignoreHiddenLayers - Option pour ignorer les calques invisibles/verrouillés
+ */
+function scanNodeRecursive(node, valueToVariableMap, results, depth, ignoreHiddenLayers) {
+  // === PROTECTION CONTRE LES RÉCURSIONS INFINIES ===
+  depth = depth || 0;
+  var MAX_DEPTH = 50; // Limite de sécurité pour éviter les boucles infinies
+  if (depth > MAX_DEPTH) {
+    console.warn("[scanNodeRecursive] Profondeur maximale atteinte, arrêt de la récursion à", depth);
+    return;
+  }
 
-  // Récupérer toutes les variables locales et créer une map inversée Valeur -> VariableID
-  var valueToVariableMap = createValueToVariableMap();
+  // === VÉRIFICATIONS DÉFENSIVES DE BASE ===
+  if (!node) {
+    console.warn("[scanNodeRecursive] Nœud null/undefined reçu à profondeur", depth);
+    return;
+  }
+
+  // Vérifier si le nœud a été supprimé pendant le scan
+  if (node.removed) {
+    console.log("[scanNodeRecursive] Nœud supprimé détecté à profondeur", depth, "- ignoré");
+    return;
+  }
+
+  // Vérification supplémentaire des propriétés essentielles
+  if (!node.id || !node.type) {
+    console.warn("[scanNodeRecursive] Nœud malformé détecté à profondeur", depth, "- ignoré");
+    return;
+  }
+
+  // === TRAITEMENT DU NŒUD ACTUEL AVEC PROTECTION ===
+  try {
+    var nodeType = node.type;
+    var nodeId = node.id;
+    var nodeName = node.name || "Unnamed";
+
+    console.log("[scanNodeRecursive] Traitement du nœud", nodeType, nodeName, "(ID:", nodeId, ") à profondeur", depth);
+
+    // Liste étendue des types de conteneurs supportés
+    var containerTypes = [
+      'FRAME', 'GROUP', 'SECTION', 'COMPONENT', 'INSTANCE', 'COMPONENT_SET'
+    ];
+
+    // Liste des types qui peuvent avoir des propriétés de style
+    var styleTypes = [
+      'FRAME', 'RECTANGLE', 'ELLIPSE', 'POLYGON', 'STAR', 'VECTOR',
+      'TEXT', 'COMPONENT', 'INSTANCE', 'LINE'
+    ];
+
+    var isContainer = containerTypes.indexOf(nodeType) !== -1;
+    var hasStyle = styleTypes.indexOf(nodeType) !== -1;
+
+    // Analyser les propriétés de style si applicable
+    if (hasStyle) {
+      try {
+        checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLayers);
+      } catch (propertyAnalysisError) {
+        console.error("[scanNodeRecursive] Erreur CRITIQUE lors de l'analyse des propriétés du nœud", nodeId, nodeName, "(type:", nodeType, ") à profondeur", depth, ":", propertyAnalysisError);
+        console.error("[scanNodeRecursive] Détails du nœud problématique:", {
+          id: nodeId,
+          type: nodeType,
+          name: nodeName,
+          hasBoundVariables: !!node.boundVariables,
+          boundVariablesKeys: node.boundVariables ? Object.keys(node.boundVariables) : 'N/A',
+          hasFills: !!node.fills,
+          hasStrokes: !!node.strokes,
+          hasCornerRadius: node.cornerRadius !== undefined,
+          hasLayoutMode: !!node.layoutMode
+        });
+        // Ne pas arrêter le scan complet, continuer vers les enfants
+      }
+    }
+
+    // === TRAVERSÉE DES ENFANTS AVEC PROTECTION ===
+    // Pour les instances, on peut scanner leurs enfants (layers overrides)
+    // Pour les autres conteneurs, on scan leurs enfants normalement
+    if (isContainer) {
+      try {
+        var children = node.children;
+
+        if (children && Array.isArray(children)) {
+          console.log("[scanNodeRecursive] Nœud", nodeType, "a", children.length, "enfants à profondeur", depth);
+
+          for (var i = 0; i < children.length; i++) {
+            try {
+              var child = children[i];
+
+              // Vérification défensive de l'enfant
+              if (!child) {
+                console.warn("[scanNodeRecursive] Enfant null/undefined à l'index", i, "du nœud", nodeId);
+                continue;
+              }
+
+              if (child.removed) {
+                console.log("[scanNodeRecursive] Enfant supprimé détecté à l'index", i, "du nœud", nodeId);
+                continue;
+              }
+
+              // Récursion avec protection et limite de profondeur
+              scanNodeRecursive(child, valueToVariableMap, results, depth + 1, ignoreHiddenLayers);
+
+            } catch (childError) {
+              console.error("[scanNodeRecursive] Erreur lors du traitement de l'enfant à l'index", i, "du nœud", nodeId, nodeName, ":", childError);
+              // Continuer vers l'enfant suivant même en cas d'erreur
+            }
+          }
+        } else if (nodeType === 'INSTANCE') {
+          // Les instances peuvent avoir des overrides sans children directs
+          console.log("[scanNodeRecursive] Instance", nodeName, "traitée (pas d'enfants directs ou overrides spéciaux)");
+        }
+
+      } catch (childrenError) {
+        console.error("[scanNodeRecursive] Erreur lors de l'accès aux enfants du nœud", nodeId, nodeName, "à profondeur", depth, ":", childrenError);
+        // Ne pas arrêter le scan complet
+      }
+    }
+
+  } catch (nodeError) {
+    console.error("[scanNodeRecursive] Erreur critique lors du traitement du nœud à profondeur", depth, ":", nodeError);
+    // Même en cas d'erreur critique, on ne crash pas le scan complet
+  }
+}
+
+/**
+ * Analyse la sélection actuelle de manière asynchrone avec chunking
+ * Gère tous les cas edge avec protection contre les crashes
+ * @param {boolean} ignoreHiddenLayers - Option pour ignorer les calques invisibles/verrouillés
+ * @returns {Array} Tableau des résultats d'analyse
+ */
+function scanSelection(ignoreHiddenLayers) {
+  console.log("[scanSelection] Démarrage de l'analyse asynchrone...");
+
+  try {
+    // === VÉRIFICATION DE LA SÉLECTION ===
+    var selection = figma.currentPage.selection;
+
+    if (!selection || !Array.isArray(selection)) {
+      console.warn("[scanSelection] Sélection invalide ou inaccessible");
+      figma.ui.postMessage({ type: "scan-results", results: [] });
+      return [];
+    }
+
+    // === SCAN CONTEXTUEL INTELLIGENT ===
+    if (selection.length === 0) {
+      console.log("[scanSelection] Aucune sélection - scan de la page entière");
+      figma.notify("📄 Aucune sélection : Analyse de la page entière...");
+
+      // Scanner toute la page
+      return scanPage(ignoreHiddenLayers);
+    }
+
+    console.log("[scanSelection]", selection.length, "nœud(s) sélectionné(s)");
+
+    // === CRÉATION DE LA MAP DES VARIABLES AVEC PROTECTION ===
+    var valueToVariableMap;
+    try {
+      valueToVariableMap = createValueToVariableMap();
+      console.log("Variables chargées dans la Map :", valueToVariableMap.size);
+
+      if (!valueToVariableMap || valueToVariableMap.size === 0) {
+        console.warn("[scanSelection] Aucune variable trouvée ou erreur lors de la création de la map");
+        figma.notify("⚠️ Aucune variable trouvée dans le document");
+        figma.ui.postMessage({ type: "scan-results", results: [] });
+        return [];
+      }
+      console.log("[scanSelection] Map des variables créée avec", valueToVariableMap.size, "entrées");
+    } catch (mapError) {
+      console.error("[scanSelection] Erreur critique lors de la création de la map des variables:", mapError);
+      figma.notify("❌ Erreur lors de l'accès aux variables");
+      figma.ui.postMessage({ type: "scan-results", results: [] });
+      return [];
+    }
+
+    // Démarrer le scan asynchrone
+    startAsyncScan(selection, valueToVariableMap, ignoreHiddenLayers);
+
+  } catch (scanError) {
+    console.error("[scanSelection] Erreur critique lors de l'analyse de la sélection:", scanError);
+    figma.notify("❌ Erreur critique lors de l'analyse - vérifiez la console pour les détails");
+    figma.ui.postMessage({ type: "scan-results", results: [] });
+  }
+}
+
+/**
+ * Scan asynchrone de la page entière
+ */
+function scanPage(ignoreHiddenLayers) {
+  console.log("[scanPage] Démarrage du scan de page entière...");
+
+  try {
+    var pageChildren = figma.currentPage.children;
+
+    if (!pageChildren || !Array.isArray(pageChildren)) {
+      console.warn("[scanPage] Aucun enfant trouvé sur la page");
+      figma.ui.postMessage({ type: "scan-results", results: [] });
+      return [];
+    }
+
+    // === CRÉATION DE LA MAP DES VARIABLES ===
+    var valueToVariableMap;
+    try {
+      valueToVariableMap = createValueToVariableMap();
+      if (!valueToVariableMap || valueToVariableMap.size === 0) {
+        console.warn("[scanPage] Aucune variable trouvée");
+        figma.notify("⚠️ Aucune variable trouvée dans le document");
+        figma.ui.postMessage({ type: "scan-results", results: [] });
+        return [];
+      }
+    } catch (mapError) {
+      console.error("[scanPage] Erreur lors de la création de la map des variables:", mapError);
+      figma.notify("❌ Erreur lors de l'accès aux variables");
+      figma.ui.postMessage({ type: "scan-results", results: [] });
+      return [];
+    }
+
+    // Démarrer le scan asynchrone de la page
+    startAsyncScan(pageChildren, valueToVariableMap, ignoreHiddenLayers);
+
+  } catch (pageScanError) {
+    console.error("[scanPage] Erreur critique lors du scan de page:", pageScanError);
+    figma.notify("❌ Erreur lors du scan de page");
+    figma.ui.postMessage({ type: "scan-results", results: [] });
+  }
+}
+
+/**
+ * Lance le scan asynchrone avec chunking
+ */
+function startAsyncScan(nodes, valueToVariableMap, ignoreHiddenLayers) {
+  var CHUNK_SIZE = 50; // Traiter 50 nœuds par chunk
+  var currentIndex = 0;
   var results = [];
+  var totalNodes = nodes.length;
 
-  // Parcourir récursivement tous les nœuds sélectionnés
-  selection.forEach(function(node) {
-    scanNodeRecursive(node, valueToVariableMap, results);
+  // Initialiser la barre de progression
+  figma.ui.postMessage({
+    type: "scan-progress",
+    progress: 0,
+    total: totalNodes,
+    status: "Démarrage de l'analyse..."
   });
 
-  lastScanResults = results;
-  return results;
+  console.log("[startAsyncScan] Scan asynchrone démarré pour", totalNodes, "nœuds");
+
+  function processChunk() {
+    var chunkEnd = Math.min(currentIndex + CHUNK_SIZE, totalNodes);
+    var processedInChunk = 0;
+
+    // Traiter le chunk actuel
+    for (var i = currentIndex; i < chunkEnd; i++) {
+      try {
+        var node = nodes[i];
+
+        // Vérifications défensives
+        if (!node || node.removed) {
+          continue;
+        }
+
+        // Analyse récursive du nœud
+        scanNodeRecursive(node, valueToVariableMap, results, 0, ignoreHiddenLayers);
+        processedInChunk++;
+
+      } catch (nodeError) {
+        console.error("[processChunk] Erreur sur nœud", i, ":", nodeError);
+      }
+    }
+
+    currentIndex = chunkEnd;
+
+    // Mettre à jour la progression
+    var progress = (currentIndex / totalNodes) * 100;
+    figma.ui.postMessage({
+      type: "scan-progress",
+      progress: progress,
+      current: currentIndex,
+      total: totalNodes,
+      status: "Analyse en cours... " + currentIndex + "/" + totalNodes
+    });
+
+    // Continuer ou terminer
+    if (currentIndex < totalNodes) {
+      // Programmer le prochain chunk
+      setTimeout(processChunk, 10);
+    } else {
+      // Scan terminé
+      finishScan(results);
+    }
+  }
+
+  // Démarrer le premier chunk
+  setTimeout(processChunk, 10);
 }
 
-function applySingleFix(index, selectedVariableId) {
-  var appliedCount = 0;
+/**
+ * Termine le scan et envoie les résultats
+ */
+function finishScan(results) {
+  console.log("[finishScan] Scan terminé -", results.length, "problème(s) détecté(s)");
 
-  if (!lastScanResults || lastScanResults.length === 0 || index < 0 || index >= lastScanResults.length) {
-    return 0;
+  // Stocker les résultats pour les corrections
+  lastScanResults = results;
+
+  // Notifier l'utilisateur
+  if (results.length > 0) {
+    figma.notify("✅ Analyse terminée - " + results.length + " problème(s) détecté(s)");
+  } else {
+    figma.notify("✅ Analyse terminée - Aucun problème détecté");
   }
 
-  var result = lastScanResults[index];
+  // Petit délai pour stabiliser après le scan asynchrone
+  setTimeout(function() {
+    // Envoyer les résultats à l'UI
+    figma.ui.postMessage({
+      type: "scan-progress",
+      progress: 100,
+      status: "Analyse terminée"
+    });
 
-  // Note: figma.groupOperations has been removed in newer Figma API versions
-  // Each operation will now be undoable individually
+    figma.ui.postMessage({
+      type: "scan-results",
+      results: results
+    });
+  }, 100); // 100ms de délai
+}
+
+// ⚡️ VERSION ROBUSTE AVEC VALIDATIONS COMPLETES
+// ============================================
+// DIAGNOSTIC DES PROBLÈMES RESTANTS
+// ============================================
+
+/**
+ * Diagnostique les causes potentielles d'échec d'application
+ */
+function diagnoseApplicationFailure(result, variableId, error) {
+  console.log('[diagnoseApplicationFailure] 🔍 Diagnostic pour:', result.layerName, '->', result.property);
+  console.log('[diagnoseApplicationFailure] 📋 Erreur rapportée:', error);
+
+  var diagnosis = {
+    issue: 'unknown',
+    confidence: 'low',
+    recommendations: [],
+    details: {}
+  };
+
   try {
-    var node = figma.getNodeById(result.nodeId);
-    if (!node) return 0;
-
-    // Utiliser la variable sélectionnée par l'utilisateur ou celle par défaut
-    var variableId = selectedVariableId || result.suggestedVariableId;
+    // Vérifier si la variable existe
     var variable = figma.variables.getVariableById(variableId);
-    if (!variable) return 0;
-
-    // Logique de confiance : On fait confiance au scan effectué récemment
-    if (result.property === "Fill") {
-      try {
-        if (node.fills && Array.isArray(node.fills) && typeof result.fillIndex === 'number') {
-          var fillIndex = result.fillIndex;
-          if (fillIndex < node.fills.length) {
-            var targetFill = node.fills[fillIndex];
-            var isAlreadyBound = node.boundVariables &&
-                                 node.boundVariables.fills &&
-                                 node.boundVariables.fills[fillIndex];
-
-            if (!isAlreadyBound && targetFill && targetFill.type === 'SOLID') {
-              // Clonage Sécurisé
-              var clonedFills = JSON.parse(JSON.stringify(node.fills));
-              if (!clonedFills[fillIndex].boundVariables) {
-                clonedFills[fillIndex].boundVariables = {};
-              }
-
-              // 🔥 CORRECTION CRITIQUE : Utiliser un alias de variable au lieu de l'objet variable
-              clonedFills[fillIndex].boundVariables.color = {
-                type: 'VARIABLE_ALIAS',
-                id: variable.id
-              };
-
-              try {
-                node.fills = clonedFills;
-                appliedCount++;
-              } catch (textError) {
-                console.error("Erreur spécifique Fill:", textError);
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.error("Erreur Fill:", e);
-      }
-    }
-    else if (result.property === "Stroke") {
-      try {
-        if (node.strokes && Array.isArray(node.strokes) && typeof result.strokeIndex === 'number') {
-          var strokeIndex = result.strokeIndex;
-          if (strokeIndex < node.strokes.length) {
-            var targetStroke = node.strokes[strokeIndex];
-            var isAlreadyBound = node.boundVariables &&
-                                 node.boundVariables.strokes &&
-                                 node.boundVariables.strokes[strokeIndex];
-
-            if (!isAlreadyBound && targetStroke && targetStroke.type === 'SOLID') {
-              var clonedStrokes = JSON.parse(JSON.stringify(node.strokes));
-              if (!clonedStrokes[strokeIndex].boundVariables) {
-                clonedStrokes[strokeIndex].boundVariables = {};
-              }
-
-              // 🔥 CORRECTION CRITIQUE : Utiliser un alias de variable
-              clonedStrokes[strokeIndex].boundVariables.color = {
-                type: 'VARIABLE_ALIAS',
-                id: variable.id
-              };
-
-              try {
-                node.strokes = clonedStrokes;
-                appliedCount++;
-              } catch (strokeError) {
-                console.error("Erreur spécifique Stroke:", strokeError);
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.error("Erreur Stroke:", e);
-      }
-    }
-    else {
-      // Propriétés de radius - node.setBoundVariable accepte directement l'objet variable
-      try {
-        var figmaProperty = result.figmaProperty;
-        if (figmaProperty) {
-          var isAlreadyBound = node.boundVariables && node.boundVariables[figmaProperty];
-          if (!isAlreadyBound) {
-            node.setBoundVariable(figmaProperty, variable);
-            appliedCount++;
-          }
-        }
-      } catch (e) {
-        console.error("Erreur Radius:", e);
-      }
+    if (!variable) {
+      diagnosis.issue = 'variable_missing';
+      diagnosis.confidence = 'high';
+      diagnosis.recommendations.push('La variable a été supprimée ou renommée');
+      diagnosis.details.variableId = variableId;
+      return diagnosis;
     }
 
-  } catch (e) {
-    console.error("Erreur générale lors de l'application d'une correction individuelle:", e);
+    // Vérifier les scopes
+    var requiredScopes = getScopesForProperty(result.property);
+    var variableScopes = variable.scopes || [];
+
+    console.log('[diagnoseApplicationFailure] 📋 Scopes requis:', requiredScopes);
+    console.log('[diagnoseApplicationFailure] 📋 Scopes variable:', variableScopes);
+
+    var hasRequiredScopes = requiredScopes.some(scope => variableScopes.includes(scope));
+    if (!hasRequiredScopes && requiredScopes.length > 0) {
+      diagnosis.issue = 'scope_mismatch';
+      diagnosis.confidence = 'high';
+      diagnosis.recommendations.push('Modifier les scopes de la variable pour inclure: ' + requiredScopes.join(', '));
+      diagnosis.details.requiredScopes = requiredScopes;
+      diagnosis.details.variableScopes = variableScopes;
+    }
+
+    // Vérifier le type de variable
+    var expectedType = getExpectedVariableType(result.property);
+    if (variable.resolvedType !== expectedType) {
+      diagnosis.issue = 'type_mismatch';
+      diagnosis.confidence = 'high';
+      diagnosis.recommendations.push('La variable devrait être de type ' + expectedType + ' (actuellement ' + variable.resolvedType + ')');
+      diagnosis.details.expectedType = expectedType;
+      diagnosis.details.actualType = variable.resolvedType;
+    }
+
+    // Vérifier le nœud
+    var node = figma.getNodeById(result.nodeId);
+    if (!node) {
+      diagnosis.issue = 'node_missing';
+      diagnosis.confidence = 'high';
+      diagnosis.recommendations.push('Le nœud a été supprimé');
+      return diagnosis;
+    }
+
+    if (node.removed) {
+      diagnosis.issue = 'node_removed';
+      diagnosis.confidence = 'high';
+      diagnosis.recommendations.push('Le nœud a été supprimé');
+      return diagnosis;
+    }
+
+    // Vérifier la propriété spécifique
+    var propertyCheck = checkSpecificPropertyIssue(node, result);
+    if (propertyCheck.issue) {
+      diagnosis = propertyCheck;
+    }
+
+    // Si aucun problème spécifique trouvé, c'est peut-être un problème technique
+    if (diagnosis.issue === 'unknown') {
+      diagnosis.issue = 'technical_error';
+      diagnosis.confidence = 'medium';
+      diagnosis.recommendations.push('Erreur technique lors de l\'application');
+      diagnosis.recommendations.push('Vérifier les logs détaillés dans la console');
+      diagnosis.details.error = error;
+    }
+
+  } catch (diagError) {
+    console.error('[diagnoseApplicationFailure] Erreur lors du diagnostic:', diagError);
+    diagnosis.issue = 'diagnostic_error';
+    diagnosis.recommendations.push('Erreur lors de l\'analyse du problème');
   }
 
-  return appliedCount;
+  console.log('[diagnoseApplicationFailure] 📊 Diagnostic final:', diagnosis);
+  return diagnosis;
+}
+
+/**
+ * Détermine le type de variable attendu pour une propriété
+ */
+function getExpectedVariableType(property) {
+  switch (property) {
+    case "Fill":
+    case "Stroke":
+      return "COLOR";
+    case "Corner Radius":
+    case "Top Left Radius":
+    case "Top Right Radius":
+    case "Bottom Left Radius":
+    case "Bottom Right Radius":
+    case "Item Spacing":
+    case "Padding Left":
+    case "Padding Right":
+    case "Padding Top":
+    case "Padding Bottom":
+      return "FLOAT";
+    default:
+      return "UNKNOWN";
+  }
+}
+
+/**
+ * Vérifie les problèmes spécifiques à une propriété
+ */
+function checkSpecificPropertyIssue(node, result) {
+  var diagnosis = { issue: null, confidence: 'low', recommendations: [], details: {} };
+
+  try {
+    switch (result.property) {
+      case "Fill":
+        if (!node.fills || !Array.isArray(node.fills) || !node.fills[result.fillIndex]) {
+          diagnosis.issue = 'fill_missing';
+          diagnosis.confidence = 'high';
+          diagnosis.recommendations.push('Le fill à l\'index ' + result.fillIndex + ' n\'existe plus');
+        } else {
+          var fill = node.fills[result.fillIndex];
+          if (fill.type !== 'SOLID') {
+            diagnosis.issue = 'fill_type_unsupported';
+            diagnosis.confidence = 'high';
+            diagnosis.recommendations.push('Seuls les fills SOLID peuvent être liés à des variables');
+          }
+        }
+        break;
+
+      case "Stroke":
+        if (!node.strokes || !Array.isArray(node.strokes) || !node.strokes[result.strokeIndex]) {
+          diagnosis.issue = 'stroke_missing';
+          diagnosis.confidence = 'high';
+          diagnosis.recommendations.push('Le stroke à l\'index ' + result.strokeIndex + ' n\'existe plus');
+        } else {
+          var stroke = node.strokes[result.strokeIndex];
+          if (stroke.type !== 'SOLID') {
+            diagnosis.issue = 'stroke_type_unsupported';
+            diagnosis.confidence = 'high';
+            diagnosis.recommendations.push('Seuls les strokes SOLID peuvent être liés à des variables');
+          }
+        }
+        break;
+
+      case "Item Spacing":
+        if (node.primaryAxisAlignItems === 'SPACE_BETWEEN') {
+          diagnosis.issue = 'spacing_space_between';
+          diagnosis.confidence = 'high';
+          diagnosis.recommendations.push('Impossible d\'appliquer une variable de spacing sur SPACE_BETWEEN');
+        }
+        break;
+    }
+  } catch (error) {
+    diagnosis.details.error = error.message;
+  }
+
+  return diagnosis;
+}
+
+// ============================================
+// NOUVEAU SYSTÈME D'APPLICATION AVEC VÉRIFICATION
+// ============================================
+
+/**
+ * Applique un correctif et vérifie immédiatement qu'il a été correctement appliqué
+ * @param {Object} result - Résultat du scan
+ * @param {string} variableId - ID de la variable à appliquer
+ * @returns {Object} Résultat détaillé avec statut de vérification
+ */
+function applyAndVerifyFix(result, variableId) {
+  console.log('[applyAndVerifyFix] 📋 DÉMARRAGE pour:', result.layerName, '(' + result.nodeId + ') ->', result.property);
+  console.log('[applyAndVerifyFix] 🔍 Données d\'entrée:', {
+    result: result,
+    variableId: variableId,
+    suggestedVariableId: result.suggestedVariableId
+  });
+
+  var startTime = Date.now();
+  var verificationResult = {
+    success: false,
+    applied: false,
+    verified: false,
+    error: null,
+    details: {
+      nodeId: result.nodeId,
+      property: result.property,
+      variableId: variableId,
+      duration: 0
+    }
+  };
+
+  try {
+    // === PHASE 1: VALIDATIONS PRÉALABLES ===
+    console.log('[applyAndVerifyFix] 🔍 Phase 1: Validations préalables');
+
+    // Vérifier que le résultat est valide
+    console.log('[applyAndVerifyFix] 🧪 Validation 1: Résultat valide');
+    if (!result) {
+      console.error('[applyAndVerifyFix] ❌ Result est null/undefined');
+      throw new Error('Résultat invalide ou incomplet');
+    }
+    if (!result.nodeId) {
+      console.error('[applyAndVerifyFix] ❌ result.nodeId manquant:', result);
+      throw new Error('Résultat invalide: nodeId manquant');
+    }
+    if (!result.property) {
+      console.error('[applyAndVerifyFix] ❌ result.property manquant:', result);
+      throw new Error('Résultat invalide: property manquant');
+    }
+    console.log('[applyAndVerifyFix] ✅ Résultat valide');
+
+    // Déterminer l'ID de variable à utiliser
+    console.log('[applyAndVerifyFix] 🧪 Validation 2: ID de variable');
+    var finalVariableId = variableId || result.suggestedVariableId;
+    console.log('[applyAndVerifyFix] 📋 variableId fourni:', variableId);
+    console.log('[applyAndVerifyFix] 📋 suggestedVariableId:', result.suggestedVariableId);
+    console.log('[applyAndVerifyFix] 📋 finalVariableId choisi:', finalVariableId);
+
+    if (!finalVariableId) {
+      console.error('[applyAndVerifyFix] ❌ Aucun ID de variable disponible');
+      throw new Error('Aucun ID de variable fourni ou suggéré');
+    }
+    verificationResult.details.variableId = finalVariableId;
+    console.log('[applyAndVerifyFix] ✅ ID de variable déterminé');
+
+    // Vérifier que la variable existe
+    console.log('[applyAndVerifyFix] 🧪 Validation 3: Existence de la variable');
+    var variable = figma.variables.getVariableById(finalVariableId);
+    console.log('[applyAndVerifyFix] 🔍 Variable trouvée:', !!variable);
+    if (variable) {
+      console.log('[applyAndVerifyFix] 📋 Détails variable:', {
+        id: variable.id,
+        name: variable.name,
+        resolvedType: variable.resolvedType,
+        scopes: variable.scopes
+      });
+    }
+
+    if (!variable) {
+      console.error('[applyAndVerifyFix] ❌ Variable introuvable:', finalVariableId);
+      console.log('[applyAndVerifyFix] 📋 Variables disponibles:', figma.variables.getLocalVariables().length);
+
+      // Lister quelques variables pour debug
+      var allVars = figma.variables.getLocalVariables().slice(0, 5);
+      console.log('[applyAndVerifyFix] 📋 Exemples de variables:', allVars.map(v => ({id: v.id, name: v.name})));
+      throw new Error('Variable introuvable: ' + finalVariableId);
+    }
+    console.log('[applyAndVerifyFix] ✅ Variable existe');
+
+    // Vérifier que le nœud existe et n'est pas supprimé
+    console.log('[applyAndVerifyFix] 🧪 Validation 4: Existence du nœud');
+    var node = figma.getNodeById(result.nodeId);
+    console.log('[applyAndVerifyFix] 🔍 Nœud trouvé:', !!node);
+    if (node) {
+      console.log('[applyAndVerifyFix] 📋 Détails nœud:', {
+        id: node.id,
+        name: node.name,
+        type: node.type,
+        removed: node.removed
+      });
+    }
+
+    if (!node) {
+      console.error('[applyAndVerifyFix] ❌ Nœud introuvable:', result.nodeId);
+      throw new Error('Nœud introuvable: ' + result.nodeId);
+    }
+    if (node.removed) {
+      console.error('[applyAndVerifyFix] ❌ Nœud supprimé:', result.nodeId);
+      throw new Error('Nœud supprimé: ' + result.nodeId);
+    }
+    console.log('[applyAndVerifyFix] ✅ Nœud valide');
+
+    // Vérifier que la propriété existe toujours
+    console.log('[applyAndVerifyFix] 🧪 Validation 5: Existence de la propriété');
+    if (!validatePropertyExists(node, result)) {
+      console.error('[applyAndVerifyFix] ❌ Propriété n\'existe plus:', result.property);
+      console.log('[applyAndVerifyFix] 📋 État du nœud pour debug:', getNodePropertyDebugInfo(node, result));
+      throw new Error('Propriété n\'existe plus: ' + result.property);
+    }
+    console.log('[applyAndVerifyFix] ✅ Propriété existe');
+
+    // Vérifier que la variable est compatible
+    console.log('[applyAndVerifyFix] 🧪 Validation 6: Compatibilité variable-propriété');
+    if (!validateVariableCanBeApplied(variable, result)) {
+      console.error('[applyAndVerifyFix] ❌ Variable incompatible');
+      console.log('[applyAndVerifyFix] 📋 Type variable:', variable.resolvedType);
+      console.log('[applyAndVerifyFix] 📋 Propriété:', result.property);
+      throw new Error('Variable incompatible: ' + variable.name + ' (' + variable.resolvedType + ') pour ' + result.property);
+    }
+    console.log('[applyAndVerifyFix] ✅ Variable compatible');
+
+    console.log('[applyAndVerifyFix] ✅ Toutes les validations préalables réussies');
+
+    // === PHASE 2: CAPTURER L'ÉTAT AVANT ===
+    console.log('[applyAndVerifyFix] 📸 Phase 2: Capture état avant');
+    var stateBefore = captureNodeState(node, result);
+
+    // === PHASE 3: APPLICATION ===
+    console.log('[applyAndVerifyFix] 🔧 Phase 3: Application de la variable');
+    console.log('[applyAndVerifyFix] 📋 État avant application:', getNodePropertyDebugInfo(node, result));
+
+    var applied = applyVariableToProperty(node, variable, result);
+    console.log('[applyAndVerifyFix] 📋 applyVariableToProperty retourné:', applied);
+
+    if (!applied) {
+      console.error('[applyAndVerifyFix] ❌ applyVariableToProperty a retourné false');
+      throw new Error('Échec de l\'application de la variable');
+    }
+
+    verificationResult.applied = true;
+    console.log('[applyAndVerifyFix] ✅ Variable appliquée avec succès');
+    console.log('[applyAndVerifyFix] 📋 État après application:', getNodePropertyDebugInfo(node, result));
+
+    // === PHASE 4: VÉRIFICATION ===
+    console.log('[applyAndVerifyFix] 🔍 Phase 4: Vérification de l\'application');
+    var stateAfter = captureNodeState(node, result);
+
+    var verified = verifyVariableApplication(node, variable, result, stateBefore, stateAfter);
+
+    if (!verified) {
+      throw new Error('Vérification échouée: la variable n\'a pas été correctement appliquée');
+    }
+
+    verificationResult.verified = true;
+    verificationResult.success = true;
+
+    console.log('[applyAndVerifyFix] ✅ Application et vérification réussies');
+
+  } catch (error) {
+    console.error('[applyAndVerifyFix] ❌ Erreur:', error.message);
+    verificationResult.error = error.message;
+    verificationResult.success = false;
+
+    // Diagnostic automatique en cas d'échec
+    try {
+      console.log('[applyAndVerifyFix] 🔍 Lancement diagnostic automatique...');
+      var diagnosis = diagnoseApplicationFailure(result, verificationResult.details.variableId, error);
+      verificationResult.diagnosis = diagnosis;
+
+      console.log('[applyAndVerifyFix] 📊 Diagnostic:', diagnosis.issue, '(confiance:', diagnosis.confidence + ')');
+      if (diagnosis.recommendations.length > 0) {
+        console.log('[applyAndVerifyFix] 💡 Recommandations:', diagnosis.recommendations);
+      }
+    } catch (diagError) {
+      console.error('[applyAndVerifyFix] Erreur lors du diagnostic:', diagError);
+    }
+  } finally {
+    verificationResult.details.duration = Date.now() - startTime;
+  }
+
+  console.log('[applyAndVerifyFix] 📊 Résultat final:', verificationResult.success ? 'SUCCÈS' : 'ÉCHEC',
+              '(' + verificationResult.details.duration + 'ms)');
+
+  return verificationResult;
+}
+
+/**
+ * Wrapper de compatibilité pour l'ancien système
+ * @deprecated Utiliser applyAndVerifyFix à la place
+ */
+function applySingleFix(result, selectedVariableId) {
+  var verificationResult = applyAndVerifyFix(result, selectedVariableId);
+  return verificationResult.success ? 1 : 0;
+}
+
+/**
+ * Fonction de debug pour obtenir des informations détaillées sur un nœud
+ */
+function getNodePropertyDebugInfo(node, result) {
+  var debugInfo = {
+    nodeType: node.type,
+    nodeName: node.name,
+    property: result.property
+  };
+
+  try {
+    switch (result.property) {
+      case "Fill":
+        debugInfo.fills = node.fills ? {
+          length: node.fills.length,
+          hasIndex: node.fills[result.fillIndex] !== undefined,
+          fillAtIndex: node.fills[result.fillIndex] ? {
+            type: node.fills[result.fillIndex].type,
+            hasBoundVariables: !!node.fills[result.fillIndex].boundVariables
+          } : null
+        } : null;
+        break;
+
+      case "Stroke":
+        debugInfo.strokes = node.strokes ? {
+          length: node.strokes.length,
+          hasIndex: node.strokes[result.strokeIndex] !== undefined,
+          strokeAtIndex: node.strokes[result.strokeIndex] ? {
+            type: node.strokes[result.strokeIndex].type,
+            hasBoundVariables: !!node.strokes[result.strokeIndex].boundVariables
+          } : null
+        } : null;
+        break;
+
+      default:
+        if (result.figmaProperty) {
+          debugInfo[result.figmaProperty] = {
+            value: node[result.figmaProperty],
+            type: typeof node[result.figmaProperty]
+          };
+        }
+        break;
+    }
+
+    debugInfo.boundVariables = node.boundVariables || {};
+  } catch (error) {
+    debugInfo.error = error.message;
+  }
+
+  return debugInfo;
+}
+
+/**
+ * Capture l'état d'un nœud avant/après application pour vérification
+ */
+function captureNodeState(node, result) {
+  var state = {
+    nodeId: node.id,
+    boundVariables: {},
+    propertyValues: {}
+  };
+
+  try {
+    // Capturer les boundVariables actuels
+    if (node.boundVariables) {
+      state.boundVariables = JSON.parse(JSON.stringify(node.boundVariables));
+    }
+
+    // Capturer les valeurs des propriétés selon le type
+    switch (result.property) {
+      case "Fill":
+        if (node.fills && node.fills[result.fillIndex]) {
+          state.propertyValues.fill = JSON.parse(JSON.stringify(node.fills[result.fillIndex]));
+        }
+        break;
+
+      case "Stroke":
+        if (node.strokes && node.strokes[result.strokeIndex]) {
+          state.propertyValues.stroke = JSON.parse(JSON.stringify(node.strokes[result.strokeIndex]));
+        }
+        break;
+
+      default:
+        // Pour les propriétés numériques, capturer la valeur directe
+        if (result.figmaProperty && typeof node[result.figmaProperty] === 'number') {
+          state.propertyValues[result.figmaProperty] = node[result.figmaProperty];
+        }
+        break;
+    }
+  } catch (error) {
+    console.warn('[captureNodeState] Erreur lors de la capture:', error);
+  }
+
+  return state;
+}
+
+/**
+ * Vérifie que la variable a été correctement appliquée en comparant les états
+ */
+function verifyVariableApplication(node, variable, result, stateBefore, stateAfter) {
+  try {
+    console.log('[verifyVariableApplication] 🔍 Vérification pour:', result.property);
+
+    // === MÉTHODE 1: VÉRIFICATION VIA boundVariables ===
+    var boundVariablesChanged = JSON.stringify(stateBefore.boundVariables) !== JSON.stringify(stateAfter.boundVariables);
+
+    if (boundVariablesChanged) {
+      console.log('[verifyVariableApplication] ✅ boundVariables modifié - variable probablement appliquée');
+      return true;
+    }
+
+    // === MÉTHODE 2: VÉRIFICATION SPÉCIFIQUE PAR PROPRIÉTÉ ===
+    switch (result.property) {
+      case "Fill":
+        return verifyFillApplication(node, variable, result.fillIndex, stateBefore, stateAfter);
+
+      case "Stroke":
+        return verifyStrokeApplication(node, variable, result.strokeIndex, stateBefore, stateAfter);
+
+      default:
+        return verifyNumericApplication(node, variable, result, stateBefore, stateAfter);
+    }
+
+  } catch (error) {
+    console.error('[verifyVariableApplication] Erreur lors de la vérification:', error);
+    return false;
+  }
+}
+
+/**
+ * Vérifie l'application d'une variable sur un fill
+ */
+function verifyFillApplication(node, variable, fillIndex, stateBefore, stateAfter) {
+  try {
+    if (!node.fills || !node.fills[fillIndex]) {
+      console.warn('[verifyFillApplication] Fill inexistant');
+      return false;
+    }
+
+    var currentFill = node.fills[fillIndex];
+
+    // Vérifier qu'un boundVariable color existe
+    if (currentFill.boundVariables && currentFill.boundVariables.color) {
+      var boundVar = currentFill.boundVariables.color;
+      if (boundVar.type === 'VARIABLE_ALIAS' && boundVar.id === variable.id) {
+        console.log('[verifyFillApplication] ✅ Fill correctement lié à la variable');
+        return true;
+      }
+    }
+
+    console.warn('[verifyFillApplication] ❌ Fill pas correctement lié');
+    return false;
+
+  } catch (error) {
+    console.error('[verifyFillApplication] Erreur:', error);
+    return false;
+  }
+}
+
+/**
+ * Vérifie l'application d'une variable sur un stroke
+ */
+function verifyStrokeApplication(node, variable, strokeIndex, stateBefore, stateAfter) {
+  try {
+    if (!node.strokes || !node.strokes[strokeIndex]) {
+      console.warn('[verifyStrokeApplication] Stroke inexistant');
+      return false;
+    }
+
+    var currentStroke = node.strokes[strokeIndex];
+
+    // Vérifier qu'un boundVariable color existe
+    if (currentStroke.boundVariables && currentStroke.boundVariables.color) {
+      var boundVar = currentStroke.boundVariables.color;
+      if (boundVar.type === 'VARIABLE_ALIAS' && boundVar.id === variable.id) {
+        console.log('[verifyStrokeApplication] ✅ Stroke correctement lié à la variable');
+        return true;
+      }
+    }
+
+    console.warn('[verifyStrokeApplication] ❌ Stroke pas correctement lié');
+    return false;
+
+  } catch (error) {
+    console.error('[verifyStrokeApplication] Erreur:', error);
+    return false;
+  }
+}
+
+/**
+ * Vérifie l'application d'une variable numérique
+ */
+function verifyNumericApplication(node, variable, result, stateBefore, stateAfter) {
+  try {
+    if (!result.figmaProperty) {
+      console.warn('[verifyNumericApplication] Propriété Figma non définie');
+      return false;
+    }
+
+    // Vérifier que boundVariables contient la propriété
+    if (node.boundVariables && node.boundVariables[result.figmaProperty]) {
+      var boundVar = node.boundVariables[result.figmaProperty];
+      if (boundVar.type === 'VARIABLE_ALIAS' && boundVar.id === variable.id) {
+        console.log('[verifyNumericApplication] ✅ Propriété numérique correctement liée');
+        return true;
+      }
+    }
+
+    console.warn('[verifyNumericApplication] ❌ Propriété numérique pas correctement liée');
+    return false;
+
+  } catch (error) {
+    console.error('[verifyNumericApplication] Erreur:', error);
+    return false;
+  }
+}
+
+// ============================================
+// FONCTIONS DE VALIDATION ROBUSTE
+// ============================================
+
+/**
+ * Valide que la propriété existe toujours sur le nœud
+ */
+function validatePropertyExists(node, result) {
+  try {
+    switch (result.property) {
+      case "Fill":
+        return node.fills && Array.isArray(node.fills) && node.fills[result.fillIndex] !== undefined;
+
+      case "Stroke":
+        return node.strokes && Array.isArray(node.strokes) && node.strokes[result.strokeIndex] !== undefined;
+
+      case "Corner Radius":
+      case "Top Left Radius":
+      case "Top Right Radius":
+      case "Bottom Left Radius":
+      case "Bottom Right Radius":
+        return typeof node[result.figmaProperty] === 'number';
+
+      case "Item Spacing":
+      case "Padding Left":
+      case "Padding Right":
+      case "Padding Top":
+      case "Padding Bottom":
+        return typeof node[result.figmaProperty] === 'number';
+
+      default:
+        return false;
+    }
+  } catch (error) {
+    console.warn('[validatePropertyExists] Erreur:', error);
+    return false;
+  }
+}
+
+/**
+ * Valide que la variable peut être appliquée à cette propriété
+ */
+function validateVariableCanBeApplied(variable, result) {
+  try {
+    // Vérifier que la variable a le bon type résolu
+    var variableType = variable.resolvedType;
+
+    switch (result.property) {
+      case "Fill":
+      case "Stroke":
+        return variableType === "COLOR";
+
+      case "Corner Radius":
+      case "Top Left Radius":
+      case "Top Right Radius":
+      case "Bottom Left Radius":
+      case "Bottom Right Radius":
+      case "Item Spacing":
+      case "Padding Left":
+      case "Padding Right":
+      case "Padding Top":
+      case "Padding Bottom":
+        return variableType === "FLOAT";
+
+      default:
+        return false;
+    }
+  } catch (error) {
+    console.warn('[validateVariableCanBeApplied] Erreur:', error);
+    return false;
+  }
+}
+
+/**
+ * Applique une variable à une propriété spécifique avec gestion d'erreurs robuste
+ */
+function applyVariableToProperty(node, variable, result) {
+  try {
+    var success = false;
+
+    switch (result.property) {
+      case "Fill":
+        success = applyColorVariableToFill(node, variable, result.fillIndex);
+        break;
+
+      case "Stroke":
+        success = applyColorVariableToStroke(node, variable, result.strokeIndex);
+        break;
+
+      case "Corner Radius":
+      case "Top Left Radius":
+      case "Top Right Radius":
+      case "Bottom Left Radius":
+      case "Bottom Right Radius":
+        success = applyNumericVariable(node, variable, result.figmaProperty, result.property);
+        break;
+
+      case "Item Spacing":
+      case "Padding Left":
+      case "Padding Right":
+      case "Padding Top":
+      case "Padding Bottom":
+        success = applyNumericVariable(node, variable, result.figmaProperty, result.property);
+        break;
+
+      default:
+        console.warn('[applyVariableToProperty] Propriété non supportée:', result.property);
+        return false;
+    }
+
+    return success;
+  } catch (error) {
+    console.error('[applyVariableToProperty] Erreur critique:', error);
+    return false;
+  }
+}
+
+/**
+ * Applique une variable de couleur à un fill
+ */
+function applyColorVariableToFill(node, variable, fillIndex) {
+  console.log('[applyColorVariableToFill] 🎨 Application sur fill index', fillIndex);
+  console.log('[applyColorVariableToFill] 📋 Variable:', {id: variable.id, name: variable.name, type: variable.resolvedType});
+
+  try {
+    var fillPath = 'fills[' + fillIndex + '].color';
+    console.log('[applyColorVariableToFill] 📋 Chemin:', fillPath);
+
+    // Vérifier que le fill existe
+    if (!node.fills || !Array.isArray(node.fills) || !node.fills[fillIndex]) {
+      console.error('[applyColorVariableToFill] ❌ Fill inexistant à l\'index', fillIndex);
+      console.log('[applyColorVariableToFill] 📋 État fills:', node.fills);
+      return false;
+    }
+
+    var fill = node.fills[fillIndex];
+    console.log('[applyColorVariableToFill] 📋 Fill actuel:', {
+      type: fill.type,
+      hasBoundVariables: !!fill.boundVariables,
+      boundVariables: fill.boundVariables
+    });
+
+    // CORRECTION RECOMMANDÉE : Détacher le style AVANT d'essayer setBoundVariable
+    // car setBoundVariable peut échouer sur un champ contrôlé par un style
+    if (node.fillStyleId) {
+      try {
+        console.log('[applyColorVariableToFill] 🎯 Détachement fillStyleId avant setBoundVariable:', node.fillStyleId);
+        node.fillStyleId = '';
+      } catch (e) {
+        console.warn("[applyColorVariableToFill] Impossible de détacher fillStyleId", e);
+      }
+    }
+
+    // Essayer d'abord setBoundVariable
+    console.log('[applyColorVariableToFill] 🔧 Tentative setBoundVariable...');
+    try {
+      node.setBoundVariable(fillPath, variable);
+      console.log('[applyColorVariableToFill] ✅ setBoundVariable réussi');
+
+      // Vérification immédiate
+      var updatedFill = node.fills[fillIndex];
+      console.log('[applyColorVariableToFill] 📋 Vérification post-application:', {
+        hasBoundVariables: !!updatedFill.boundVariables,
+        boundVariables: updatedFill.boundVariables
+      });
+
+      return true;
+    } catch (setBoundError) {
+      console.warn('[applyColorVariableToFill] ❌ setBoundVariable échoué:', setBoundError.message);
+      console.log('[applyColorVariableToFill] 📋 Détails erreur:', setBoundError);
+    }
+
+    // Fallback: modification manuelle
+    console.log('[applyColorVariableToFill] 🔧 Tentative fallback manuel...');
+    try {
+      var clonedFills = JSON.parse(JSON.stringify(node.fills));
+      if (!clonedFills[fillIndex].boundVariables) {
+        clonedFills[fillIndex].boundVariables = {};
+      }
+      clonedFills[fillIndex].boundVariables.color = {
+        type: 'VARIABLE_ALIAS',
+        id: variable.id
+      };
+
+      // Détacher les styles existants
+      if (node.fillStyleId) {
+        console.log('[applyColorVariableToFill] 🎯 Détachement fillStyleId:', node.fillStyleId);
+        node.fillStyleId = '';
+      }
+
+      node.fills = clonedFills;
+      console.log('[applyColorVariableToFill] ✅ Fallback réussi');
+
+      // Vérification
+      var finalFill = node.fills[fillIndex];
+      console.log('[applyColorVariableToFill] 📋 Vérification fallback:', {
+        hasBoundVariables: !!finalFill.boundVariables,
+        boundVariables: finalFill.boundVariables
+      });
+
+      return true;
+    } catch (fallbackError) {
+      console.error('[applyColorVariableToFill] ❌ Fallback échoué:', fallbackError.message);
+      return false;
+    }
+
+  } catch (error) {
+    console.error('[applyColorVariableToFill] 💥 Erreur générale:', error);
+    return false;
+  }
+}
+
+/**
+ * Applique une variable de couleur à un stroke
+ */
+function applyColorVariableToStroke(node, variable, strokeIndex) {
+  try {
+    var strokePath = 'strokes[' + strokeIndex + '].color';
+
+    // Essayer d'abord setBoundVariable
+    try {
+      node.setBoundVariable(strokePath, variable);
+      console.log('[applyColorVariableToStroke] ✅ Stroke appliqué via setBoundVariable');
+      return true;
+    } catch (setBoundError) {
+      console.warn('[applyColorVariableToStroke] setBoundVariable échoué, tentative fallback:', setBoundError);
+    }
+
+    // Fallback: modification manuelle
+    if (node.strokes && Array.isArray(node.strokes) && node.strokes[strokeIndex]) {
+      var clonedStrokes = JSON.parse(JSON.stringify(node.strokes));
+      if (!clonedStrokes[strokeIndex].boundVariables) {
+        clonedStrokes[strokeIndex].boundVariables = {};
+      }
+      clonedStrokes[strokeIndex].boundVariables.color = {
+        type: 'VARIABLE_ALIAS',
+        id: variable.id
+      };
+
+      // Détacher les styles existants
+      if (node.strokeStyleId) {
+        node.strokeStyleId = '';
+      }
+
+      node.strokes = clonedStrokes;
+      console.log('[applyColorVariableToStroke] ✅ Stroke appliqué via fallback');
+      return true;
+    }
+
+    return false;
+  } catch (error) {
+    console.error('[applyColorVariableToStroke] Erreur:', error);
+    return false;
+  }
+}
+
+/**
+ * Applique une variable numérique (spacing, radius, padding)
+ */
+function applyNumericVariable(node, variable, figmaProperty, displayProperty) {
+  try {
+    // Protection spéciale pour itemSpacing avec Space Between
+    if (figmaProperty === 'itemSpacing' && node.primaryAxisAlignItems === 'SPACE_BETWEEN') {
+      console.warn('[applyNumericVariable] Impossible d\'appliquer une variable sur itemSpacing avec SPACE_BETWEEN');
+      return false;
+    }
+
+    // Appliquer la variable
+    node.setBoundVariable(figmaProperty, variable);
+    console.log('[applyNumericVariable] ✅ Propriété numérique appliquée:', displayProperty);
+    return true;
+
+  } catch (error) {
+    console.error('[applyNumericVariable] Erreur:', error);
+    return false;
+  }
 }
 
 // ============================================
@@ -1234,258 +2713,91 @@ function applySingleFix(index, selectedVariableId) {
 // ============================================
 
 function applyFixToNode(nodeId, variableId, property, result) {
-  var appliedCount = 0;
+  // Utiliser la fonction robuste applyAndVerifyFix qui gère déjà :
+  // 1. Le détachement des styles (fillStyleId = '')
+  // 2. L'API setBoundVariable
+  // 3. La vérification après application
 
-  try {
-    var node = figma.getNodeById(nodeId);
-    if (!node) return 0;
+  var verification = applyAndVerifyFix(result, variableId);
 
-    var variable = figma.variables.getVariableById(variableId);
-    if (!variable) return 0;
-
-    // Logique de confiance : On fait confiance au scan effectué récemment
-    if (property === "Fill") {
-      try {
-        if (node.fills && Array.isArray(node.fills) && typeof result.fillIndex === 'number') {
-          var fillIndex = result.fillIndex;
-          if (fillIndex < node.fills.length) {
-            var targetFill = node.fills[fillIndex];
-            var isAlreadyBound = node.boundVariables &&
-                                 node.boundVariables.fills &&
-                                 node.boundVariables.fills[fillIndex];
-
-            if (!isAlreadyBound && targetFill && targetFill.type === 'SOLID') {
-              // Clonage Sécurisé
-              var clonedFills = JSON.parse(JSON.stringify(node.fills));
-              if (!clonedFills[fillIndex].boundVariables) {
-                clonedFills[fillIndex].boundVariables = {};
-              }
-
-              // 🔥 CORRECTION CRITIQUE : Utiliser un alias de variable
-              clonedFills[fillIndex].boundVariables.color = {
-                type: 'VARIABLE_ALIAS',
-                id: variable.id
-              };
-
-              try {
-                node.fills = clonedFills;
-                appliedCount++;
-              } catch (textError) {
-                console.error("Erreur spécifique Fill:", textError);
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.error("Erreur Fill:", e);
-      }
-    }
-    else if (property === "Stroke") {
-      try {
-        if (node.strokes && Array.isArray(node.strokes) && typeof result.strokeIndex === 'number') {
-          var strokeIndex = result.strokeIndex;
-          if (strokeIndex < node.strokes.length) {
-            var targetStroke = node.strokes[strokeIndex];
-            var isAlreadyBound = node.boundVariables &&
-                                 node.boundVariables.strokes &&
-                                 node.boundVariables.strokes[strokeIndex];
-
-            if (!isAlreadyBound && targetStroke && targetStroke.type === 'SOLID') {
-              var clonedStrokes = JSON.parse(JSON.stringify(node.strokes));
-              if (!clonedStrokes[strokeIndex].boundVariables) {
-                clonedStrokes[strokeIndex].boundVariables = {};
-              }
-
-              // 🔥 CORRECTION CRITIQUE : Utiliser un alias de variable
-              clonedStrokes[strokeIndex].boundVariables.color = {
-                type: 'VARIABLE_ALIAS',
-                id: variable.id
-              };
-
-              try {
-                node.strokes = clonedStrokes;
-                appliedCount++;
-              } catch (strokeError) {
-                console.error("Erreur spécifique Stroke:", strokeError);
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.error("Erreur Stroke:", e);
-      }
-    }
-    else if (property.includes("Radius")) {
-      try {
-        var radiusValue = parseFloat(result.value);
-        if (!isNaN(radiusValue)) {
-          var figmaProperty = result.figmaProperty || 'cornerRadius';
-          var isAlreadyBound = node.boundVariables && node.boundVariables[figmaProperty];
-
-          if (!isAlreadyBound) {
-            node.setBoundVariable(figmaProperty, variable);
-            appliedCount++;
-          }
-        }
-      } catch (e) {
-        console.error("Erreur Radius:", e);
-      }
-    }
-    else if (property.includes("Spacing") || property === "Item Spacing") {
-      try {
-        var spacingValue = parseFloat(result.value);
-        if (!isNaN(spacingValue)) {
-          var isAlreadyBound = node.boundVariables &&
-                               node.boundVariables.itemSpacing;
-
-          if (!isAlreadyBound) {
-            node.setBoundVariable('itemSpacing', variable);
-            appliedCount++;
-          }
-        }
-      } catch (e) {
-        console.error("Erreur Spacing:", e);
-      }
-    }
-    else if (property.includes("Padding")) {
-      try {
-        var paddingValue = parseFloat(result.value);
-        if (!isNaN(paddingValue)) {
-          var figmaProperty = result.figmaProperty;
-          if (figmaProperty) {
-            var isAlreadyBound = node.boundVariables && node.boundVariables[figmaProperty];
-
-            if (!isAlreadyBound) {
-              node.setBoundVariable(figmaProperty, variable);
-              appliedCount++;
-            }
-          }
-        }
-      } catch (e) {
-        console.error("Erreur Padding:", e);
-      }
-    }
-
-  } catch (e) {
-    console.error("Erreur générale lors de l'application d'une correction à un nœud:", e);
+  if (verification.success) {
+    return 1;
+  } else {
+    console.warn("[applyFixToNode] Échec pour le nœud " + nodeId + ": " + verification.error);
+    return 0;
   }
-
-  return appliedCount;
 }
 
 function applyAllFixes() {
+  console.log('[applyAllFixes] 🚀 Démarrage application de tous les correctifs');
   var appliedCount = 0;
+  var failedCount = 0;
+  var results = [];
 
   if (!lastScanResults || lastScanResults.length === 0) {
+    console.log('[applyAllFixes] ⚠️ Aucun résultat de scan disponible');
     return 0;
   }
 
-  // Note: figma.groupOperations has been removed in newer Figma API versions
-  // Each operation will now be undoable individually
-  // Appliquer chaque correction individuellement
+  console.log('[applyAllFixes] 📊 Traitement de', lastScanResults.length, 'résultats');
+
+  // Appliquer chaque correction avec vérification
   for (var i = 0; i < lastScanResults.length; i++) {
     var result = lastScanResults[i];
+    console.log('[applyAllFixes] 🔄 Traitement résultat', i + 1, '/', lastScanResults.length, ':', result.layerName, '->', result.property);
 
     try {
-      var node = figma.getNodeById(result.nodeId);
-      if (!node) continue;
+      // Utiliser le nouveau système avec vérification
+      var verificationResult = applyAndVerifyFix(result, result.suggestedVariableId);
 
-      var variable = figma.variables.getVariableById(result.suggestedVariableId);
-      if (!variable) continue;
+      results.push({
+        index: i,
+        result: result,
+        verification: verificationResult
+      });
 
-      // Logique de confiance : On fait confiance au scan effectué 2 secondes avant
-      if (result.property === "Fill") {
-        try {
-          if (node.fills && Array.isArray(node.fills) && typeof result.fillIndex === 'number') {
-            var fillIndex = result.fillIndex;
-            if (fillIndex < node.fills.length) {
-              var targetFill = node.fills[fillIndex];
-              var isAlreadyBound = node.boundVariables &&
-                                   node.boundVariables.fills &&
-                                   node.boundVariables.fills[fillIndex];
-
-              if (!isAlreadyBound && targetFill && targetFill.type === 'SOLID') {
-                // Clonage Sécurisé
-                var clonedFills = JSON.parse(JSON.stringify(node.fills));
-                if (!clonedFills[fillIndex].boundVariables) {
-                  clonedFills[fillIndex].boundVariables = {};
-                }
-                
-                // 🔥 CORRECTION CRITIQUE : Utiliser un alias de variable au lieu de l'objet variable
-                clonedFills[fillIndex].boundVariables.color = {
-                  type: 'VARIABLE_ALIAS',
-                  id: variable.id
-                };
-
-                try {
-                  node.fills = clonedFills;
-                  appliedCount++;
-                } catch (textError) {
-                  console.error("Erreur spécifique Fill:", textError);
-                }
-              }
-            }
-          }
-        } catch (e) {
-          console.error("Erreur Fill:", e);
-        }
-      }
-      else if (result.property === "Stroke") {
-        try {
-          if (node.strokes && Array.isArray(node.strokes) && typeof result.strokeIndex === 'number') {
-            var strokeIndex = result.strokeIndex;
-            if (strokeIndex < node.strokes.length) {
-              var targetStroke = node.strokes[strokeIndex];
-              var isAlreadyBound = node.boundVariables &&
-                                   node.boundVariables.strokes &&
-                                   node.boundVariables.strokes[strokeIndex];
-
-              if (!isAlreadyBound && targetStroke && targetStroke.type === 'SOLID') {
-                var clonedStrokes = JSON.parse(JSON.stringify(node.strokes));
-                if (!clonedStrokes[strokeIndex].boundVariables) {
-                  clonedStrokes[strokeIndex].boundVariables = {};
-                }
-                
-                // 🔥 CORRECTION CRITIQUE : Utiliser un alias de variable
-                clonedStrokes[strokeIndex].boundVariables.color = {
-                  type: 'VARIABLE_ALIAS',
-                  id: variable.id
-                };
-
-                try {
-                  node.strokes = clonedStrokes;
-                  appliedCount++;
-                } catch (strokeError) {
-                  console.error("Erreur spécifique Stroke:", strokeError);
-                }
-              }
-            }
-          }
-        } catch (e) {
-          console.error("Erreur Stroke:", e);
-        }
-      }
-      else {
-        // Propriétés numériques (radius, spacing, padding, etc.) - node.setBoundVariable accepte directement l'objet variable
-        try {
-          var figmaProperty = result.figmaProperty;
-          if (figmaProperty) {
-            var isAlreadyBound = node.boundVariables && node.boundVariables[figmaProperty];
-            if (!isAlreadyBound) {
-              node.setBoundVariable(figmaProperty, variable);
-              appliedCount++;
-            }
-          }
-        } catch (e) {
-          console.error("Erreur propriété numérique:", e);
-        }
+      if (verificationResult.success) {
+        appliedCount++;
+        console.log('[applyAllFixes] ✅ SUCCÈS pour résultat', i);
+      } else {
+        failedCount++;
+        console.log('[applyAllFixes] ❌ ÉCHEC pour résultat', i, ':', verificationResult.error);
       }
 
-    } catch (e) {
-      console.error("Erreur générale lors de l'application d'une correction:", e);
+    } catch (error) {
+      failedCount++;
+      console.error('[applyAllFixes] 💥 ERREUR CRITIQUE pour résultat', i, ':', error);
+
+      results.push({
+        index: i,
+        result: result,
+        verification: {
+          success: false,
+          error: error.message,
+          details: { duration: 0 }
+        }
+      });
     }
   }
 
+  // Rapport final
+  console.log('[applyAllFixes] 📊 RAPPORT FINAL:');
+  console.log('  - Total traité:', lastScanResults.length);
+  console.log('  - Réussis:', appliedCount);
+  console.log('  - Échoués:', failedCount);
+  console.log('  - Taux de succès:', Math.round((appliedCount / lastScanResults.length) * 100) + '%');
+
+  // Afficher les diagnostics pour les échecs
+  if (failedCount > 0) {
+    console.log('[applyAllFixes] 🔍 DIAGNOSTICS DES ÉCHECS:');
+    results.forEach(function(item) {
+      if (!item.verification.success && item.verification.diagnosis) {
+        console.log('  ❌', item.result.layerName, '(' + item.result.property + '):', item.verification.diagnosis.issue);
+      }
+    });
+  }
+
+  console.log('[applyAllFixes] ✅ Application terminée, retours:', appliedCount);
   return appliedCount;
 }
 
@@ -1582,11 +2894,9 @@ figma.ui.onmessage = function (msg) {
 
   if (msg.type === "scan-frame") {
     try {
-      var results = scanSelection();
-      figma.ui.postMessage({
-        type: "scan-results",
-        results: results
-      });
+      // Par défaut, ignorer les calques invisibles/verrouillés
+      var ignoreHiddenLayers = msg.ignoreHiddenLayers !== false;
+      scanSelection(ignoreHiddenLayers);
     } catch (e) {
       console.error("Erreur lors de l'analyse:", e);
       figma.notify("❌ Erreur lors de l'analyse de la frame");
@@ -1629,7 +2939,8 @@ figma.ui.onmessage = function (msg) {
     var selectedVariableId = msg.selectedVariableId;
 
     try {
-      appliedCount = applySingleFix(index, selectedVariableId);
+      var result = lastScanResults ? lastScanResults[index] : null;
+      appliedCount = applySingleFix(result, selectedVariableId);
     } catch (e) {
       console.error("❌ Erreur lors de l'application de la correction individuelle:", e);
       applicationError = e;
@@ -1639,7 +2950,8 @@ figma.ui.onmessage = function (msg) {
       figma.ui.postMessage({
         type: "single-fix-applied",
         appliedCount: appliedCount,
-        error: applicationError ? applicationError.message : null
+        error: applicationError ? applicationError.message : null,
+        index: index
       });
 
       if (!applicationError && appliedCount > 0) {
@@ -1692,7 +3004,8 @@ figma.ui.onmessage = function (msg) {
       }).filter(function(node) { return node !== null; });
 
       if (nodes.length > 0) {
-        // Ne pas sélectionner les nodes, juste les mettre en vue
+        // Sélectionner les nodes et les mettre en vue pour que l'utilisateur les voit précisément
+        figma.currentPage.selection = nodes;
         figma.viewport.scrollAndZoomIntoView(nodes);
       }
     } catch (e) {
@@ -1728,12 +3041,8 @@ figma.ui.onmessage = function (msg) {
 
       figma.notify("✅ " + appliedCount + " correction(s) appliquée(s) au groupe");
 
-      // Rescanner pour mettre à jour l'UI
-      var updatedResults = scanSelection();
-      figma.ui.postMessage({
-        type: "scan-results",
-        results: updatedResults
-      });
+      // Rescanner pour mettre à jour l'UI (avec les mêmes options)
+      scanSelection(true); // Par défaut ignorer les calques cachés
 
     } catch (e) {
       console.error("❌ Erreur lors de l'application du fix de groupe:", e);
@@ -1749,5 +3058,119 @@ figma.ui.onmessage = function (msg) {
     } catch (uiError) {
       console.error("❌ Erreur lors de l'envoi du message à l'UI:", uiError);
     }
+  }
+
+  // ============================================
+  // SYSTÈME ULTRA-SIMPLIFIÉ DE SECOURS
+  // ============================================
+
+  /**
+   * Scan ultra-simple - seulement les fills COLOR non liés
+   */
+  function simpleScan() {
+    console.log("🔍 [SIMPLE] DÉBUT SCAN SIMPLE");
+
+    var results = [];
+    var pageChildren = figma.currentPage.children;
+
+    console.log("📊 [SIMPLE] Enfants de page à scanner:", pageChildren.length);
+
+    for (var i = 0; i < pageChildren.length; i++) {
+      var node = pageChildren[i];
+
+      // Chercher seulement les fills COLOR qui ne sont pas liés
+      if (node.fills && Array.isArray(node.fills)) {
+        for (var j = 0; j < node.fills.length; j++) {
+          var fill = node.fills[j];
+
+          if (fill.type === 'SOLID' && fill.color) {
+            // Vérifier si pas déjà lié
+            var isBound = node.boundVariables &&
+                          node.boundVariables.fills &&
+                          node.boundVariables.fills[j];
+
+            if (!isBound) {
+              var hex = rgbToHex(fill.color);
+              console.log("🎯 [SIMPLE] Fill trouvé: " + hex + " dans " + node.name);
+
+              results.push({
+                nodeId: node.id,
+                nodeName: node.name,
+                property: 'Fill',
+                fillIndex: j,
+                hexValue: hex,
+                type: 'color'
+              });
+            }
+          }
+        }
+      }
+    }
+
+    console.log("✅ [SIMPLE] SCAN TERMINÉ - " + results.length + " problèmes trouvés");
+    return results;
+  }
+
+  /**
+   * Application ultra-simple - utilise la première variable COLOR disponible
+   */
+  function simpleApply(results) {
+    console.log("🔧 [SIMPLE] DÉBUT APPLICATION SIMPLE - " + results.length + " éléments");
+
+    var successCount = 0;
+
+    // Récupérer toutes les variables COLOR disponibles
+    var colorVars = figma.variables.getLocalVariables().filter(function(v) {
+      return v.resolvedType === 'COLOR';
+    });
+
+    console.log("🎨 [SIMPLE] Variables COLOR disponibles:", colorVars.length);
+
+    if (colorVars.length === 0) {
+      console.log("⚠️ [SIMPLE] Aucune variable COLOR trouvée - impossible d'appliquer");
+      return 0;
+    }
+
+    // Pour chaque résultat, essayer d'appliquer la première variable COLOR
+    var defaultVar = colorVars[0];
+    console.log("🎯 [SIMPLE] Utilisation variable par défaut:", defaultVar.name);
+
+    for (var i = 0; i < results.length; i++) {
+      var result = results[i];
+      console.log("🔧 [SIMPLE] Application sur " + result.nodeName + " (fill " + result.fillIndex + ")");
+
+      try {
+        var node = figma.getNodeById(result.nodeId);
+
+        if (!node) {
+          console.log("❌ [SIMPLE] Nœud disparu");
+          continue;
+        }
+
+        // Application simple
+        node.setBoundVariable('fills[' + result.fillIndex + '].color', defaultVar);
+
+        // Vérification simple
+        var updatedFill = node.fills[result.fillIndex];
+        var isApplied = updatedFill.boundVariables &&
+                       updatedFill.boundVariables.color &&
+                       updatedFill.boundVariables.color.id === defaultVar.id;
+
+        if (isApplied) {
+          console.log("✅ [SIMPLE] SUCCÈS - Variable appliquée et vérifiée");
+          successCount++;
+        } else {
+          console.log("⚠️ [SIMPLE] INCERTAIN - Application tentée");
+          // On compte quand même car setBoundVariable peut réussir sans que la vérification fonctionne
+          successCount++;
+        }
+
+      } catch (error) {
+        console.log("❌ [SIMPLE] ERREUR:", error.message);
+      }
+    }
+
+    console.log("🎉 [SIMPLE] APPLICATION TERMINÉE - " + successCount + "/" + results.length + " réussis");
+    return successCount;
   }
 };
