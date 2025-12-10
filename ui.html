@@ -2789,9 +2789,6 @@
                   </button>
                 </div>
                 <div class="filter-actions">
-                  <button id="selectAllBtn" class="btn-secondary" style="font-size: 12px; padding: 6px 12px;">
-                    Tout sélectionner
-                  </button>
                   <button id="clearSelectionBtn" class="btn-outline" style="font-size: 12px; padding: 6px 12px; display: none;">
                     Tout désélectionner
                   </button>
@@ -4648,14 +4645,6 @@
         });
       });
 
-      // Gestionnaire "Tout sélectionner"
-      var selectAllBtn = document.getElementById('selectAllBtn');
-      if (selectAllBtn) {
-        selectAllBtn.addEventListener('click', function() {
-          selectAllVisibleItems();
-        });
-      }
-
       // Gestionnaire "Tout désélectionner"
       var clearSelectionBtn = document.getElementById('clearSelectionBtn');
       if (clearSelectionBtn) {
@@ -4680,13 +4669,6 @@
         });
       }
 
-      // Raccourci Ctrl+A pour tout sélectionner
-      document.addEventListener('keydown', function(e) {
-        if (e.ctrlKey && e.key === 'a') {
-          e.preventDefault();
-          selectAllVisibleItems();
-        }
-      });
     }
 
     // Appliquer un filtre aux éléments affichés
