@@ -3161,6 +3161,12 @@
       document.getElementById('cleaningDashboard').style.display = results.length > 0 ? 'block' : 'none';
       document.getElementById('exportReportBtn').style.display = results.length > 0 ? 'inline-flex' : 'none';
 
+      // Mettre à jour le bouton principal selon l'onglet actif
+      var activeTab = document.querySelector('.tab-btn.active');
+      if (activeTab) {
+        updateMainActionButton(activeTab.getAttribute('data-tab'));
+      }
+
       // Mettre à jour le compteur de problèmes
       updateProblemCounter(results.length, true);
     }
@@ -3459,8 +3465,32 @@
           // Activer l'onglet sélectionné
           this.classList.add('active');
           document.getElementById(targetTab + 'CleaningTab').classList.add('active');
+
+          // Changer le bouton selon l'onglet actif
+          updateMainActionButton(targetTab);
         });
       });
+    }
+
+    // Fonction pour mettre à jour le bouton principal selon l'onglet actif
+    function updateMainActionButton(activeTab) {
+      var scanBtn = document.getElementById('scanBtn');
+      if (!scanBtn) return;
+
+      // Supprimer les anciens event listeners
+      scanBtn.onclick = null;
+
+      if (activeTab === 'auto') {
+        scanBtn.textContent = '✅ Appliquer toutes les corrections auto';
+        scanBtn.onclick = function() {
+          applyAllAutoFixes();
+        };
+      } else if (activeTab === 'manual') {
+        scanBtn.textContent = '🎯 Appliquer les corrections manuelles';
+        scanBtn.onclick = function() {
+          applyAllManualFixes();
+        };
+      }
     }
 
     // Gestionnaire pour les sélecteurs manuels
@@ -4005,8 +4035,22 @@
       if (msg.type === "selection-checked") {
         if (msg.hasSelection) {
           scanBtn.disabled = false;
-          scanBtn.textContent = "Lancer l'analyse";
           scanBtn.className = "btn-primary"; // Bouton vert quand frame sélectionnée
+
+          // Mettre à jour le texte selon l'onglet actif
+          var activeTab = document.querySelector('.tab-btn.active');
+          if (activeTab) {
+            var tabType = activeTab.getAttribute('data-tab');
+            if (tabType === 'auto') {
+              scanBtn.textContent = '✅ Appliquer toutes les corrections auto';
+            } else if (tabType === 'manual') {
+              scanBtn.textContent = '🎯 Appliquer les corrections manuelles';
+            } else {
+              scanBtn.textContent = "Lancer l'analyse";
+            }
+          } else {
+            scanBtn.textContent = "Lancer l'analyse";
+          }
 
           // Afficher le nom de la frame sélectionnée au lieu de l'état vide
           scanEmptyState.classList.add("hidden");
