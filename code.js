@@ -1219,10 +1219,49 @@ function checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLaye
       // 4. VÉRIFICATION DES PROPRIÉTÉS NUMÉRIQUES (SPACING, PADDING, RADIUS)
       checkNumericPropertiesSafely(node, valueToVariableMap, results);
 
+      // 5. VÉRIFICATION DES PROPRIÉTÉS DE TYPOGRAPHIE (pour les nœuds TEXT)
+      if (node.type === 'TEXT') {
+        checkTypographyPropertiesSafely(node, valueToVariableMap, results);
+      }
+
     } catch (propertyError) {
       console.error("[checkNodeProperties] Erreur lors de l'analyse des propriétés du nœud", nodeId, layerName, ":", propertyError);
       // Ne pas arrêter le scan, continuer vers les autres nœuds
     }
+  }
+}
+
+/**
+ * Vérifie les propriétés de typographie pour les nœuds TEXT
+ */
+function checkTypographyPropertiesSafely(node, valueToVariableMap, results) {
+  try {
+    // FONT SIZE - Propriété principale de typographie
+    if (typeof node.fontSize === 'number' && node.fontSize > 0) {
+      var isFontSizeBound = isPropertyBoundToVariable(node.boundVariables || {}, 'fontSize');
+      if (!isFontSizeBound) {
+        var suggestions = findNumericSuggestions(node.fontSize, valueToVariableMap, undefined, "Font Size");
+        if (suggestions.length > 0) {
+          var bestSuggestion = suggestions[0];
+          results.push({
+            nodeId: node.id,
+            layerName: node.name,
+            property: "Font Size",
+            value: node.fontSize + "px",
+            suggestedVariableId: bestSuggestion.id,
+            suggestedVariableName: bestSuggestion.name,
+            figmaProperty: 'fontSize',
+            numericSuggestions: suggestions
+          });
+        }
+      }
+    }
+
+    // Autres propriétés de typographie pourraient être ajoutées ici si nécessaire
+    // (lineHeight, letterSpacing, etc.)
+
+  } catch (typographyError) {
+    console.error("[checkTypographyPropertiesSafely] Erreur lors de l'analyse des propriétés de typographie du nœud", node.id, node.name, ":", typographyError);
   }
 }
 
