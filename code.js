@@ -1130,6 +1130,49 @@ function findNumericSuggestions(targetValue, valueToVariableMap, tolerance, prop
 }
 
 /**
+ * Enrichit les suggestions avec leur vraie valeur de variable
+ * @param {Array} suggestions - Liste des suggestions à enrichir
+ * @returns {Array} Suggestions enrichies avec resolvedValue
+ */
+function enrichSuggestionsWithRealValues(suggestions) {
+  return suggestions.map(function(suggestion) {
+    var enriched = Object.assign({}, suggestion);
+
+    // Récupérer la variable par son ID
+    var variable = figma.variables.getVariableById(suggestion.id);
+    if (variable) {
+      // Récupérer la valeur de la variable selon son mode
+      var collections = figma.variables.getLocalVariableCollections();
+      var collection = null;
+      for (var i = 0; i < collections.length; i++) {
+        if (collections[i].variableIds.includes(variable.id)) {
+          collection = collections[i];
+          break;
+        }
+      }
+
+      if (collection && collection.modes.length > 0) {
+        var modeId = collection.modes[0].modeId;
+        var rawValue = variable.valuesByMode[modeId];
+
+        // Formater la valeur selon le type de variable
+        if (variable.resolvedType === "COLOR" && typeof rawValue === "object") {
+          enriched.resolvedValue = rgbToHex(rawValue);
+        } else if (variable.resolvedType === "FLOAT") {
+          enriched.resolvedValue = rawValue + "px";
+        } else if (variable.resolvedType === "STRING") {
+          enriched.resolvedValue = rawValue;
+        } else {
+          enriched.resolvedValue = rawValue;
+        }
+      }
+    }
+
+    return enriched;
+  });
+}
+
+/**
  * Analyse les propriétés d'un nœud de manière défensive et robuste
  * Gère tous les cas edge avec protection contre les crashes
  * @param {Object} node - Le nœud Figma à analyser
@@ -1243,7 +1286,7 @@ function checkTypographyPropertiesSafely(node, valueToVariableMap, results) {
     if (typeof node.fontSize === 'number' && node.fontSize > 0) {
       var isFontSizeBound = isPropertyBoundToVariable(node.boundVariables || {}, 'fontSize');
       if (!isFontSizeBound) {
-        var suggestions = findNumericSuggestions(node.fontSize, valueToVariableMap, undefined, "Font Size");
+        var suggestions = enrichSuggestionsWithRealValues(findNumericSuggestions(node.fontSize, valueToVariableMap, undefined, "Font Size"));
         if (suggestions.length > 0) {
           var bestSuggestion = suggestions[0];
           results.push({
@@ -1288,7 +1331,7 @@ function checkFillsSafely(node, valueToVariableMap, results) {
         var hexValue = rgbToHex(fill.color);
         if (!hexValue) continue;
 
-        var suggestions = findColorSuggestions(hexValue, valueToVariableMap, "Fill");
+        var suggestions = enrichSuggestionsWithRealValues(findColorSuggestions(hexValue, valueToVariableMap, "Fill"));
 
         // NE SIGNALER QUE LES PROBLÈMES AYANT UNE SOLUTION
         if (suggestions.length > 0) {
@@ -1334,7 +1377,7 @@ function checkStrokesSafely(node, valueToVariableMap, results) {
         var hexValue = rgbToHex(stroke.color);
         if (!hexValue) continue;
 
-        var suggestions = findColorSuggestions(hexValue, valueToVariableMap, "Stroke");
+        var suggestions = enrichSuggestionsWithRealValues(findColorSuggestions(hexValue, valueToVariableMap, "Stroke"));
 
         // NE SIGNALER QUE LES PROBLÈMES AYANT UNE SOLUTION
         if (suggestions.length > 0) {
@@ -1389,7 +1432,7 @@ function checkCornerRadiusSafely(node, valueToVariableMap, results) {
             var isBound = isPropertyBoundToVariable(node.boundVariables || {}, prop.figmaProp);
             if (isBound) continue;
 
-            var suggestions = findNumericSuggestions(radiusValue, valueToVariableMap, undefined, prop.displayName);
+            var suggestions = enrichSuggestionsWithRealValues(findNumericSuggestions(radiusValue, valueToVariableMap, undefined, prop.displayName));
             if (suggestions.length > 0) {
               var bestSuggestion = suggestions[0];
               results.push({
@@ -1420,7 +1463,7 @@ function checkCornerRadiusSafely(node, valueToVariableMap, results) {
                     isPropertyBoundToVariable(boundVars, 'bottomRightRadius');
 
       if (!isBound) {
-        var suggestions = findNumericSuggestions(node.cornerRadius, valueToVariableMap, undefined, "Corner Radius");
+        var suggestions = enrichSuggestionsWithRealValues(findNumericSuggestions(node.cornerRadius, valueToVariableMap, undefined, "Corner Radius"));
         if (suggestions.length > 0) {
           var bestSuggestion = suggestions[0];
           results.push({
@@ -1453,7 +1496,7 @@ function checkNumericPropertiesSafely(node, valueToVariableMap, results) {
     if (node.layoutMode && node.layoutMode !== "NONE" && typeof node.itemSpacing === 'number' && node.itemSpacing > 0) {
       var isGapBound = isPropertyBoundToVariable(node.boundVariables || {}, 'itemSpacing');
       if (!isGapBound) {
-        var suggestions = findNumericSuggestions(node.itemSpacing, valueToVariableMap, undefined, "Item Spacing");
+        var suggestions = enrichSuggestionsWithRealValues(findNumericSuggestions(node.itemSpacing, valueToVariableMap, undefined, "Item Spacing"));
         if (suggestions.length > 0) {
           var bestSuggestion = suggestions[0];
           results.push({
@@ -1487,7 +1530,7 @@ function checkNumericPropertiesSafely(node, valueToVariableMap, results) {
         if (typeof paddingValue === 'number' && paddingValue > 0) {
           var isPaddingBound = isPropertyBoundToVariable(node.boundVariables || {}, paddingProp.figmaProp);
           if (!isPaddingBound) {
-            var suggestions = findNumericSuggestions(paddingValue, valueToVariableMap, undefined, paddingProp.displayName);
+            var suggestions = enrichSuggestionsWithRealValues(findNumericSuggestions(paddingValue, valueToVariableMap, undefined, paddingProp.displayName));
             if (suggestions.length > 0) {
               var bestSuggestion = suggestions[0];
               results.push({
@@ -1912,7 +1955,7 @@ function diagnoseApplicationFailure(result, variableId, error) {
     console.log('[diagnoseApplicationFailure] 📋 Scopes requis:', requiredScopes);
     console.log('[diagnoseApplicationFailure] 📋 Scopes variable:', variableScopes);
 
-    var hasRequiredScopes = requiredScopes.some(scope => variableScopes.includes(scope));
+    var hasRequiredScopes = requiredScopes.some(function(scope) { return variableScopes.includes(scope); });
     if (!hasRequiredScopes && requiredScopes.length > 0) {
       diagnosis.issue = 'scope_mismatch';
       diagnosis.confidence = 'high';
@@ -2134,7 +2177,7 @@ function applyAndVerifyFix(result, variableId) {
 
       // Lister quelques variables pour debug
       var allVars = figma.variables.getLocalVariables().slice(0, 5);
-      console.log('[applyAndVerifyFix] 📋 Exemples de variables:', allVars.map(v => ({id: v.id, name: v.name})));
+      console.log('[applyAndVerifyFix] 📋 Exemples de variables:', allVars.map(function(v) { return {id: v.id, name: v.name}; }));
       throw new Error('Variable introuvable: ' + finalVariableId);
     }
     console.log('[applyAndVerifyFix] ✅ Variable existe');

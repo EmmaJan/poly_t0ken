@@ -3474,10 +3474,12 @@
     // ============================================
 
     // Fonction pour enrichir les suggestions avec leur valeur résolue
+    // Les suggestions sont maintenant déjà enrichies côté plugin avec resolvedValue
     function enrichSuggestionsWithValues(suggestions, property, currentValue) {
       return suggestions.map(function(suggestion) {
         var enriched = Object.assign({}, suggestion);
         if (!enriched.resolvedValue) {
+          // Fallback : si resolvedValue n'est pas défini (anciennes données)
           // Pour les couleurs, la valeur hex est déjà dans suggestion.hex
           if (property === 'Fill' || property === 'Stroke') {
             enriched.resolvedValue = suggestion.hex || currentValue;

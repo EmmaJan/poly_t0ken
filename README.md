@@ -56,3 +56,5 @@ Consultez [`COMPATIBILITY.md`](COMPATIBILITY.md) pour les règles détaillées e
 - `check-compatibility.js` : Script de vérification de compatibilité
 - `COMPATIBILITY.md` : Guide de compatibilité JavaScript</contents>
 </xai:function_call">Créer un README avec les informations de compatibilité
+
+
