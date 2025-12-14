@@ -4847,85 +4847,74 @@
 
     // Recalculer dynamiquement les compteurs des onglets après corrections
     function updateDynamicTabCounts() {
-      var autoCount = 0;
-      var manualCount = 0;
+      var counts = {
+        auto: 0,
+        manual: 0
+      };
 
-      // Analyser TOUTES les cartes (pas seulement les visibles) car le filtre actif peut masquer certaines cartes
+      // Fonction helper pour déterminer le type de carte
+      function getCardType(card) {
+        // Priorité 1: Classes CSS explicites
+        if (card.classList.contains('auto-fixable') || card.classList.contains('compact-row')) {
+          return 'auto';
+        }
+        if (card.classList.contains('manual-required')) {
+          return 'manual';
+        }
+
+        // Priorité 2: Fallback sur data-suggestions (legacy)
+        var suggestions = card.getAttribute('data-suggestions');
+        if (suggestions) {
+          try {
+            var suggestionsArray = JSON.parse(suggestions);
+            return (suggestionsArray && suggestionsArray.length === 1) ? 'auto' : 'manual';
+          } catch (e) {
+            console.warn('[updateDynamicTabCounts] Erreur parsing data-suggestions:', e);
+          }
+        }
+
+        // Défaut: considérer comme manuel si rien n'est défini
+        return 'manual';
+      }
+
+      // Analyser TOUTES les cartes (pas seulement les visibles)
       var cards = document.querySelectorAll('.cleaning-result-card, .compact-row');
 
-      console.log('[DEBUG updateDynamicTabCounts] Cartes trouvées:', cards.length);
-
-      cards.forEach(function(card, index) {
+      cards.forEach(function(card) {
         // Ignorer les cartes complètement masquées (ignorées ou supprimées)
         if (card.style.display === 'none' || card.style.opacity === '0') {
           return;
         }
 
+        // Récupérer les indices de cette carte
         var cardIndices = JSON.parse(card.getAttribute('data-indices') || '[]');
         var appliedIndices = card._appliedIndices || [];
 
-        // Compter les indices non encore appliqués dans cette carte
+        // Compter les indices non encore appliqués
         var remainingIndices = cardIndices.filter(function(idx) {
           return !appliedIndices.includes(idx);
         });
 
         if (remainingIndices.length > 0) {
-          // Vérifier si c'est une correction auto ou manuelle en utilisant les classes CSS
-          var isAutoFixable = card.classList.contains('auto-fixable');
-          var isManualRequired = card.classList.contains('manual-required');
-          var isCompactRow = card.classList.contains('compact-row');
-
-          console.log('[DEBUG updateDynamicTabCounts] Carte', index, '- Classe:', card.className, '- Indices restants:', remainingIndices.length, '- AutoFixable:', isAutoFixable, '- ManualRequired:', isManualRequired, '- CompactRow:', isCompactRow);
-
-          if (isAutoFixable || isCompactRow) {
-            // Les cartes auto-fixable ou compact-row sont auto-fixables
-            autoCount += remainingIndices.length;
-            console.log('[DEBUG updateDynamicTabCounts] Carte', index, '- Classée comme AUTO (auto-fixable ou compact-row)');
-          } else if (isManualRequired) {
-            // Les cartes manual-required sont manuelles
-            manualCount += remainingIndices.length;
-            console.log('[DEBUG updateDynamicTabCounts] Carte', index, '- Classée comme MANUAL (manual-required)');
-          } else {
-            // Fallback: vérifier data-suggestions si les classes ne sont pas définies
-            var suggestions = card.getAttribute('data-suggestions');
-            if (suggestions) {
-              try {
-                var suggestionsArray = JSON.parse(suggestions);
-                if (suggestionsArray && suggestionsArray.length === 1) {
-                  autoCount += remainingIndices.length;
-                  console.log('[DEBUG updateDynamicTabCounts] Carte', index, '- Classée comme AUTO (1 suggestion via data-suggestions)');
-                } else {
-                  manualCount += remainingIndices.length;
-                  console.log('[DEBUG updateDynamicTabCounts] Carte', index, '- Classée comme MANUAL (' + (suggestionsArray ? suggestionsArray.length : 0) + ' suggestions via data-suggestions)');
-                }
-              } catch (e) {
-                console.error('[DEBUG updateDynamicTabCounts] Erreur parsing suggestions pour carte', index, ':', e);
-                manualCount += remainingIndices.length;
-              }
-            } else {
-              // Par défaut, si rien n'est défini, compter comme manuel
-              manualCount += remainingIndices.length;
-              console.log('[DEBUG updateDynamicTabCounts] Carte', index, '- Classée comme MANUAL (fallback - pas de classe ni data-suggestions)');
-            }
-          }
+          var cardType = getCardType(card);
+          counts[cardType] += remainingIndices.length;
         }
       });
 
-      // Mettre à jour les badges
-      var autoBadge = document.getElementById('autoCount');
-      var manualBadge = document.getElementById('manualCount');
+      // Mettre à jour les badges des onglets
+      updateTabBadge('autoCount', counts.auto);
+      updateTabBadge('manualCount', counts.manual);
 
-      if (autoBadge) {
-        autoBadge.textContent = autoCount;
-        autoBadge.style.display = autoCount > 0 ? 'inline-flex' : 'none';
+      console.log('[DEBUG updateDynamicTabCounts] Comptage final - Auto:', counts.auto, 'Manual:', counts.manual);
+    }
+
+    // Fonction helper pour mettre à jour un badge spécifique
+    function updateTabBadge(badgeId, count) {
+      var badge = document.getElementById(badgeId);
+      if (badge) {
+        badge.textContent = count;
+        badge.style.display = count > 0 ? 'inline-flex' : 'none';
       }
-
-      if (manualBadge) {
-        manualBadge.textContent = manualCount;
-        manualBadge.style.display = manualCount > 0 ? 'inline-flex' : 'none';
-      }
-
-      console.log('[DEBUG updateDynamicTabCounts] Mise à jour badges - Auto:', autoCount, 'Manual:', manualCount);
     }
 
     // Générer le contenu unifié avec tolérance aux erreurs
