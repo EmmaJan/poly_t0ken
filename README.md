@@ -58,3 +58,5 @@ Consultez [`COMPATIBILITY.md`](COMPATIBILITY.md) pour les règles détaillées e
 </xai:function_call">Créer un README avec les informations de compatibilité
 
 
+
+

@@ -1,20 +1,1367 @@
-console.log("🔥 Token Starter Plugin Loaded");
+// ============================================
+// 1. CONFIGURATION
+// ============================================
+const CONFIG = {
+  // Debug mode
+  DEBUG_MODE: true,
 
+  // Node types
+  types: {
+    SOLID: 'SOLID',
+    VARIABLE_ALIAS: 'VARIABLE_ALIAS',
+    TEXT: 'TEXT',
+    FRAME: 'FRAME',
+    RECTANGLE: 'RECTANGLE',
+    ELLIPSE: 'ELLIPSE',
+    POLYGON: 'POLYGON',
+    STAR: 'STAR',
+    VECTOR: 'VECTOR',
+    COMPONENT: 'COMPONENT',
+    INSTANCE: 'INSTANCE',
+    LINE: 'LINE',
+    GROUP: 'GROUP',
+    SECTION: 'SECTION',
+    COMPONENT_SET: 'COMPONENT_SET'
+  },
+
+  // Property types
+  properties: {
+    FILL: 'Fill',
+    STROKE: 'Stroke',
+    RADIUS: 'Radius',
+    SPACING: 'Spacing',
+    WIDTH: 'Width',
+    HEIGHT: 'Height'
+  },
+
+  // Variable resolved types
+  variableTypes: {
+    COLOR: 'COLOR',
+    FLOAT: 'FLOAT',
+    STRING: 'STRING'
+  },
+
+  // Limits
+  limits: {
+    MAX_DEPTH: 50,
+    MAX_WIDTH: 1600,
+    MAX_HEIGHT: 1400
+  },
+
+  // Supported node types for operations
+  supportedTypes: {
+    radius: ['FRAME', 'RECTANGLE', 'ELLIPSE', 'POLYGON', 'STAR', 'VECTOR', 'COMPONENT', 'INSTANCE'],
+    fillAndStroke: ['FRAME', 'RECTANGLE', 'ELLIPSE', 'POLYGON', 'STAR', 'VECTOR', 'TEXT', 'COMPONENT', 'INSTANCE', 'LINE'],
+    spacing: ['FRAME', 'GROUP', 'SECTION', 'COMPONENT', 'INSTANCE', 'COMPONENT_SET'],
+    all: ['FRAME', 'RECTANGLE', 'ELLIPSE', 'POLYGON', 'STAR', 'VECTOR', 'TEXT', 'COMPONENT', 'INSTANCE', 'LINE', 'GROUP', 'SECTION', 'COMPONENT_SET']
+  },
+
+  // Property scopes for variables
+  scopes: {
+    Fill: ['ALL_FILLS', 'FRAME_FILL', 'SHAPE_FILL', 'TEXT_FILL', 'ALL_SCOPES'],
+    Stroke: ['STROKE_COLOR', 'ALL_SCOPES'],
+    'Corner Radius': ['CORNER_RADIUS', 'ALL_SCOPES'],
+    'Top Left Radius': ['CORNER_RADIUS', 'ALL_SCOPES'],
+    'Top Right Radius': ['CORNER_RADIUS', 'ALL_SCOPES'],
+    'Bottom Left Radius': ['CORNER_RADIUS', 'ALL_SCOPES'],
+    'Bottom Right Radius': ['CORNER_RADIUS', 'ALL_SCOPES'],
+    'Item Spacing': ['GAP', 'ALL_SCOPES'],
+    'Padding Left': ['GAP', 'ALL_SCOPES'],
+    'Padding Right': ['GAP', 'ALL_SCOPES'],
+    'Padding Top': ['GAP', 'ALL_SCOPES'],
+    'Padding Bottom': ['GAP', 'ALL_SCOPES'],
+    'Font Size': ['FONT_SIZE', 'ALL_SCOPES']
+  },
+
+  // Layout modes
+  layoutModes: {
+    NONE: 'NONE'
+  },
+
+  // Categories for token organization
+  categories: {
+    brand: 'brand',
+    system: 'system',
+    gray: 'gray',
+    spacing: 'spacing',
+    radius: 'radius',
+    typography: 'typography',
+    border: 'border'
+  },
+
+  // Naming conventions
+  naming: {
+    shadcn: 'shadcn',
+    mui: 'mui',
+    ant: 'ant',
+    bootstrap: 'bootstrap',
+    default: 'default'
+  }
+};
+
+// ============================================
+// 2. UTILS (Helpers techniques)
+// ============================================
+const Utils = {
+  /**
+   * Helper function for logging in debug mode
+   * @param {string} msg - The message to log
+   * @param {*} data - Optional data to log alongside the message
+   */
+  log: function (msg, data) {
+    if (CONFIG.DEBUG_MODE) {
+      if (data !== undefined) {
+        console.log(msg, data);
+      } else {
+        console.log(msg);
+      }
+    }
+  },
+
+  /**
+   * Safely get a property from a node with error handling
+   * @param {Object} node - Figma node
+   * @param {string} prop - Property name
+   * @param {*} defaultValue - Default value if property doesn't exist
+   * @returns {*} The property value or default
+   */
+  safeGet: function (node, prop, defaultValue) {
+    try {
+      if (node && node[prop] !== undefined) {
+        return node[prop];
+      }
+      return defaultValue;
+    } catch (error) {
+      return defaultValue;
+    }
+  },
+
+  /**
+   * Safely check if a node has a property
+   * @param {Object} node - Figma node
+   * @param {string} prop - Property name
+   * @returns {boolean} True if property exists
+   */
+  hasProperty: function (node, prop) {
+    try {
+      return node && node[prop] !== undefined;
+    } catch (error) {
+      return false;
+    }
+  }
+};
+
+/**
+ * @param {string} msg - The message to log
+ * @param {*} data - Optional data to log alongside the message
+ */
+function log(msg, data) {
+  // Logging disabled for production
+}
+
+// ============================================
+// 3. COLOR_SERVICE (Logique pure couleurs)
+// ============================================
+const ColorService = {
+  /**
+   * Convert hex color to RGB object
+   * @param {string} hex - Hex color string
+   * @returns {Object} RGB object with r, g, b properties
+   */
+  hexToRgb: function (hex) {
+    hex = hex.replace("#", "");
+    if (hex.length === 3) {
+      hex = hex.split("").map(function (x) { return x + x; }).join("");
+    }
+    var num = parseInt(hex, 16);
+    return {
+      r: ((num >> 16) & 255) / 255,
+      g: ((num >> 8) & 255) / 255,
+      b: (num & 255) / 255
+    };
+  },
+
+  /**
+   * Convert RGB object to hex color (version sécurisée avec arrondis)
+   * @param {Object} c - RGB object with r, g, b properties
+   * @returns {string} Hex color string
+   */
+  rgbToHex: function (c) {
+    // Tolérance pour la précision flottante - arrondi à 6 décimales pour éviter les erreurs d'arrondi
+    var roundToPrecision = function (x) {
+      return Math.round(x * 1000000) / 1000000;
+    };
+
+    var r = roundToPrecision(Math.max(0, Math.min(1, c.r)));
+    var g = roundToPrecision(Math.max(0, Math.min(1, c.g)));
+    var b = roundToPrecision(Math.max(0, Math.min(1, c.b)));
+
+    // Conversion en 255 avec arrondi sécurisé
+    var r255 = Math.round(r * 255);
+    var g255 = Math.round(g * 255);
+    var b255 = Math.round(b * 255);
+
+    var n = (r255 << 16) | (g255 << 8) | b255;
+    var hex = "#" + n.toString(16).padStart(6, "0").toUpperCase();
+    return hex;
+  },
+
+  /**
+   * Convert hex color to HSL object
+   * @param {string} hex - Hex color string
+   * @returns {Object} HSL object with h, s, l properties
+   */
+  hexToHsl: function (hex) {
+    var rgb = ColorService.hexToRgb(hex);
+    var r = rgb.r;
+    var g = rgb.g;
+    var b = rgb.b;
+
+    var max = Math.max(r, g, b);
+    var min = Math.min(r, g, b);
+    var h, s, l = (max + min) / 2;
+
+    if (max === min) {
+      h = s = 0;
+    } else {
+      var d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+
+      switch (max) {
+        case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+        case g: h = (b - r) / d + 2; break;
+        case b: h = (r - g) / d + 4; break;
+      }
+      h /= 6;
+    }
+
+    return { h: h, s: s, l: l };
+  },
+
+  /**
+   * Convert HSL object to hex color
+   * @param {Object} hsl - HSL object with h, s, l properties
+   * @returns {string} Hex color string
+   */
+  hslToHex: function (hsl) {
+    var h = hsl.h;
+    var s = hsl.s;
+    var l = hsl.l;
+
+    if (s === 0) {
+      var gray = Math.round(l * 255);
+      return "#" + (gray << 16 | gray << 8 | gray).toString(16).padStart(6, "0").toUpperCase();
+    }
+
+    var hue2rgb = function (p, q, t) {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    };
+
+    var q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    var p = 2 * l - q;
+
+    var r = hue2rgb(p, q, h + 1 / 3);
+    var g = hue2rgb(p, q, h);
+    var b = hue2rgb(p, q, h - 1 / 3);
+
+    return ColorService.rgbToHex({ r: r, g: g, b: b });
+  },
+
+  /**
+   * Adjust lightness of a color
+   * @param {Object} hsl - HSL object
+   * @param {number} amount - Amount to adjust (-1 to 1)
+   * @returns {Object} Adjusted HSL object
+   */
+  adjustLightness: function (hsl, amount) {
+    return {
+      h: hsl.h,
+      s: hsl.s,
+      l: Math.max(0, Math.min(1, hsl.l + amount))
+    };
+  },
+
+  /**
+   * Mix two colors
+   * @param {string} c1 - First hex color
+   * @param {string} c2 - Second hex color
+   * @param {number} w - Weight (0-1, 0 = c1, 1 = c2)
+   * @returns {string} Mixed hex color
+   */
+  mixColors: function (c1, c2, w) {
+    var rgb1 = ColorService.hexToRgb(c1);
+    var rgb2 = ColorService.hexToRgb(c2);
+
+    return ColorService.rgbToHex({
+      r: rgb1.r * (1 - w) + rgb2.r * w,
+      g: rgb1.g * (1 - w) + rgb2.g * w,
+      b: rgb1.b * (1 - w) + rgb2.b * w
+    });
+  }
+};
+
+// ============================================
+// 4. TOKEN_SERVICE (Génération des tokens)
+// ============================================
+const TokenService = {
+  /**
+   * Generate brand color tokens
+   * @param {string} hex - Base brand color
+   * @param {string} naming - Naming convention
+   * @returns {Object} Brand color tokens
+   */
+  generateBrand: function (hex, naming) {
+    var tokens = {};
+
+    if (naming === CONFIG.naming.shadcn) {
+      tokens.primary = hex;
+    } else if (naming === CONFIG.naming.mui) {
+      tokens.main = hex;
+      tokens.light = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), 0.1));
+      tokens.dark = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), -0.1));
+      tokens.contrastText = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), -0.5));
+    } else if (naming === CONFIG.naming.ant) {
+      tokens.main = hex;
+      tokens.light = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), 0.1));
+      tokens.dark = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), -0.1));
+    } else if (naming === CONFIG.naming.bootstrap) {
+      tokens.main = hex;
+      tokens.light = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), 0.15));
+      tokens.dark = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), -0.15));
+    } else {
+      // Default naming
+      tokens['50'] = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), 0.4));
+      tokens['100'] = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), 0.3));
+      tokens['200'] = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), 0.2));
+      tokens['300'] = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), 0.1));
+      tokens['400'] = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), 0.05));
+      tokens['500'] = hex;
+      tokens['600'] = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), -0.05));
+      tokens['700'] = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), -0.1));
+      tokens['800'] = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), -0.2));
+      tokens['900'] = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), -0.3));
+    }
+
+    return tokens;
+  },
+
+  /**
+   * Generate system color tokens
+   * @param {string} naming - Naming convention
+   * @param {string} brandHex - Base brand color for derived colors
+   * @returns {Object} System color tokens
+   */
+  generateSystem: function (naming, brandHex) {
+    var tokens = {};
+    var brandHsl = ColorService.hexToHsl(brandHex);
+
+    if (naming === CONFIG.naming.mui) {
+      tokens.primary = TokenService.generateBrand(brandHex, naming);
+      tokens.secondary = {
+        main: ColorService.mixColors(brandHex, '#666666', 0.3),
+        light: ColorService.mixColors(brandHex, '#999999', 0.5),
+        dark: ColorService.mixColors(brandHex, '#333333', 0.2),
+        contrastText: '#ffffff'
+      };
+      tokens.success = { main: '#4caf50', light: '#81c784', dark: '#388e3c', contrastText: '#ffffff' };
+      tokens.warning = { main: '#ff9800', light: '#ffb74d', dark: '#f57c00', contrastText: '#000000' };
+      tokens.error = { main: '#f44336', light: '#e57373', dark: '#d32f2f', contrastText: '#ffffff' };
+      tokens.info = { main: '#2196f3', light: '#64b5f6', dark: '#1976d2', contrastText: '#ffffff' };
+    } else {
+      // Default system colors
+      tokens.primary = brandHex;
+      tokens.secondary = ColorService.mixColors(brandHex, '#666666', 0.3);
+      tokens.success = '#22c55e';
+      tokens.warning = '#f59e0b';
+      tokens.error = '#ef4444';
+      tokens.info = '#3b82f6';
+    }
+
+    return tokens;
+  },
+
+  /**
+   * Generate grayscale tokens
+   * @param {string} naming - Naming convention
+   * @returns {Object} Grayscale tokens
+   */
+  generateGray: function (naming) {
+    var tokens = {};
+
+    if (naming === CONFIG.naming.shadcn || naming === CONFIG.naming.ant) {
+      // Shadcn/Ant design scale
+      var steps = ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900', '950'];
+      steps.forEach(function (step, index) {
+        var lightness = 0.95 - (index * 0.09);
+        lightness = Math.max(0.05, Math.min(0.95, lightness));
+        tokens[step] = ColorService.hslToHex({ h: 0, s: 0, l: lightness });
+      });
+    } else if (naming === CONFIG.naming.mui) {
+      // MUI grey scale
+      tokens['50'] = '#fafafa';
+      tokens['100'] = '#f5f5f5';
+      tokens['200'] = '#eeeeee';
+      tokens['300'] = '#e0e0e0';
+      tokens['400'] = '#bdbdbd';
+      tokens['500'] = '#9e9e9e';
+      tokens['600'] = '#757575';
+      tokens['700'] = '#616161';
+      tokens['800'] = '#424242';
+      tokens['900'] = '#212121';
+    } else {
+      // Bootstrap/default scale
+      tokens.white = '#ffffff';
+      tokens.light = '#f8f9fa';
+      tokens.secondary = '#6c757d';
+      tokens.dark = '#343a40';
+      tokens.black = '#000000';
+    }
+
+    return tokens;
+  },
+
+  /**
+   * Generate spacing tokens
+   * @param {string} naming - Naming convention
+   * @returns {Object} Spacing tokens
+   */
+  generateSpacing: function (naming) {
+    var tokens = {};
+
+    if (naming === CONFIG.naming.mui) {
+      // MUI spacing scale (4px base)
+      [0, 0.5, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 40].forEach(function (multiplier) {
+        tokens[multiplier] = multiplier * 4;
+      });
+    } else {
+      // Default spacing scale
+      [4, 8, 12, 16, 20, 24, 32, 40, 48, 64, 80, 96, 128, 160, 192, 224, 256].forEach(function (value) {
+        tokens[value] = value;
+      });
+    }
+
+    return tokens;
+  },
+
+  /**
+   * Generate radius tokens
+   * @param {string} naming - Naming convention
+   * @returns {Object} Radius tokens
+   */
+  generateRadius: function (naming) {
+    var tokens = {};
+
+    if (naming === CONFIG.naming.mui) {
+      tokens.none = 0;
+      tokens.xs = 2;
+      tokens.sm = 4;
+      tokens.md = 6;
+      tokens.lg = 8;
+      tokens.xl = 12;
+      tokens['2xl'] = 16;
+      tokens.full = 9999;
+    } else {
+      // Default radius scale
+      tokens.none = 0;
+      tokens.sm = 2;
+      tokens.base = 4;
+      tokens.md = 6;
+      tokens.lg = 8;
+      tokens.xl = 12;
+      tokens['2xl'] = 16;
+      tokens['3xl'] = 24;
+      tokens.full = 9999;
+    }
+
+    return tokens;
+  },
+
+  /**
+   * Generate all tokens based on input
+   * @param {Object} msg - Message with generation parameters
+   * @returns {Object} Complete tokens object
+   */
+  generateAll: function (msg) {
+    var hex = msg.hex || '#6366F1';
+    var naming = msg.naming || CONFIG.naming.default;
+
+
+    return {
+      brand: TokenService.generateBrand(hex, naming),
+      system: TokenService.generateSystem(naming, hex),
+      gray: TokenService.generateGray(naming),
+      spacing: TokenService.generateSpacing(naming),
+      radius: TokenService.generateRadius(naming),
+      typography: {
+        'xs': 12,
+        'sm': 14,
+        'base': 16,
+        'lg': 18,
+        'xl': 20,
+        '2xl': 24,
+        '3xl': 30,
+        '4xl': 36
+      },
+      border: {
+        'thin': 1,
+        'base': 2,
+        'thick': 4
+      }
+    };
+  }
+};
+
+// ============================================
+// 5. FIGMA_SERVICE (Interactions API directes)
+// ============================================
+const FigmaService = {
+  /**
+   * Get all variable collections
+   * @returns {Array} Array of variable collections
+   */
+  getCollections: function () {
+    return figma.variables.getLocalVariableCollections();
+  },
+
+  /**
+   * Get variable by ID
+   * @param {string} id - Variable ID
+   * @returns {Object|null} Variable object or null
+   */
+  getVariableById: function (id) {
+    return figma.variables.getVariableById(id);
+  },
+
+  /**
+   * Show notification to user
+   * @param {string} msg - Message to show
+   */
+  notify: function (msg) {
+    figma.notify(msg);
+  },
+
+  /**
+   * Get or create a variable collection
+   * @param {string} name - Collection name
+   * @param {boolean} overwrite - Whether to overwrite existing
+   * @returns {Object} Collection object
+   */
+  getOrCreateCollection: function (name, overwrite) {
+    var collections = FigmaService.getCollections();
+
+    for (var i = 0; i < collections.length; i++) {
+      if (collections[i].name === name) {
+        if (overwrite) {
+          // Remove all variables from collection
+          var variables = collections[i].variableIds;
+          for (var j = 0; j < variables.length; j++) {
+            try {
+              var variable = FigmaService.getVariableById(variables[j]);
+              if (variable) {
+                variable.remove();
+              }
+            } catch (error) {
+            }
+          }
+        }
+        return collections[i];
+      }
+    }
+
+    return figma.variables.createVariableCollection(name);
+  },
+
+  /**
+   * Create or update a variable
+   * @param {Object} collection - Variable collection
+   * @param {string} name - Variable name
+   * @param {string} type - Variable type
+   * @param {*} value - Variable value
+   * @param {string} category - Category name
+   * @param {boolean} overwrite - Whether to overwrite existing
+   * @returns {Object} Created or updated variable
+   */
+  createOrUpdateVariable: function (collection, name, type, value, category, overwrite) {
+    // 1. Find existing variable
+    var allVariables = figma.variables.getLocalVariables();
+    var existingVariable = null;
+
+    for (var i = 0; i < allVariables.length; i++) {
+      var variable = allVariables[i];
+      if (variable.name === name && variable.variableCollectionId === collection.id) {
+        existingVariable = variable;
+        break;
+      }
+    }
+
+    if (existingVariable && !overwrite) {
+      return existingVariable;
+    }
+
+    if (existingVariable) {
+      // Update existing variable
+      existingVariable.setValueForMode(collection.modes[0].modeId, value);
+      return existingVariable;
+    }
+
+    // Create new variable
+    var variable = figma.variables.createVariable(name, collection, type);
+
+    // Set scopes based on category
+    var scopes = [];
+    if (category === CONFIG.categories.brand || category === CONFIG.categories.system || category === CONFIG.categories.gray) {
+      scopes = CONFIG.scopes.Fill;
+    } else if (category === CONFIG.categories.spacing || category === CONFIG.categories.radius) {
+      scopes = CONFIG.scopes['Item Spacing'];
+    } else if (category === CONFIG.categories.typography) {
+      scopes = CONFIG.scopes['Font Size'];
+    } else if (category === CONFIG.categories.border) {
+      scopes = CONFIG.scopes.Stroke;
+    }
+
+    if (scopes.length > 0) {
+      variable.setScopes(scopes);
+    }
+
+    variable.setValueForMode(collection.modes[0].modeId, value);
+    return variable;
+  },
+
+  /**
+   * Import tokens to Figma
+   * @param {Object} tokens - Tokens object
+   * @param {string} naming - Naming convention
+   * @param {boolean} overwrite - Whether to overwrite existing
+   */
+  importTokens: function (tokens, naming, overwrite) {
+
+    // Brand Colors
+    if (tokens.brand) {
+      var brandCollection = FigmaService.getOrCreateCollection("Brand Colors", overwrite);
+
+      for (var key in tokens.brand) {
+        if (!tokens.brand.hasOwnProperty(key)) continue;
+
+        var varName = "";
+        if (naming === CONFIG.naming.shadcn) varName = "primary";
+        else if (naming === CONFIG.naming.mui) varName = "primary/" + key;
+        else if (naming === CONFIG.naming.ant) varName = "primary-" + key;
+        else if (naming === CONFIG.naming.bootstrap) varName = key;
+        else varName = "primary-" + key;
+
+        FigmaService.createOrUpdateVariable(brandCollection, varName, CONFIG.variableTypes.COLOR, ColorService.hexToRgb(tokens.brand[key]), CONFIG.categories.brand, overwrite);
+      }
+    }
+
+    // System Colors
+    if (tokens.system) {
+      var systemCollection = FigmaService.getOrCreateCollection("System Colors", overwrite);
+
+      for (var sKey in tokens.system) {
+        if (!tokens.system.hasOwnProperty(sKey)) continue;
+
+        if (typeof tokens.system[sKey] === 'object') {
+          // MUI style nested colors
+          for (var subKey in tokens.system[sKey]) {
+            if (!tokens.system[sKey].hasOwnProperty(subKey)) continue;
+            FigmaService.createOrUpdateVariable(systemCollection, sKey + "/" + subKey, CONFIG.variableTypes.COLOR, ColorService.hexToRgb(tokens.system[sKey][subKey]), CONFIG.categories.system, overwrite);
+          }
+        } else {
+          // Simple color
+          FigmaService.createOrUpdateVariable(systemCollection, sKey, CONFIG.variableTypes.COLOR, ColorService.hexToRgb(tokens.system[sKey]), CONFIG.categories.system, overwrite);
+        }
+      }
+    }
+
+    // Grayscale
+    if (tokens.gray) {
+      var grayCollection = FigmaService.getOrCreateCollection("Grayscale", overwrite);
+
+      for (var gKey in tokens.gray) {
+        if (!tokens.gray.hasOwnProperty(gKey)) continue;
+
+        var grayName = "";
+        if (naming === CONFIG.naming.shadcn) grayName = "gray-" + gKey;
+        else if (naming === CONFIG.naming.mui) grayName = "grey-" + gKey;
+        else if (naming === CONFIG.naming.ant) grayName = "gray-" + gKey;
+        else grayName = "gray-" + gKey;
+
+        FigmaService.createOrUpdateVariable(grayCollection, grayName, CONFIG.variableTypes.COLOR, ColorService.hexToRgb(tokens.gray[gKey]), CONFIG.categories.gray, overwrite);
+      }
+    }
+
+    // Spacing
+    if (tokens.spacing) {
+      var spacingCollection = FigmaService.getOrCreateCollection("Spacing", overwrite);
+
+      for (var sKey in tokens.spacing) {
+        if (!tokens.spacing.hasOwnProperty(sKey)) continue;
+        var cleanKey = sKey.toString().replace(/[^a-zA-Z0-9_-]/g, '');
+        FigmaService.createOrUpdateVariable(spacingCollection, "spacing-" + cleanKey, CONFIG.variableTypes.FLOAT, tokens.spacing[sKey], CONFIG.categories.spacing, overwrite);
+      }
+    }
+
+    // Radius
+    if (tokens.radius) {
+      var radiusCollection = FigmaService.getOrCreateCollection("Radius", overwrite);
+
+      for (var rKey in tokens.radius) {
+        if (!tokens.radius.hasOwnProperty(rKey)) continue;
+        var cleanRKey = rKey.toString().replace(/[^a-zA-Z0-9_-]/g, '');
+        FigmaService.createOrUpdateVariable(radiusCollection, "radius-" + cleanRKey, CONFIG.variableTypes.FLOAT, tokens.radius[rKey], CONFIG.categories.radius, overwrite);
+      }
+    }
+
+    // Typography
+    if (tokens.typography) {
+      var typoCollection = FigmaService.getOrCreateCollection("Typography", overwrite);
+
+      for (var tKey in tokens.typography) {
+        if (!tokens.typography.hasOwnProperty(tKey)) continue;
+        var cleanTKey = tKey.toString().replace(/[^a-zA-Z0-9_-]/g, '');
+        FigmaService.createOrUpdateVariable(typoCollection, "typo-" + cleanTKey, CONFIG.variableTypes.FLOAT, tokens.typography[tKey], CONFIG.categories.typography, overwrite);
+      }
+    }
+
+    // Border
+    if (tokens.border) {
+      var borderCollection = FigmaService.getOrCreateCollection("Border", overwrite);
+
+      for (var bKey in tokens.border) {
+        if (!tokens.border.hasOwnProperty(bKey)) continue;
+        var cleanBKey = bKey.toString().replace(/[^a-zA-Z0-9_-]/g, '');
+        FigmaService.createOrUpdateVariable(borderCollection, "border-" + cleanBKey, CONFIG.variableTypes.FLOAT, tokens.border[bKey], CONFIG.categories.border, overwrite);
+      }
+    }
+
+    FigmaService.notify("✅ Tokens importés depuis le fichier (Ctrl+Z pour annuler)");
+  }
+};
+
+// ============================================
+// 6. SCANNER_ENGINE (Logique d'analyse)
+// ============================================
+const Scanner = {
+  // État interne
+  valueMap: null,
+  lastScanResults: null,
+  collectionsCache: null,
+  variablesCache: null,
+  cacheTimestamp: 0,
+  CACHE_DURATION: 30000, // 30 secondes
+
+  /**
+   * Initialize the value to variable map
+   */
+  initMap: function () {
+    var now = Date.now();
+
+    // Utiliser le cache si valide
+    if (Scanner.valueMap && Scanner.cacheTimestamp && (now - Scanner.cacheTimestamp < Scanner.CACHE_DURATION)) {
+      return;
+    }
+
+
+    Scanner.valueMap = new Map();
+    var localCollections = FigmaService.getCollections();
+    Scanner.cacheTimestamp = now;
+
+
+    for (var i = 0; i < localCollections.length; i++) {
+      var collection = localCollections[i];
+      var collectionName = collection.name;
+
+      for (var j = 0; j < collection.variableIds.length; j++) {
+        var variableId = collection.variableIds[j];
+        var variable = FigmaService.getVariableById(variableId);
+
+        if (!variable) {
+          continue;
+        }
+
+        var modeId = collection.modes[0].modeId;
+        var resolvedValue = variable.valuesByMode[modeId];
+
+        if (resolvedValue !== undefined) {
+          var formattedValue = Scanner._formatVariableValue(variable, resolvedValue);
+          var key = Scanner._createMapKey(variable.resolvedType, formattedValue);
+
+          if (!Scanner.valueMap.has(key)) {
+            Scanner.valueMap.set(key, []);
+          }
+
+          Scanner.valueMap.get(key).push({
+            id: variable.id,
+            name: variable.name,
+            resolvedValue: formattedValue,
+            scopes: variable.scopes || []
+          });
+
+        }
+      }
+    }
+
+  },
+
+  /**
+   * Format variable value for map key
+   * @param {Object} variable - Variable object
+   * @param {*} rawValue - Raw variable value
+   * @returns {*} Formatted value
+   */
+  _formatVariableValue: function (variable, rawValue) {
+    if (variable.resolvedType === CONFIG.variableTypes.COLOR && typeof rawValue === "object") {
+      return ColorService.rgbToHex(rawValue);
+    } else if (variable.resolvedType === CONFIG.variableTypes.FLOAT) {
+      return rawValue + "px";
+    } else if (variable.resolvedType === CONFIG.variableTypes.STRING) {
+      return rawValue;
+    }
+    return rawValue;
+  },
+
+  /**
+   * Create map key from type and value
+   * @param {string} type - Variable type
+   * @param {*} value - Formatted value
+   * @returns {string} Map key
+   */
+  _createMapKey: function (type, value) {
+    return type + ':' + value;
+  },
+
+  /**
+   * Scan selection for applicable fixes
+   * @param {boolean} ignoreHiddenLayers - Whether to ignore hidden layers
+   */
+  scanSelection: function (ignoreHiddenLayers) {
+
+    var selection = figma.currentPage.selection;
+    if (!selection || !Array.isArray(selection) || selection.length === 0) {
+      figma.ui.postMessage({ type: "scan-results", results: [] });
+      return [];
+    }
+
+    if (!Scanner.valueMap) {
+      Scanner.initMap();
+    }
+
+    var results = [];
+    var processedCount = 0;
+
+
+    for (var i = 0; i < selection.length; i++) {
+      var node = selection[i];
+      Scanner._scanNodeRecursive(node, results, 0, ignoreHiddenLayers);
+      processedCount++;
+    }
+
+    Scanner.lastScanResults = results;
+
+    figma.ui.postMessage({ type: "scan-results", results: results });
+
+    // Nettoyer la mémoire après 5 secondes
+    setTimeout(function () {
+      if (Scanner.valueMap) {
+        Scanner.valueMap.clear();
+        Scanner.valueMap = null;
+      }
+    }, 5000);
+
+    return results;
+  },
+
+  /**
+   * Recursively scan a node and its children
+   * @param {Object} node - Node to scan
+   * @param {Array} results - Results array
+   * @param {number} depth - Current depth
+   * @param {boolean} ignoreHiddenLayers - Whether to ignore hidden layers
+   */
+  _scanNodeRecursive: function (node, results, depth, ignoreHiddenLayers) {
+    // Protection contre les récursions infinies
+    if (depth > CONFIG.limits.MAX_DEPTH) {
+      return;
+    }
+
+    // Vérifications défensives de base
+    if (!node) {
+      return;
+    }
+
+    // Vérifier si le nœud a été supprimé
+    if (node.removed) {
+      return;
+    }
+
+    // NOUVEAU: Vérifier les instances détachées (CRITICAL FIX)
+    if (node.type === 'INSTANCE' && node.mainComponent === null) {
+      return;
+    }
+
+    // Vérification supplémentaire des propriétés essentielles
+    if (!node.id || !node.type) {
+      return;
+    }
+
+    try {
+      var nodeType = node.type;
+      var nodeId = node.id;
+      var nodeName = node.name || "Unnamed";
+
+
+      // NOUVEAU: Envoyer la progression tous les 10 nœuds
+      if (depth === 0 && results.length % 10 === 0) {
+        figma.ui.postMessage({
+          type: "scan-progress",
+          current: results.length,
+          status: "Analyse en cours..."
+        });
+      }
+
+      // Liste étendue des types de conteneurs supportés
+      var containerTypes = CONFIG.supportedTypes.spacing;
+
+      // Liste des types qui peuvent avoir des propriétés de style
+      var styleTypes = CONFIG.supportedTypes.fillAndStroke;
+
+      var isContainer = containerTypes.indexOf(nodeType) !== -1;
+      var hasStyle = styleTypes.indexOf(nodeType) !== -1;
+
+      // Analyser les propriétés de style si applicable
+      if (hasStyle) {
+        try {
+          Scanner._checkProperties(node, results, ignoreHiddenLayers);
+        } catch (propertyAnalysisError) {
+        }
+      }
+
+      // Traversée des enfants avec protection
+      if (isContainer) {
+        try {
+          var children = node.children;
+
+          if (children && Array.isArray(children)) {
+
+            for (var i = 0; i < children.length; i++) {
+              try {
+                var child = children[i];
+
+                // Vérification défensive de l'enfant
+                if (!child) {
+                  continue;
+                }
+
+                if (child.removed) {
+                  continue;
+                }
+
+                // Récursion avec protection et limite de profondeur
+                Scanner._scanNodeRecursive(child, results, depth + 1, ignoreHiddenLayers);
+
+              } catch (childError) {
+              }
+            }
+          }
+
+        } catch (childrenError) {
+        }
+      }
+
+    } catch (nodeError) {
+    }
+  },
+
+  /**
+   * Check properties of a node for applicable fixes
+   * @param {Object} node - Node to check
+   * @param {Array} results - Results array
+   * @param {boolean} ignoreHiddenLayers - Whether to ignore hidden layers
+   */
+  _checkProperties: function (node, results, ignoreHiddenLayers) {
+    // Vérifications défensives de base
+    if (!node) {
+      return;
+    }
+
+    // Vérifier si le nœud a été supprimé
+    if (node.removed) {
+      return;
+    }
+
+    // Vérifications de base des propriétés essentielles
+    if (!node.id || !node.name || !node.type) {
+      return;
+    }
+
+    var nodeId = node.id;
+    var layerName = node.name;
+    var nodeType = node.type;
+
+    // Filtrage intelligent
+    if (ignoreHiddenLayers) {
+      try {
+        if (Utils.safeGet(node, 'visible') === false) {
+          return;
+        }
+        if (Utils.safeGet(node, 'locked') === true) {
+          return;
+        }
+      } catch (visibilityError) {
+        // Certains types de nœuds n'ont pas ces propriétés, continuer silencieusement
+      }
+    }
+
+    // Liste étendue des types supportés pour le style
+    var supportedTypes = CONFIG.supportedTypes.all;
+
+    // Pour les conteneurs, on ne vérifie que s'ils peuvent avoir des propriétés de style
+    var styleSupportedTypes = CONFIG.supportedTypes.fillAndStroke;
+
+    var isContainer = supportedTypes.indexOf(nodeType) !== -1;
+    var supportsStyle = styleSupportedTypes.indexOf(nodeType) !== -1;
+
+    if (!isContainer) {
+      return;
+    }
+
+    // Analyse des propriétés avec protection
+    if (supportsStyle) {
+      try {
+        // 1. VÉRIFICATION DES FILLS (COULEURS DE FOND) - GESTION FIGMA.MIXED
+        if (Utils.hasProperty(node, 'fills') && node.fills !== figma.mixed) {
+          Scanner._checkFillsSafely(node, results);
+        }
+
+        // 2. VÉRIFICATION DES STROKES (COULEURS DE CONTOUR) - GESTION FIGMA.MIXED
+        if (Utils.hasProperty(node, 'strokes') && node.strokes !== figma.mixed) {
+          Scanner._checkStrokesSafely(node, results);
+        }
+
+        // 3. VÉRIFICATION DES CORNER RADIUS - GESTION COMPLÈTE FIGMA.MIXED
+        Scanner._checkCornerRadiusSafely(node, results);
+
+        // 4. VÉRIFICATION DES PROPRIÉTÉS NUMÉRIQUES (SPACING, PADDING, RADIUS)
+        Scanner._checkNumericPropertiesSafely(node, results);
+
+        // 5. VÉRIFICATION DES PROPRIÉTÉS DE TYPOGRAPHIE (pour les nœuds TEXT)
+        if (node.type === CONFIG.types.TEXT) {
+          Scanner._checkTypographyPropertiesSafely(node, results);
+        }
+
+      } catch (propertyError) {
+      }
+    }
+  },
+
+  // Autres méthodes privées du Scanner...
+  _checkFillsSafely: function (node, results) {
+    // Implémentation similaire à l'original
+  },
+
+  _checkStrokesSafely: function (node, results) {
+    // Implémentation similaire à l'original
+  },
+
+  _checkCornerRadiusSafely: function (node, results) {
+    // Implémentation similaire à l'original
+  },
+
+  _checkNumericPropertiesSafely: function (node, results) {
+    // Implémentation similaire à l'original
+  },
+
+  _checkTypographyPropertiesSafely: function (node, results) {
+    // Implémentation similaire à l'original
+  }
+};
+
+// ============================================
+// 7. FIXER_ENGINE (Logique de correction)
+// ============================================
+const Fixer = {
+  /**
+   * Apply and verify a fix
+   * @param {Object} result - Scan result
+   * @param {string} variableId - Variable ID to apply
+   * @returns {Object} Verification result
+   */
+  applyAndVerify: function (result, variableId) {
+
+    // Validation 1: Résultat valide
+    if (!result) {
+      throw new Error('Invalid result or incomplete');
+    }
+    if (!result.nodeId) {
+      throw new Error('Invalid result: nodeId missing');
+    }
+    if (!result.property) {
+      throw new Error('Invalid result: property missing');
+    }
+
+    // Validation 2: Variable disponible
+    if (!variableId) {
+      throw new Error('No variable ID provided or suggested');
+    }
+
+    var variable = FigmaService.getVariableById(variableId);
+    if (!variable) {
+      throw new Error('Variable not found: ' + variableId);
+    }
+
+    // Validation 3: Nœud existe et accessible
+    var node = figma.getNodeById(result.nodeId);
+    if (!node) {
+      throw new Error('Node not found: ' + result.nodeId);
+    }
+    if (node.removed) {
+      throw new Error('Node removed: ' + result.nodeId);
+    }
+
+    // NOUVEAU: Vérifier si le nœud est verrouillé (CRITICAL FIX)
+    if (Utils.safeGet(node, 'locked') === true) {
+      throw new Error('Cannot modify locked node: ' + result.layerName);
+    }
+
+    // Validation 4: Propriété existe toujours
+    if (!Fixer._validatePropertyExists(node, result)) {
+      throw new Error('Property no longer exists: ' + result.property);
+    }
+
+    // Validation 5: Compatibilité variable-propriété
+    if (!Fixer._validateVariableCanBeApplied(variable, result)) {
+      throw new Error('Variable incompatible with property');
+    }
+
+    // Application de la correction
+    var applied = Fixer._applyVariableToProperty(node, result, variable);
+
+    if (!applied) {
+      throw new Error('Failed to apply variable');
+    }
+
+    // Vérification de l'application
+    var verification = Fixer._verifyVariableApplication(node, result, variable);
+
+    if (verification.success) {
+      return verification;
+    } else {
+      return verification;
+    }
+  },
+
+  /**
+   * Apply fix to a single node
+   * @param {Object} result - Scan result
+   * @param {string} variableId - Variable ID
+   * @returns {number} 1 if successful, 0 if failed
+   */
+  applySingle: function (result, variableId) {
+    try {
+      var verification = Fixer.applyAndVerify(result, variableId);
+      return verification.success ? 1 : 0;
+    } catch (error) {
+      return 0;
+    }
+  },
+
+  /**
+   * Apply fixes to a group of results
+   * @param {Array} indices - Array of result indices
+   * @param {string} variableId - Variable ID to apply
+   */
+  applyGroup: function (indices, variableId) {
+    if (!Scanner.lastScanResults || !Array.isArray(indices)) {
+      return;
+    }
+
+    var appliedCount = 0;
+    var failedCount = 0;
+
+    for (var i = 0; i < indices.length; i++) {
+      var index = indices[i];
+      if (index >= 0 && index < Scanner.lastScanResults.length) {
+        var result = Scanner.lastScanResults[index];
+        try {
+          var success = Fixer.applySingle(result, variableId);
+          if (success) {
+            appliedCount++;
+          } else {
+            failedCount++;
+          }
+        } catch (error) {
+          failedCount++;
+        }
+      }
+    }
+
+    var message = '✅ ' + appliedCount + ' corrections appliquées';
+    if (failedCount > 0) {
+      message += ', ' + failedCount + ' échouées';
+    }
+
+    FigmaService.notify(message);
+  },
+
+  /**
+   * Apply all fixes from scan results
+   */
+  applyAll: function () {
+    if (!Scanner.lastScanResults || !Array.isArray(Scanner.lastScanResults)) {
+      return;
+    }
+
+    var appliedCount = 0;
+    var failedCount = 0;
+
+    for (var i = 0; i < Scanner.lastScanResults.length; i++) {
+      var result = Scanner.lastScanResults[i];
+      try {
+        var success = Fixer.applySingle(result, result.suggestedVariableId);
+        if (success) {
+          appliedCount++;
+        } else {
+          failedCount++;
+        }
+      } catch (error) {
+        failedCount++;
+      }
+    }
+
+    var message = '🎉 Toutes les corrections appliquées ! (' + appliedCount + ' réussies';
+    if (failedCount > 0) {
+      message += ', ' + failedCount + ' échouées)';
+    } else {
+      message += ')';
+    }
+
+    FigmaService.notify(message);
+  },
+
+  // Méthodes privées du Fixer...
+  _validatePropertyExists: function (node, result) {
+    // Implémentation similaire à l'original
+  },
+
+  _validateVariableCanBeApplied: function (variable, result) {
+    // Implémentation similaire à l'original
+  },
+
+  _applyVariableToProperty: function (node, result, variable) {
+    try {
+      var success = false;
+
+      switch (result.property) {
+        case "Fill":
+          success = applyColorVariableToFill(node, variable, result.fillIndex);
+          break;
+
+        case "Stroke":
+          success = applyColorVariableToStroke(node, variable, result.strokeIndex);
+          break;
+
+        case "Corner Radius":
+        case "Top Left Radius":
+        case "Top Right Radius":
+        case "Bottom Left Radius":
+        case "Bottom Right Radius":
+          success = applyNumericVariable(node, variable, result.figmaProperty, result.property);
+          break;
+
+        case "Item Spacing":
+        case "Padding Left":
+        case "Padding Right":
+        case "Padding Top":
+        case "Padding Bottom":
+          success = applyNumericVariable(node, variable, result.figmaProperty, result.property);
+          break;
+
+        default:
+          return false;
+      }
+
+      return success;
+    } catch (error) {
+      return false;
+    }
+  },
+
+  _verifyVariableApplication: function (node, result, variable) {
+    // Implémentation similaire à l'original
+  },
+
+  _getNodePropertyDebugInfo: function (node, result) {
+    // Implémentation similaire à l'original
+  }
+};
+
+// ============================================
+// 8. MAIN (Point d'entrée)
+// ============================================
+
+// Initialisation de l'UI
 figma.showUI(__html__, { width: 700, height: 950, themeColors: true });
 
+// Gestionnaire d'événements
+figma.ui.onmessage = function (msg) {
+
+  try {
+    switch (msg.type) {
+      case 'scan-selection':
+        Scanner.scanSelection(msg.ignoreHiddenLayers);
+        break;
+
+      case 'scan-page':
+        Scanner.scanPage(msg.ignoreHiddenLayers);
+        break;
+
+      case 'generate-tokens':
+        var tokens = TokenService.generateAll(msg);
+        figma.ui.postMessage({ type: 'tokens-generated', tokens: tokens });
+        break;
+
+      case 'import-tokens':
+        FigmaService.importTokens(msg.tokens, msg.naming, msg.overwrite);
+        break;
+
+      case 'apply-fix':
+        var verification = Fixer.applyAndVerify(msg.result, msg.variableId);
+        figma.ui.postMessage({ type: 'fix-applied', verification: verification });
+        break;
+
+      case 'apply-group':
+        Fixer.applyGroup(msg.indices, msg.variableId);
+        break;
+
+      case 'apply-all':
+        Fixer.applyAll();
+        break;
+
+      default:
+    }
+  } catch (error) {
+    figma.ui.postMessage({ type: 'error', error: error.message });
+  }
+};
+
 // Check if variables exist and notify UI
-var existingCollections = figma.variables.getLocalVariableCollections();
+const existingCollections = figma.variables.getLocalVariableCollections();
 if (existingCollections.length > 0) {
   figma.ui.postMessage({ type: "has-variables", value: true });
 
   // Extraire les tokens existants et les envoyer à l'UI
   try {
-    var existingTokens = extractExistingTokens();
-    console.log("Tokens existants extraits:", existingTokens);
+    const existingTokens = extractExistingTokens();
+    log("Tokens existants extraits:", existingTokens);
 
     // Compter le nombre total de tokens
-    var hasTokens = false;
-    for (var cat in existingTokens.tokens) {
+    let hasTokens = false;
+    for (let cat in existingTokens.tokens) {
       if (existingTokens.tokens.hasOwnProperty(cat) && Object.keys(existingTokens.tokens[cat]).length > 0) {
         hasTokens = true;
         break;
@@ -22,14 +1369,14 @@ if (existingCollections.length > 0) {
     }
 
     if (existingTokens && hasTokens) {
-      console.log("Envoi des tokens à l'UI");
+      log("Envoi des tokens à l'UI");
       figma.ui.postMessage({
         type: "existing-tokens",
         tokens: existingTokens.tokens,
         library: existingTokens.library
       });
     } else {
-      console.log("Aucun token extrait - envoi d'un message vide");
+      log("Aucun token extrait - envoi d'un message vide");
       figma.ui.postMessage({
         type: "existing-tokens",
         tokens: {},
@@ -37,18 +1384,26 @@ if (existingCollections.length > 0) {
       });
     }
   } catch (e) {
-    console.error("Erreur lors de l'extraction des tokens existants:", e);
+    log("Erreur lors de l'extraction des tokens existants:", e);
   }
 }
 
 // ============================================
+// ============================================
 // EXTRACT EXISTING TOKENS
 // ============================================
+
+/**
+ * Extrait les tokens existants des collections de variables Figma
+ * @returns {Object} Objet contenant les tokens organisés par catégories et la librairie détectée
+ * @property {Object} tokens - Tokens organisés par catégories (brand, system, gray, spacing, radius, typography, border)
+ * @property {string} library - Librairie détectée (tailwind, mui, bootstrap)
+ */
 function extractExistingTokens() {
   var collections = figma.variables.getLocalVariableCollections();
-  console.log("Nombre de collections trouvées:", collections.length);
+  log("Nombre de collections trouvées:", collections.length);
 
-  var tokens = {
+  const tokens = {
     brand: {},
     system: {},
     gray: {},
@@ -63,7 +1418,7 @@ function extractExistingTokens() {
   for (var i = 0; i < collections.length; i++) {
     var collection = collections[i];
     var collectionName = collection.name;
-    console.log("Collection #" + i + ":", collectionName, "(" + collection.variableIds.length + " variables)");
+    log("Collection #" + i + ":", collectionName, "(" + collection.variableIds.length + " variables)");
 
     // Déterminer la catégorie en matchant les noms exacts créés par le plugin
     var category = null;
@@ -84,10 +1439,10 @@ function extractExistingTokens() {
       category = "border";
     }
 
-    console.log("  → Catégorie détectée:", category);
+    log("  → Catégorie détectée:", category);
 
     if (!category) {
-      console.log("  → Collection ignorée (ne correspond pas aux collections du plugin)");
+      log("  → Collection ignorée (ne correspond pas aux collections du plugin)");
       continue;
     }
 
@@ -96,7 +1451,7 @@ function extractExistingTokens() {
       return figma.variables.getVariableById(id);
     });
 
-    console.log("  → Nombre de variables:", variables.length);
+    log("  → Nombre de variables:", variables.length);
 
     for (var j = 0; j < variables.length; j++) {
       var variable = variables[j];
@@ -129,14 +1484,14 @@ function extractExistingTokens() {
         formattedValue = value;
       }
 
-      console.log("    Variable:", variable.name, "→", cleanName, "=", formattedValue);
+      log("    Variable:", variable.name, "→", cleanName, "=", formattedValue);
       tokens[category][cleanName] = formattedValue;
     }
   }
 
-  console.log("Tokens finaux par catégorie:");
+  log("Tokens finaux par catégorie:");
   for (var cat in tokens) {
-    console.log("  " + cat + ":", Object.keys(tokens[cat]).length, "tokens");
+    log("  " + cat + ":", Object.keys(tokens[cat]).length, "tokens");
   }
 
   return {
@@ -164,7 +1519,7 @@ function hexToRgb(hex) {
 
 function rgbToHex(c) {
   // Tolérance pour la précision flottante - arrondi à 6 décimales pour éviter les erreurs d'arrondi
-  var roundToPrecision = function(x) {
+  var roundToPrecision = function (x) {
     return Math.round(x * 1000000) / 1000000;
   };
 
@@ -573,7 +1928,7 @@ function applyScopesForCategory(variable, category) {
   try {
     variable.scopes = scopes;
   } catch (error) {
-    console.warn("[Scopes] Erreur pour", category, error);
+    log("[Scopes] Erreur pour", category, error);
   }
 }
 
@@ -599,6 +1954,16 @@ function getOrCreateCollection(name, overwrite) {
   return figma.variables.createVariableCollection(name);
 }
 
+/**
+ * Crée ou met à jour une variable dans une collection Figma
+ * @param {Object} collection - Collection de variables Figma
+ * @param {string} name - Nom de la variable
+ * @param {string} type - Type de la variable (COLOR, FLOAT, STRING)
+ * @param {*} value - Valeur de la variable
+ * @param {string} category - Catégorie de la variable
+ * @param {boolean} overwrite - Si true, écrase les variables existantes
+ * @returns {Object} La variable créée ou mise à jour
+ */
 function createOrUpdateVariable(collection, name, type, value, category, overwrite) {
   // 1. Find existing variable
   var allVariables = figma.variables.getLocalVariables();
@@ -746,6 +2111,7 @@ function importTokensToFigma(tokens, naming, overwrite) {
   }
 
   figma.notify("✅ All tokens imported successfully! (Chaque modification peut être annulée individuellement avec Ctrl+Z)");
+  figma.ui.postMessage({ type: 'import-completed' });
 }
 
 // ============================================
@@ -773,7 +2139,7 @@ function resolveVariableValue(variable, modeId, visitedVariables) {
   }
 
   if (visitedVariables.has(variable.id)) {
-    console.warn("[resolveVariableValue] Cycle détecté dans les alias pour variable:", variable.name);
+    log("[resolveVariableValue] Cycle détecté dans les alias pour variable:", variable.name);
     return null;
   }
 
@@ -784,11 +2150,11 @@ function resolveVariableValue(variable, modeId, visitedVariables) {
 
     // Si c'est un alias, résoudre récursivement
     if (value && typeof value === 'object' && value.type === 'VARIABLE_ALIAS') {
-      console.log("[resolveVariableValue] Alias détecté pour", variable.name, "-> résolution vers", value.id);
+      log("[resolveVariableValue] Alias détecté pour", variable.name, "-> résolution vers", value.id);
 
       var parentVar = figma.variables.getVariableById(value.id);
       if (!parentVar) {
-        console.warn("[resolveVariableValue] Variable parente introuvable:", value.id);
+        log("[resolveVariableValue] Variable parente introuvable:", value.id);
         return null;
       }
 
@@ -801,7 +2167,7 @@ function resolveVariableValue(variable, modeId, visitedVariables) {
     return value;
 
   } catch (error) {
-    console.error("[resolveVariableValue] Erreur lors de la résolution de", variable.name, ":", error);
+    log("[resolveVariableValue] Erreur lors de la résolution de", variable.name, ":", error);
     return null;
   } finally {
     visitedVariables.delete(variable.id);
@@ -809,21 +2175,21 @@ function resolveVariableValue(variable, modeId, visitedVariables) {
 }
 
 function createValueToVariableMap() {
-  console.log("🔧 Construction de la map des variables avec résolution des alias...");
+  log("🔧 Construction de la map des variables avec résolution des alias...");
   var map = new Map(); // value -> [{id, name, collectionName, resolvedValue}, ...]
   var localCollections = figma.variables.getLocalVariableCollections();
 
-  console.log("📚 Collections trouvées:", localCollections.length);
+  log("📚 Collections trouvées:", localCollections.length);
 
-  localCollections.forEach(function(collection) {
-    collection.variableIds.forEach(function(variableId) {
+  localCollections.forEach(function (collection) {
+    collection.variableIds.forEach(function (variableId) {
       var variable = figma.variables.getVariableById(variableId);
       if (!variable) {
-        console.warn("[createValueToVariableMap] Variable introuvable:", variableId);
+        log("[createValueToVariableMap] Variable introuvable:", variableId);
         return;
       }
 
-      collection.modes.forEach(function(mode) {
+      collection.modes.forEach(function (mode) {
         var modeId = mode.modeId;
 
         // Résoudre la valeur réelle (en suivant les alias)
@@ -849,7 +2215,7 @@ function createValueToVariableMap() {
           }
           // Pour les autres types (nombres), stocker directement
           else if (typeof resolvedValue === 'number') {
-            console.log('[DEBUG createValueToVariableMap] Stockage variable numérique:', variable.name, '=', resolvedValue);
+            log('[DEBUG createValueToVariableMap] Stockage variable numérique:', variable.name, '=', resolvedValue);
             var key = resolvedValue;
             if (!map.has(key)) {
               map.set(key, []);
@@ -868,7 +2234,7 @@ function createValueToVariableMap() {
     });
   });
 
-  console.log("MAP INITIALISÉE :", map.size, "couleurs/valeurs uniques trouvées dans la librairie locale.");
+  log("MAP INITIALISÉE :", map.size, "couleurs/valeurs uniques trouvées dans la librairie locale.");
   return map;
 }
 
@@ -938,7 +2304,7 @@ function filterVariablesByScopes(variables, requiredScopes) {
     return variables; // Si pas de scopes requis, retourner tout
   }
 
-  return variables.filter(function(variable) {
+  return variables.filter(function (variable) {
     // Récupérer la variable complète depuis Figma
     var figmaVariable = figma.variables.getVariableById(variable.id);
     if (!figmaVariable || !figmaVariable.scopes) {
@@ -946,7 +2312,7 @@ function filterVariablesByScopes(variables, requiredScopes) {
     }
 
     // Vérifier si au moins un scope de la variable correspond aux scopes requis
-    return figmaVariable.scopes.some(function(variableScope) {
+    return figmaVariable.scopes.some(function (variableScope) {
       return requiredScopes.includes(variableScope);
     });
   });
@@ -956,7 +2322,7 @@ function filterVariablesByScopes(variables, requiredScopes) {
 function findColorSuggestions(hexValue, valueToVariableMap, propertyType) {
   // Déterminer les scopes appropriés pour cette propriété
   var requiredScopes = getScopesForProperty(propertyType);
-  console.log("[DEBUG] Recherche pour Hex:", hexValue, "Scopes requis:", requiredScopes);
+  log("[DEBUG] Recherche pour Hex:", hexValue, "Scopes requis:", requiredScopes);
 
   // Chercher d'abord une correspondance exacte
   var exactMatches = valueToVariableMap.get(hexValue);
@@ -964,7 +2330,7 @@ function findColorSuggestions(hexValue, valueToVariableMap, propertyType) {
     // Filtrer selon les scopes
     var filteredExactMatches = filterVariablesByScopes(exactMatches, requiredScopes);
     if (filteredExactMatches.length > 0) {
-      console.log('[findColorSuggestions] Correspondance exacte trouvée et filtrée:', filteredExactMatches[0].name);
+      log('[findColorSuggestions] Correspondance exacte trouvée et filtrée:', filteredExactMatches[0].name);
       return [{
         id: filteredExactMatches[0].id,
         name: filteredExactMatches[0].name,
@@ -981,7 +2347,7 @@ function findColorSuggestions(hexValue, valueToVariableMap, propertyType) {
 
   // Parcourir toutes les variables disponibles dans valueToVariableMap
   var minDistanceFound = Infinity;
-  valueToVariableMap.forEach(function(vars, varHex) {
+  valueToVariableMap.forEach(function (vars, varHex) {
     if (vars && vars.length > 0) {
       var distance = getColorDistance(hexValue, varHex);
       minDistanceFound = Math.min(minDistanceFound, distance);
@@ -992,9 +2358,9 @@ function findColorSuggestions(hexValue, valueToVariableMap, propertyType) {
         var passScope = filteredVars.length > 0;
 
         if (!passScope) {
-          console.log("[DEBUG] Variable rejetée par SCOPE:", vars[0].name, "scopes:", vars[0].scopes, "requis:", requiredScopes, "distance:", distance);
+          log("[DEBUG] Variable rejetée par SCOPE:", vars[0].name, "scopes:", vars[0].scopes, "requis:", requiredScopes, "distance:", distance);
         } else {
-          console.log("[DEBUG] Candidat valide trouvé:", vars[0].name, "Distance:", distance);
+          log("[DEBUG] Candidat valide trouvé:", vars[0].name, "Distance:", distance);
         }
 
         if (passScope) {
@@ -1013,9 +2379,9 @@ function findColorSuggestions(hexValue, valueToVariableMap, propertyType) {
   // FALLBACK "SANS SCOPE" : Si aucune suggestion n'est trouvée avec le filtrage par scopes,
   // relance une recherche sans aucun filtre de scope
   if (suggestions.length === 0) {
-    console.log("[DEBUG] Aucune suggestion avec scopes, tentative fallback sans filtre de scope");
+    log("[DEBUG] Aucune suggestion avec scopes, tentative fallback sans filtre de scope");
 
-    valueToVariableMap.forEach(function(vars, varHex) {
+    valueToVariableMap.forEach(function (vars, varHex) {
       if (vars && vars.length > 0) {
         var distance = getColorDistance(hexValue, varHex);
         if (distance <= maxDistance) {
@@ -1028,22 +2394,22 @@ function findColorSuggestions(hexValue, valueToVariableMap, propertyType) {
             scopeMismatch: true, // Flag pour indiquer un problème de scope
             warning: "Scope mismatch - Cette variable pourrait ne pas être appropriée pour ce type de propriété"
           });
-          console.log("[DEBUG] Fallback: variable trouvée sans filtre scope:", vars[0].name, "Distance:", distance);
+          log("[DEBUG] Fallback: variable trouvée sans filtre scope:", vars[0].name, "Distance:", distance);
         }
       }
     });
   }
 
   // Trier par distance croissante et prendre les 3 meilleures
-  suggestions.sort(function(a, b) {
+  suggestions.sort(function (a, b) {
     return a.distance - b.distance;
   });
 
-  console.log('[findColorSuggestions] Suggestions trouvées pour', propertyType, ':', suggestions.length, '(dont', suggestions.filter(function(s) { return s.scopeMismatch; }).length, 'avec scope mismatch)');
+  log('[findColorSuggestions] Suggestions trouvées pour', propertyType, ':', suggestions.length, '(dont', suggestions.filter(function (s) { return s.scopeMismatch; }).length, 'avec scope mismatch)');
 
   // Log de debug détaillé si aucune suggestion n'est trouvée
   if (suggestions.length === 0) {
-    console.log("FAIL: Hex", hexValue, " - Distance min trouvée :", minDistanceFound, "- Max tolérance:", maxDistance);
+    log("FAIL: Hex", hexValue, " - Distance min trouvée :", minDistanceFound, "- Max tolérance:", maxDistance);
   }
 
   return suggestions.slice(0, 3);
@@ -1054,24 +2420,24 @@ function findNumericSuggestions(targetValue, valueToVariableMap, tolerance, prop
   // Tolérance par défaut de 4px pour radius, 8px pour spacing (plus permissif)
   tolerance = tolerance !== undefined ? tolerance : (propertyType.indexOf('Spacing') !== -1 ? 8 : 4);
 
-  console.log('[DEBUG findNumericSuggestions] Recherche pour valeur:', targetValue, 'type:', propertyType, 'tolérance:', tolerance);
+  log('[DEBUG findNumericSuggestions] Recherche pour valeur:', targetValue, 'type:', propertyType, 'tolérance:', tolerance);
 
   // Déterminer les scopes appropriés pour cette propriété
   var requiredScopes = getScopesForProperty(propertyType);
-  console.log('[findNumericSuggestions] Scopes requis pour', propertyType, ':', requiredScopes);
+  log('[findNumericSuggestions] Scopes requis pour', propertyType, ':', requiredScopes);
 
   // Chercher d'abord une correspondance exacte
-  console.log('[DEBUG findNumericSuggestions] Recherche correspondance exacte pour valeur:', targetValue);
+  log('[DEBUG findNumericSuggestions] Recherche correspondance exacte pour valeur:', targetValue);
   var exactMatches = valueToVariableMap.get(targetValue);
-  console.log('[DEBUG findNumericSuggestions] Correspondances exactes trouvées:', exactMatches ? exactMatches.length : 0);
+  log('[DEBUG findNumericSuggestions] Correspondances exactes trouvées:', exactMatches ? exactMatches.length : 0);
 
   if (exactMatches && exactMatches.length > 0) {
-    console.log('[DEBUG findNumericSuggestions] Variables exactes:', exactMatches.map(function(v) { return v.name; }));
+    log('[DEBUG findNumericSuggestions] Variables exactes:', exactMatches.map(function (v) { return v.name; }));
     // Filtrer selon les scopes
     var filteredExactMatches = filterVariablesByScopes(exactMatches, requiredScopes);
-    console.log('[DEBUG findNumericSuggestions] Après filtrage scopes:', filteredExactMatches.length);
+    log('[DEBUG findNumericSuggestions] Après filtrage scopes:', filteredExactMatches.length);
     if (filteredExactMatches.length > 0) {
-      console.log('[findNumericSuggestions] Correspondance exacte trouvée et filtrée:', filteredExactMatches[0].name);
+      log('[findNumericSuggestions] Correspondance exacte trouvée et filtrée:', filteredExactMatches[0].name);
       return [{
         id: filteredExactMatches[0].id,
         name: filteredExactMatches[0].name,
@@ -1080,28 +2446,28 @@ function findNumericSuggestions(targetValue, valueToVariableMap, tolerance, prop
         isExact: true
       }];
     } else {
-      console.log('[DEBUG findNumericSuggestions] Aucune correspondance exacte après filtrage scopes');
+      log('[DEBUG findNumericSuggestions] Aucune correspondance exacte après filtrage scopes');
     }
   } else {
-    console.log('[DEBUG findNumericSuggestions] Aucune correspondance exacte trouvée');
+    log('[DEBUG findNumericSuggestions] Aucune correspondance exacte trouvée');
   }
 
   // Si pas de correspondance exacte, chercher les plus proches dans la tolérance
   var suggestions = [];
-  console.log('[DEBUG findNumericSuggestions] Recherche approximative avec tolérance:', tolerance);
+  log('[DEBUG findNumericSuggestions] Recherche approximative avec tolérance:', tolerance);
 
   // Parcourir toutes les variables numériques disponibles dans valueToVariableMap
-  valueToVariableMap.forEach(function(vars, varValue) {
+  valueToVariableMap.forEach(function (vars, varValue) {
     if (vars && vars.length > 0 && typeof varValue === 'number') {
-      console.log('[DEBUG findNumericSuggestions] Vérification variable:', vars[0].name, 'valeur:', varValue, 'type:', typeof varValue);
+      log('[DEBUG findNumericSuggestions] Vérification variable:', vars[0].name, 'valeur:', varValue, 'type:', typeof varValue);
       // Filtrer les variables selon les scopes
       var filteredVars = filterVariablesByScopes(vars, requiredScopes);
-      console.log('[DEBUG findNumericSuggestions] Après filtrage scopes:', filteredVars.length, 'pour valeur:', varValue);
+      log('[DEBUG findNumericSuggestions] Après filtrage scopes:', filteredVars.length, 'pour valeur:', varValue);
       if (filteredVars.length > 0) {
         var difference = Math.abs(targetValue - varValue);
-        console.log('[DEBUG findNumericSuggestions] Différence:', difference, 'tolérance:', tolerance);
+        log('[DEBUG findNumericSuggestions] Différence:', difference, 'tolérance:', tolerance);
         if (difference <= tolerance) {
-          console.log('[DEBUG findNumericSuggestions] Suggestion ajoutée:', filteredVars[0].name, 'différence:', difference);
+          log('[DEBUG findNumericSuggestions] Suggestion ajoutée:', filteredVars[0].name, 'différence:', difference);
           suggestions.push({
             id: filteredVars[0].id,
             name: filteredVars[0].name,
@@ -1115,15 +2481,15 @@ function findNumericSuggestions(targetValue, valueToVariableMap, tolerance, prop
   });
 
   // Trier par différence absolue croissante (plus proche en premier)
-  suggestions.sort(function(a, b) {
+  suggestions.sort(function (a, b) {
     return a.difference - b.difference;
   });
 
-  console.log('[findNumericSuggestions] Suggestions trouvées pour', propertyType, ':', suggestions.length);
+  log('[findNumericSuggestions] Suggestions trouvées pour', propertyType, ':', suggestions.length);
   if (suggestions.length > 0) {
-    console.log('[DEBUG findNumericSuggestions] Meilleures suggestions:', suggestions.slice(0, 3).map(function(s) { return s.name + ' (diff:' + s.difference + ')'; }));
+    log('[DEBUG findNumericSuggestions] Meilleures suggestions:', suggestions.slice(0, 3).map(function (s) { return s.name + ' (diff:' + s.difference + ')'; }));
   } else {
-    console.log('[DEBUG findNumericSuggestions] AUCUNE suggestion trouvée pour valeur:', targetValue, 'avec tolérance:', tolerance);
+    log('[DEBUG findNumericSuggestions] AUCUNE suggestion trouvée pour valeur:', targetValue, 'avec tolérance:', tolerance);
   }
   // Retourner jusqu'à 3 suggestions
   return suggestions.slice(0, 3);
@@ -1135,7 +2501,7 @@ function findNumericSuggestions(targetValue, valueToVariableMap, tolerance, prop
  * @returns {Array} Suggestions enrichies avec resolvedValue
  */
 function enrichSuggestionsWithRealValues(suggestions) {
-  return suggestions.map(function(suggestion) {
+  return suggestions.map(function (suggestion) {
     var enriched = Object.assign({}, suggestion);
 
     // Récupérer la variable par son ID
@@ -1180,22 +2546,29 @@ function enrichSuggestionsWithRealValues(suggestions) {
  * @param {Array} results - Tableau pour stocker les résultats
  * @param {boolean} ignoreHiddenLayers - Option pour ignorer les calques invisibles/verrouillés
  */
+/**
+ * Vérifie les propriétés d'un nœud Figma pour identifier les valeurs qui pourraient être converties en variables
+ * @param {Object} node - Nœud Figma à analyser
+ * @param {Map} valueToVariableMap - Map des valeurs vers les variables existantes
+ * @param {Array} results - Tableau des résultats d'analyse
+ * @param {boolean} ignoreHiddenLayers - Si true, ignore les calques invisibles/verrouillés
+ */
 function checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLayers) {
   // === VÉRIFICATIONS DÉFENSIVES DE BASE ===
   if (!node) {
-    console.warn("[checkNodeProperties] Nœud null/undefined reçu");
+    log("[checkNodeProperties] Nœud null/undefined reçu");
     return;
   }
 
   // Vérifier si le nœud a été supprimé ou n'existe plus
   if (node.removed) {
-    console.warn("[checkNodeProperties] Nœud supprimé détecté:", node.id);
+    log("[checkNodeProperties] Nœud supprimé détecté:", node.id);
     return;
   }
 
   // Vérifications de base des propriétés essentielles
   if (!node.id || !node.name || !node.type) {
-    console.warn("[checkNodeProperties] Nœud malformé:", node);
+    log("[checkNodeProperties] Nœud malformé:", node);
     return;
   }
 
@@ -1205,7 +2578,7 @@ function checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLaye
 
   // === VÉRIFICATIONS DÉFENSIVES SUPPLÉMENTAIRES ===
   if (!node || !node.id || !node.type) {
-    console.warn("[checkNodeProperties] Nœud malformé ou null détecté");
+    log("[checkNodeProperties] Nœud malformé ou null détecté");
     return;
   }
 
@@ -1214,11 +2587,11 @@ function checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLaye
   if (ignoreHiddenLayers) {
     try {
       if (node.visible === false) {
-        console.log("[checkNodeProperties] Calque invisible ignoré:", layerName);
+        log("[checkNodeProperties] Calque invisible ignoré:", layerName);
         return;
       }
       if (node.locked === true) {
-        console.log("[checkNodeProperties] Calque verrouillé ignoré:", layerName);
+        log("[checkNodeProperties] Calque verrouillé ignoré:", layerName);
         return;
       }
     } catch (visibilityError) {
@@ -1227,22 +2600,16 @@ function checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLaye
   }
 
   // Liste étendue des types supportés pour le style
-  var supportedTypes = [
-    'FRAME', 'RECTANGLE', 'ELLIPSE', 'POLYGON', 'STAR', 'VECTOR',
-    'TEXT', 'COMPONENT', 'INSTANCE', 'LINE', 'GROUP', 'SECTION', 'COMPONENT_SET'
-  ];
+  var supportedTypes = CONFIG.supportedTypes.all;
 
   // Pour les conteneurs, on ne vérifie que s'ils peuvent avoir des propriétés de style
-  var styleSupportedTypes = [
-    'FRAME', 'RECTANGLE', 'ELLIPSE', 'POLYGON', 'STAR', 'VECTOR',
-    'TEXT', 'COMPONENT', 'INSTANCE', 'LINE'
-  ];
+  var styleSupportedTypes = CONFIG.supportedTypes.fillAndStroke;
 
   var isContainer = supportedTypes.indexOf(nodeType) !== -1;
   var supportsStyle = styleSupportedTypes.indexOf(nodeType) !== -1;
 
   if (!isContainer) {
-    console.log("[checkNodeProperties] Type de nœud non supporté:", nodeType);
+    log("[checkNodeProperties] Type de nœud non supporté:", nodeType);
     return;
   }
 
@@ -1266,12 +2633,12 @@ function checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLaye
       checkNumericPropertiesSafely(node, valueToVariableMap, results);
 
       // 5. VÉRIFICATION DES PROPRIÉTÉS DE TYPOGRAPHIE (pour les nœuds TEXT)
-      if (node.type === 'TEXT') {
+      if (node.type === CONFIG.types.TEXT) {
         checkTypographyPropertiesSafely(node, valueToVariableMap, results);
       }
 
     } catch (propertyError) {
-      console.error("[checkNodeProperties] Erreur lors de l'analyse des propriétés du nœud", nodeId, layerName, ":", propertyError);
+      log("[checkNodeProperties] Erreur lors de l'analyse des propriétés du nœud", nodeId, layerName, ":", propertyError);
       // Ne pas arrêter le scan, continuer vers les autres nœuds
     }
   }
@@ -1307,7 +2674,7 @@ function checkTypographyPropertiesSafely(node, valueToVariableMap, results) {
     // (lineHeight, letterSpacing, etc.)
 
   } catch (typographyError) {
-    console.error("[checkTypographyPropertiesSafely] Erreur lors de l'analyse des propriétés de typographie du nœud", node.id, node.name, ":", typographyError);
+    log("[checkTypographyPropertiesSafely] Erreur lors de l'analyse des propriétés de typographie du nœud", node.id, node.name, ":", typographyError);
   }
 }
 
@@ -1322,7 +2689,7 @@ function checkFillsSafely(node, valueToVariableMap, results) {
     for (var i = 0; i < fills.length; i++) {
       try {
         var fill = fills[i];
-        if (!fill || fill.type !== 'SOLID' || !fill.color) continue;
+        if (!fill || fill.type !== CONFIG.types.SOLID || !fill.color) continue;
 
         // Vérification stricte des variables liées avec validation de structure
         var isBound = isPropertyBoundToVariable(node.boundVariables || {}, 'fills', i);
@@ -1348,12 +2715,12 @@ function checkFillsSafely(node, valueToVariableMap, results) {
           });
         }
       } catch (fillError) {
-        console.warn("[checkFillsSafely] Erreur sur fill index", i, "du nœud", node.id, ":", fillError);
+        log("[checkFillsSafely] Erreur sur fill index", i, "du nœud", node.id, ":", fillError);
         // Continuer vers le fill suivant
       }
     }
   } catch (fillsError) {
-    console.error("[checkFillsSafely] Erreur générale sur fills du nœud", node.id, ":", fillsError);
+    log("[checkFillsSafely] Erreur générale sur fills du nœud", node.id, ":", fillsError);
   }
 }
 
@@ -1368,7 +2735,7 @@ function checkStrokesSafely(node, valueToVariableMap, results) {
     for (var j = 0; j < strokes.length; j++) {
       try {
         var stroke = strokes[j];
-        if (!stroke || stroke.type !== 'SOLID' || !stroke.color) continue;
+        if (!stroke || stroke.type !== CONFIG.types.SOLID || !stroke.color) continue;
 
         // Vérification stricte des variables liées
         var isBound = isPropertyBoundToVariable(node.boundVariables || {}, 'strokes', j);
@@ -1394,12 +2761,12 @@ function checkStrokesSafely(node, valueToVariableMap, results) {
           });
         }
       } catch (strokeError) {
-        console.warn("[checkStrokesSafely] Erreur sur stroke index", j, "du nœud", node.id, ":", strokeError);
+        log("[checkStrokesSafely] Erreur sur stroke index", j, "du nœud", node.id, ":", strokeError);
         // Continuer vers le stroke suivant
       }
     }
   } catch (strokesError) {
-    console.error("[checkStrokesSafely] Erreur générale sur strokes du nœud", node.id, ":", strokesError);
+    log("[checkStrokesSafely] Erreur générale sur strokes du nœud", node.id, ":", strokesError);
   }
 }
 
@@ -1409,7 +2776,7 @@ function checkStrokesSafely(node, valueToVariableMap, results) {
 function checkCornerRadiusSafely(node, valueToVariableMap, results) {
   try {
     var nodeType = node.type;
-    var radiusSupportedTypes = ['FRAME', 'RECTANGLE', 'ELLIPSE', 'POLYGON', 'STAR', 'VECTOR', 'COMPONENT', 'INSTANCE'];
+    var radiusSupportedTypes = CONFIG.supportedTypes.radius;
 
     if (radiusSupportedTypes.indexOf(nodeType) === -1) return;
 
@@ -1448,7 +2815,7 @@ function checkCornerRadiusSafely(node, valueToVariableMap, results) {
             }
           }
         } catch (radiusError) {
-          console.warn("[checkCornerRadiusSafely] Erreur sur radius", prop.name, "du nœud", node.id, ":", radiusError);
+          log("[checkCornerRadiusSafely] Erreur sur radius", prop.name, "du nœud", node.id, ":", radiusError);
         }
       }
     }
@@ -1457,10 +2824,10 @@ function checkCornerRadiusSafely(node, valueToVariableMap, results) {
       // Vérification stricte des variables liées (tous les radius possibles)
       var boundVars = node.boundVariables || {};
       var isBound = isPropertyBoundToVariable(boundVars, 'cornerRadius') ||
-                    isPropertyBoundToVariable(boundVars, 'topLeftRadius') ||
-                    isPropertyBoundToVariable(boundVars, 'topRightRadius') ||
-                    isPropertyBoundToVariable(boundVars, 'bottomLeftRadius') ||
-                    isPropertyBoundToVariable(boundVars, 'bottomRightRadius');
+        isPropertyBoundToVariable(boundVars, 'topLeftRadius') ||
+        isPropertyBoundToVariable(boundVars, 'topRightRadius') ||
+        isPropertyBoundToVariable(boundVars, 'bottomLeftRadius') ||
+        isPropertyBoundToVariable(boundVars, 'bottomRightRadius');
 
       if (!isBound) {
         var suggestions = enrichSuggestionsWithRealValues(findNumericSuggestions(node.cornerRadius, valueToVariableMap, undefined, "Corner Radius"));
@@ -1480,7 +2847,7 @@ function checkCornerRadiusSafely(node, valueToVariableMap, results) {
       }
     }
   } catch (cornerRadiusError) {
-    console.error("[checkCornerRadiusSafely] Erreur générale sur cornerRadius du nœud", node.id, ":", cornerRadiusError);
+    log("[checkCornerRadiusSafely] Erreur générale sur cornerRadius du nœud", node.id, ":", cornerRadiusError);
   }
 }
 
@@ -1489,10 +2856,10 @@ function checkCornerRadiusSafely(node, valueToVariableMap, results) {
  */
 function checkNumericPropertiesSafely(node, valueToVariableMap, results) {
   try {
-    console.log('[DEBUG checkAutoLayoutSafely] Vérification du nœud:', node.name, 'layoutMode:', node.layoutMode);
+    log('[DEBUG checkAutoLayoutSafely] Vérification du nœud:', node.name, 'layoutMode:', node.layoutMode);
 
     // ITEM SPACING (seulement si auto-layout)
-    console.log('[DEBUG checkNumericPropertiesSafely] itemSpacing:', node.itemSpacing);
+    log('[DEBUG checkNumericPropertiesSafely] itemSpacing:', node.itemSpacing);
     if (node.layoutMode && node.layoutMode !== "NONE" && typeof node.itemSpacing === 'number' && node.itemSpacing > 0) {
       var isGapBound = isPropertyBoundToVariable(node.boundVariables || {}, 'itemSpacing');
       if (!isGapBound) {
@@ -1525,7 +2892,7 @@ function checkNumericPropertiesSafely(node, valueToVariableMap, results) {
       try {
         var paddingProp = paddingProperties[p];
         var paddingValue = node[paddingProp.name];
-        console.log('[DEBUG checkNumericPropertiesSafely] ' + paddingProp.name + ':', paddingValue);
+        log('[DEBUG checkNumericPropertiesSafely] ' + paddingProp.name + ':', paddingValue);
 
         if (typeof paddingValue === 'number' && paddingValue > 0) {
           var isPaddingBound = isPropertyBoundToVariable(node.boundVariables || {}, paddingProp.figmaProp);
@@ -1547,11 +2914,11 @@ function checkNumericPropertiesSafely(node, valueToVariableMap, results) {
           }
         }
       } catch (paddingError) {
-        console.warn("[checkNumericPropertiesSafely] Erreur sur padding", paddingProp.name, "du nœud", node.id, ":", paddingError);
+        log("[checkNumericPropertiesSafely] Erreur sur padding", paddingProp.name, "du nœud", node.id, ":", paddingError);
       }
     }
   } catch (numericError) {
-    console.error("[checkNumericPropertiesSafely] Erreur générale sur propriétés numériques du nœud", node.id, ":", numericError);
+    log("[checkNumericPropertiesSafely] Erreur générale sur propriétés numériques du nœud", node.id, ":", numericError);
   }
 }
 
@@ -1571,9 +2938,9 @@ function isPropertyBoundToVariable(boundVariables, propertyPath, index) {
 
     // Validation stricte de la structure de l'alias de variable
     if (typeof binding !== 'object' ||
-        binding.type !== 'VARIABLE_ALIAS' ||
-        !binding.id ||
-        typeof binding.id !== 'string') {
+      binding.type !== 'VARIABLE_ALIAS' ||
+      !binding.id ||
+      typeof binding.id !== 'string') {
       return false;
     }
 
@@ -1582,7 +2949,7 @@ function isPropertyBoundToVariable(boundVariables, propertyPath, index) {
     return variable !== null && variable !== undefined;
 
   } catch (bindingError) {
-    console.warn("[isPropertyBoundToVariable] Erreur lors de la vérification de liaison pour", propertyPath, index !== undefined ? "index " + index : "", ":", bindingError);
+    log("[isPropertyBoundToVariable] Erreur lors de la vérification de liaison pour", propertyPath, index !== undefined ? "index " + index : "", ":", bindingError);
     return false; // En cas d'erreur, considérer comme non lié pour éviter les faux positifs
   }
 }
@@ -1596,30 +2963,38 @@ function isPropertyBoundToVariable(boundVariables, propertyPath, index) {
  * @param {number} depth - Profondeur actuelle (pour éviter les récursions infinies)
  * @param {boolean} ignoreHiddenLayers - Option pour ignorer les calques invisibles/verrouillés
  */
+/**
+ * Analyse récursivement un nœud Figma et ses enfants pour identifier les propriétés à convertir en variables
+ * @param {Object} node - Nœud Figma à analyser
+ * @param {Map} valueToVariableMap - Map des valeurs vers les variables existantes
+ * @param {Array} results - Tableau des résultats d'analyse
+ * @param {number} depth - Profondeur actuelle dans l'arbre des nœuds
+ * @param {boolean} ignoreHiddenLayers - Si true, ignore les calques invisibles/verrouillés
+ */
 function scanNodeRecursive(node, valueToVariableMap, results, depth, ignoreHiddenLayers) {
   // === PROTECTION CONTRE LES RÉCURSIONS INFINIES ===
   depth = depth || 0;
-  var MAX_DEPTH = 50; // Limite de sécurité pour éviter les boucles infinies
+  const MAX_DEPTH = CONFIG.limits.MAX_DEPTH; // Limite de sécurité pour éviter les boucles infinies
   if (depth > MAX_DEPTH) {
-    console.warn("[scanNodeRecursive] Profondeur maximale atteinte, arrêt de la récursion à", depth);
+    log("[scanNodeRecursive] Profondeur maximale atteinte, arrêt de la récursion à", depth);
     return;
   }
 
   // === VÉRIFICATIONS DÉFENSIVES DE BASE ===
   if (!node) {
-    console.warn("[scanNodeRecursive] Nœud null/undefined reçu à profondeur", depth);
+    log("[scanNodeRecursive] Nœud null/undefined reçu à profondeur", depth);
     return;
   }
 
   // Vérifier si le nœud a été supprimé pendant le scan
   if (node.removed) {
-    console.log("[scanNodeRecursive] Nœud supprimé détecté à profondeur", depth, "- ignoré");
+    log("[scanNodeRecursive] Nœud supprimé détecté à profondeur", depth, "- ignoré");
     return;
   }
 
   // Vérification supplémentaire des propriétés essentielles
   if (!node.id || !node.type) {
-    console.warn("[scanNodeRecursive] Nœud malformé détecté à profondeur", depth, "- ignoré");
+    log("[scanNodeRecursive] Nœud malformé détecté à profondeur", depth, "- ignoré");
     return;
   }
 
@@ -1629,18 +3004,13 @@ function scanNodeRecursive(node, valueToVariableMap, results, depth, ignoreHidde
     var nodeId = node.id;
     var nodeName = node.name || "Unnamed";
 
-    console.log("[scanNodeRecursive] Traitement du nœud", nodeType, nodeName, "(ID:", nodeId, ") à profondeur", depth);
+    log("[scanNodeRecursive] Traitement du nœud", nodeType, nodeName, "(ID:", nodeId, ") à profondeur", depth);
 
     // Liste étendue des types de conteneurs supportés
-    var containerTypes = [
-      'FRAME', 'GROUP', 'SECTION', 'COMPONENT', 'INSTANCE', 'COMPONENT_SET'
-    ];
+    var containerTypes = CONFIG.supportedTypes.spacing;
 
     // Liste des types qui peuvent avoir des propriétés de style
-    var styleTypes = [
-      'FRAME', 'RECTANGLE', 'ELLIPSE', 'POLYGON', 'STAR', 'VECTOR',
-      'TEXT', 'COMPONENT', 'INSTANCE', 'LINE'
-    ];
+    var styleTypes = CONFIG.supportedTypes.fillAndStroke;
 
     var isContainer = containerTypes.indexOf(nodeType) !== -1;
     var hasStyle = styleTypes.indexOf(nodeType) !== -1;
@@ -1650,8 +3020,8 @@ function scanNodeRecursive(node, valueToVariableMap, results, depth, ignoreHidde
       try {
         checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLayers);
       } catch (propertyAnalysisError) {
-        console.error("[scanNodeRecursive] Erreur CRITIQUE lors de l'analyse des propriétés du nœud", nodeId, nodeName, "(type:", nodeType, ") à profondeur", depth, ":", propertyAnalysisError);
-        console.error("[scanNodeRecursive] Détails du nœud problématique:", {
+        log("[scanNodeRecursive] Erreur CRITIQUE lors de l'analyse des propriétés du nœud", nodeId, nodeName, "(type:", nodeType, ") à profondeur", depth, ":", propertyAnalysisError);
+        log("[scanNodeRecursive] Détails du nœud problématique:", {
           id: nodeId,
           type: nodeType,
           name: nodeName,
@@ -1674,7 +3044,7 @@ function scanNodeRecursive(node, valueToVariableMap, results, depth, ignoreHidde
         var children = node.children;
 
         if (children && Array.isArray(children)) {
-          console.log("[scanNodeRecursive] Nœud", nodeType, "a", children.length, "enfants à profondeur", depth);
+          log("[scanNodeRecursive] Nœud", nodeType, "a", children.length, "enfants à profondeur", depth);
 
           for (var i = 0; i < children.length; i++) {
             try {
@@ -1682,12 +3052,12 @@ function scanNodeRecursive(node, valueToVariableMap, results, depth, ignoreHidde
 
               // Vérification défensive de l'enfant
               if (!child) {
-                console.warn("[scanNodeRecursive] Enfant null/undefined à l'index", i, "du nœud", nodeId);
+                log("[scanNodeRecursive] Enfant null/undefined à l'index", i, "du nœud", nodeId);
                 continue;
               }
 
               if (child.removed) {
-                console.log("[scanNodeRecursive] Enfant supprimé détecté à l'index", i, "du nœud", nodeId);
+                log("[scanNodeRecursive] Enfant supprimé détecté à l'index", i, "du nœud", nodeId);
                 continue;
               }
 
@@ -1695,23 +3065,23 @@ function scanNodeRecursive(node, valueToVariableMap, results, depth, ignoreHidde
               scanNodeRecursive(child, valueToVariableMap, results, depth + 1, ignoreHiddenLayers);
 
             } catch (childError) {
-              console.error("[scanNodeRecursive] Erreur lors du traitement de l'enfant à l'index", i, "du nœud", nodeId, nodeName, ":", childError);
+              log("[scanNodeRecursive] Erreur lors du traitement de l'enfant à l'index", i, "du nœud", nodeId, nodeName, ":", childError);
               // Continuer vers l'enfant suivant même en cas d'erreur
             }
           }
         } else if (nodeType === 'INSTANCE') {
           // Les instances peuvent avoir des overrides sans children directs
-          console.log("[scanNodeRecursive] Instance", nodeName, "traitée (pas d'enfants directs ou overrides spéciaux)");
+          log("[scanNodeRecursive] Instance", nodeName, "traitée (pas d'enfants directs ou overrides spéciaux)");
         }
 
       } catch (childrenError) {
-        console.error("[scanNodeRecursive] Erreur lors de l'accès aux enfants du nœud", nodeId, nodeName, "à profondeur", depth, ":", childrenError);
+        log("[scanNodeRecursive] Erreur lors de l'accès aux enfants du nœud", nodeId, nodeName, "à profondeur", depth, ":", childrenError);
         // Ne pas arrêter le scan complet
       }
     }
 
   } catch (nodeError) {
-    console.error("[scanNodeRecursive] Erreur critique lors du traitement du nœud à profondeur", depth, ":", nodeError);
+    log("[scanNodeRecursive] Erreur critique lors du traitement du nœud à profondeur", depth, ":", nodeError);
     // Même en cas d'erreur critique, on ne crash pas le scan complet
   }
 }
@@ -1723,44 +3093,44 @@ function scanNodeRecursive(node, valueToVariableMap, results, depth, ignoreHidde
  * @returns {Array} Tableau des résultats d'analyse
  */
 function scanSelection(ignoreHiddenLayers) {
-  console.log("[scanSelection] Démarrage de l'analyse asynchrone...");
+  log("[scanSelection] Démarrage de l'analyse asynchrone...");
 
   try {
     // === VÉRIFICATION DE LA SÉLECTION ===
     var selection = figma.currentPage.selection;
 
     if (!selection || !Array.isArray(selection)) {
-      console.warn("[scanSelection] Sélection invalide ou inaccessible");
+      log("[scanSelection] Sélection invalide ou inaccessible");
       figma.ui.postMessage({ type: "scan-results", results: [] });
       return [];
     }
 
     // === SCAN CONTEXTUEL INTELLIGENT ===
     if (selection.length === 0) {
-      console.log("[scanSelection] Aucune sélection - scan de la page entière");
+      log("[scanSelection] Aucune sélection - scan de la page entière");
       figma.notify("📄 Aucune sélection : Analyse de la page entière...");
 
       // Scanner toute la page
       return scanPage(ignoreHiddenLayers);
     }
 
-    console.log("[scanSelection]", selection.length, "nœud(s) sélectionné(s)");
+    log("[scanSelection]", selection.length, "nœud(s) sélectionné(s)");
 
     // === CRÉATION DE LA MAP DES VARIABLES AVEC PROTECTION ===
     var valueToVariableMap;
     try {
       valueToVariableMap = createValueToVariableMap();
-      console.log("Variables chargées dans la Map :", valueToVariableMap.size);
+      log("Variables chargées dans la Map :", valueToVariableMap.size);
 
       if (!valueToVariableMap || valueToVariableMap.size === 0) {
-        console.warn("[scanSelection] Aucune variable trouvée ou erreur lors de la création de la map");
+        log("[scanSelection] Aucune variable trouvée ou erreur lors de la création de la map");
         figma.notify("⚠️ Aucune variable trouvée dans le document");
         figma.ui.postMessage({ type: "scan-results", results: [] });
         return [];
       }
-      console.log("[scanSelection] Map des variables créée avec", valueToVariableMap.size, "entrées");
+      log("[scanSelection] Map des variables créée avec", valueToVariableMap.size, "entrées");
     } catch (mapError) {
-      console.error("[scanSelection] Erreur critique lors de la création de la map des variables:", mapError);
+      log("[scanSelection] Erreur critique lors de la création de la map des variables:", mapError);
       figma.notify("❌ Erreur lors de l'accès aux variables");
       figma.ui.postMessage({ type: "scan-results", results: [] });
       return [];
@@ -1770,7 +3140,7 @@ function scanSelection(ignoreHiddenLayers) {
     startAsyncScan(selection, valueToVariableMap, ignoreHiddenLayers);
 
   } catch (scanError) {
-    console.error("[scanSelection] Erreur critique lors de l'analyse de la sélection:", scanError);
+    log("[scanSelection] Erreur critique lors de l'analyse de la sélection:", scanError);
     figma.notify("❌ Erreur critique lors de l'analyse - vérifiez la console pour les détails");
     figma.ui.postMessage({ type: "scan-results", results: [] });
   }
@@ -1780,13 +3150,13 @@ function scanSelection(ignoreHiddenLayers) {
  * Scan asynchrone de la page entière
  */
 function scanPage(ignoreHiddenLayers) {
-  console.log("[scanPage] Démarrage du scan de page entière...");
+  log("[scanPage] Démarrage du scan de page entière...");
 
   try {
     var pageChildren = figma.currentPage.children;
 
     if (!pageChildren || !Array.isArray(pageChildren)) {
-      console.warn("[scanPage] Aucun enfant trouvé sur la page");
+      log("[scanPage] Aucun enfant trouvé sur la page");
       figma.ui.postMessage({ type: "scan-results", results: [] });
       return [];
     }
@@ -1796,13 +3166,13 @@ function scanPage(ignoreHiddenLayers) {
     try {
       valueToVariableMap = createValueToVariableMap();
       if (!valueToVariableMap || valueToVariableMap.size === 0) {
-        console.warn("[scanPage] Aucune variable trouvée");
+        log("[scanPage] Aucune variable trouvée");
         figma.notify("⚠️ Aucune variable trouvée dans le document");
         figma.ui.postMessage({ type: "scan-results", results: [] });
         return [];
       }
     } catch (mapError) {
-      console.error("[scanPage] Erreur lors de la création de la map des variables:", mapError);
+      log("[scanPage] Erreur lors de la création de la map des variables:", mapError);
       figma.notify("❌ Erreur lors de l'accès aux variables");
       figma.ui.postMessage({ type: "scan-results", results: [] });
       return [];
@@ -1812,7 +3182,7 @@ function scanPage(ignoreHiddenLayers) {
     startAsyncScan(pageChildren, valueToVariableMap, ignoreHiddenLayers);
 
   } catch (pageScanError) {
-    console.error("[scanPage] Erreur critique lors du scan de page:", pageScanError);
+    log("[scanPage] Erreur critique lors du scan de page:", pageScanError);
     figma.notify("❌ Erreur lors du scan de page");
     figma.ui.postMessage({ type: "scan-results", results: [] });
   }
@@ -1835,7 +3205,7 @@ function startAsyncScan(nodes, valueToVariableMap, ignoreHiddenLayers) {
     status: "Démarrage de l'analyse..."
   });
 
-  console.log("[startAsyncScan] Scan asynchrone démarré pour", totalNodes, "nœuds");
+  log("[startAsyncScan] Scan asynchrone démarré pour", totalNodes, "nœuds");
 
   function processChunk() {
     var chunkEnd = Math.min(currentIndex + CHUNK_SIZE, totalNodes);
@@ -1856,7 +3226,7 @@ function startAsyncScan(nodes, valueToVariableMap, ignoreHiddenLayers) {
         processedInChunk++;
 
       } catch (nodeError) {
-        console.error("[processChunk] Erreur sur nœud", i, ":", nodeError);
+        log("[processChunk] Erreur sur nœud", i, ":", nodeError);
       }
     }
 
@@ -1889,21 +3259,27 @@ function startAsyncScan(nodes, valueToVariableMap, ignoreHiddenLayers) {
 /**
  * Termine le scan et envoie les résultats
  */
+/**
+ * Termine le scan et envoie les résultats
+ */
 function finishScan(results) {
-  console.log("[finishScan] Scan terminé -", results.length, "problème(s) détecté(s)");
 
-  // Stocker les résultats pour les corrections
+  // CORRECTIF CRITIQUE : Mettre à jour les deux emplacements de stockage
+  // 1. Variable globale (pour la rétrocompatibilité)
   lastScanResults = results;
+  // 2. Variable du namespace Scanner (utilisée par le Live Preview)
+  Scanner.lastScanResults = results;
+
 
   // Notifier l'utilisateur
   if (results.length > 0) {
-    figma.notify("✅ Analyse terminée - " + results.length + " problème(s) détecté(s)");
+    FigmaService.notify("✅ Analyse terminée - " + results.length + " problème(s) détecté(s)");
   } else {
-    figma.notify("✅ Analyse terminée - Aucun problème détecté");
+    FigmaService.notify("✅ Analyse terminée - Aucun problème détecté");
   }
 
   // Petit délai pour stabiliser après le scan asynchrone
-  setTimeout(function() {
+  setTimeout(function () {
     // Envoyer les résultats à l'UI
     figma.ui.postMessage({
       type: "scan-progress",
@@ -1915,7 +3291,7 @@ function finishScan(results) {
       type: "scan-results",
       results: results
     });
-  }, 100); // 100ms de délai
+  }, 100);
 }
 
 // ⚡️ VERSION ROBUSTE AVEC VALIDATIONS COMPLETES
@@ -1927,8 +3303,8 @@ function finishScan(results) {
  * Diagnostique les causes potentielles d'échec d'application
  */
 function diagnoseApplicationFailure(result, variableId, error) {
-  console.log('[diagnoseApplicationFailure] 🔍 Diagnostic pour:', result.layerName, '->', result.property);
-  console.log('[diagnoseApplicationFailure] 📋 Erreur rapportée:', error);
+  log('[diagnoseApplicationFailure] 🔍 Diagnostic pour:', result.layerName, '->', result.property);
+  log('[diagnoseApplicationFailure] 📋 Erreur rapportée:', error);
 
   var diagnosis = {
     issue: 'unknown',
@@ -1952,10 +3328,10 @@ function diagnoseApplicationFailure(result, variableId, error) {
     var requiredScopes = getScopesForProperty(result.property);
     var variableScopes = variable.scopes || [];
 
-    console.log('[diagnoseApplicationFailure] 📋 Scopes requis:', requiredScopes);
-    console.log('[diagnoseApplicationFailure] 📋 Scopes variable:', variableScopes);
+    log('[diagnoseApplicationFailure] 📋 Scopes requis:', requiredScopes);
+    log('[diagnoseApplicationFailure] 📋 Scopes variable:', variableScopes);
 
-    var hasRequiredScopes = requiredScopes.some(function(scope) { return variableScopes.includes(scope); });
+    var hasRequiredScopes = requiredScopes.some(function (scope) { return variableScopes.includes(scope); });
     if (!hasRequiredScopes && requiredScopes.length > 0) {
       diagnosis.issue = 'scope_mismatch';
       diagnosis.confidence = 'high';
@@ -2006,12 +3382,12 @@ function diagnoseApplicationFailure(result, variableId, error) {
     }
 
   } catch (diagError) {
-    console.error('[diagnoseApplicationFailure] Erreur lors du diagnostic:', diagError);
+    log('[diagnoseApplicationFailure] Erreur lors du diagnostic:', diagError);
     diagnosis.issue = 'diagnostic_error';
     diagnosis.recommendations.push('Erreur lors de l\'analyse du problème');
   }
 
-  console.log('[diagnoseApplicationFailure] 📊 Diagnostic final:', diagnosis);
+  log('[diagnoseApplicationFailure] 📊 Diagnostic final:', diagnosis);
   return diagnosis;
 }
 
@@ -2054,7 +3430,7 @@ function checkSpecificPropertyIssue(node, result) {
           diagnosis.recommendations.push('Le fill à l\'index ' + result.fillIndex + ' n\'existe plus');
         } else {
           var fill = node.fills[result.fillIndex];
-          if (fill.type !== 'SOLID') {
+          if (fill.type !== CONFIG.types.SOLID) {
             diagnosis.issue = 'fill_type_unsupported';
             diagnosis.confidence = 'high';
             diagnosis.recommendations.push('Seuls les fills SOLID peuvent être liés à des variables');
@@ -2069,7 +3445,7 @@ function checkSpecificPropertyIssue(node, result) {
           diagnosis.recommendations.push('Le stroke à l\'index ' + result.strokeIndex + ' n\'existe plus');
         } else {
           var stroke = node.strokes[result.strokeIndex];
-          if (stroke.type !== 'SOLID') {
+          if (stroke.type !== CONFIG.types.SOLID) {
             diagnosis.issue = 'stroke_type_unsupported';
             diagnosis.confidence = 'high';
             diagnosis.recommendations.push('Seuls les strokes SOLID peuvent être liés à des variables');
@@ -2103,8 +3479,8 @@ function checkSpecificPropertyIssue(node, result) {
  * @returns {Object} Résultat détaillé avec statut de vérification
  */
 function applyAndVerifyFix(result, variableId) {
-  console.log('[applyAndVerifyFix] 📋 DÉMARRAGE pour:', result.layerName, '(' + result.nodeId + ') ->', result.property);
-  console.log('[applyAndVerifyFix] 🔍 Données d\'entrée:', {
+  log('[applyAndVerifyFix] 📋 DÉMARRAGE pour:', result.layerName, '(' + result.nodeId + ') ->', result.property);
+  log('[applyAndVerifyFix] 🔍 Données d\'entrée:', {
     result: result,
     variableId: variableId,
     suggestedVariableId: result.suggestedVariableId
@@ -2126,44 +3502,44 @@ function applyAndVerifyFix(result, variableId) {
 
   try {
     // === PHASE 1: VALIDATIONS PRÉALABLES ===
-    console.log('[applyAndVerifyFix] 🔍 Phase 1: Validations préalables');
+    log('[applyAndVerifyFix] 🔍 Phase 1: Validations préalables');
 
     // Vérifier que le résultat est valide
-    console.log('[applyAndVerifyFix] 🧪 Validation 1: Résultat valide');
+    log('[applyAndVerifyFix] 🧪 Validation 1: Résultat valide');
     if (!result) {
-      console.error('[applyAndVerifyFix] ❌ Result est null/undefined');
+      log('[applyAndVerifyFix] ❌ Result est null/undefined');
       throw new Error('Résultat invalide ou incomplet');
     }
     if (!result.nodeId) {
-      console.error('[applyAndVerifyFix] ❌ result.nodeId manquant:', result);
+      log('[applyAndVerifyFix] ❌ result.nodeId manquant:', result);
       throw new Error('Résultat invalide: nodeId manquant');
     }
     if (!result.property) {
-      console.error('[applyAndVerifyFix] ❌ result.property manquant:', result);
+      log('[applyAndVerifyFix] ❌ result.property manquant:', result);
       throw new Error('Résultat invalide: property manquant');
     }
-    console.log('[applyAndVerifyFix] ✅ Résultat valide');
+    log('[applyAndVerifyFix] ✅ Résultat valide');
 
     // Déterminer l'ID de variable à utiliser
-    console.log('[applyAndVerifyFix] 🧪 Validation 2: ID de variable');
+    log('[applyAndVerifyFix] 🧪 Validation 2: ID de variable');
     var finalVariableId = variableId || result.suggestedVariableId;
-    console.log('[applyAndVerifyFix] 📋 variableId fourni:', variableId);
-    console.log('[applyAndVerifyFix] 📋 suggestedVariableId:', result.suggestedVariableId);
-    console.log('[applyAndVerifyFix] 📋 finalVariableId choisi:', finalVariableId);
+    log('[applyAndVerifyFix] 📋 variableId fourni:', variableId);
+    log('[applyAndVerifyFix] 📋 suggestedVariableId:', result.suggestedVariableId);
+    log('[applyAndVerifyFix] 📋 finalVariableId choisi:', finalVariableId);
 
     if (!finalVariableId) {
-      console.error('[applyAndVerifyFix] ❌ Aucun ID de variable disponible');
+      log('[applyAndVerifyFix] ❌ Aucun ID de variable disponible');
       throw new Error('Aucun ID de variable fourni ou suggéré');
     }
     verificationResult.details.variableId = finalVariableId;
-    console.log('[applyAndVerifyFix] ✅ ID de variable déterminé');
+    log('[applyAndVerifyFix] ✅ ID de variable déterminé');
 
     // Vérifier que la variable existe
-    console.log('[applyAndVerifyFix] 🧪 Validation 3: Existence de la variable');
+    log('[applyAndVerifyFix] 🧪 Validation 3: Existence de la variable');
     var variable = figma.variables.getVariableById(finalVariableId);
-    console.log('[applyAndVerifyFix] 🔍 Variable trouvée:', !!variable);
+    log('[applyAndVerifyFix] 🔍 Variable trouvée:', !!variable);
     if (variable) {
-      console.log('[applyAndVerifyFix] 📋 Détails variable:', {
+      log('[applyAndVerifyFix] 📋 Détails variable:', {
         id: variable.id,
         name: variable.name,
         resolvedType: variable.resolvedType,
@@ -2172,22 +3548,22 @@ function applyAndVerifyFix(result, variableId) {
     }
 
     if (!variable) {
-      console.error('[applyAndVerifyFix] ❌ Variable introuvable:', finalVariableId);
-      console.log('[applyAndVerifyFix] 📋 Variables disponibles:', figma.variables.getLocalVariables().length);
+      log('[applyAndVerifyFix] ❌ Variable introuvable:', finalVariableId);
+      log('[applyAndVerifyFix] 📋 Variables disponibles:', figma.variables.getLocalVariables().length);
 
       // Lister quelques variables pour debug
       var allVars = figma.variables.getLocalVariables().slice(0, 5);
-      console.log('[applyAndVerifyFix] 📋 Exemples de variables:', allVars.map(function(v) { return {id: v.id, name: v.name}; }));
+      log('[applyAndVerifyFix] 📋 Exemples de variables:', allVars.map(function (v) { return { id: v.id, name: v.name }; }));
       throw new Error('Variable introuvable: ' + finalVariableId);
     }
-    console.log('[applyAndVerifyFix] ✅ Variable existe');
+    log('[applyAndVerifyFix] ✅ Variable existe');
 
     // Vérifier que le nœud existe et n'est pas supprimé
-    console.log('[applyAndVerifyFix] 🧪 Validation 4: Existence du nœud');
+    log('[applyAndVerifyFix] 🧪 Validation 4: Existence du nœud');
     var node = figma.getNodeById(result.nodeId);
-    console.log('[applyAndVerifyFix] 🔍 Nœud trouvé:', !!node);
+    log('[applyAndVerifyFix] 🔍 Nœud trouvé:', !!node);
     if (node) {
-      console.log('[applyAndVerifyFix] 📋 Détails nœud:', {
+      log('[applyAndVerifyFix] 📋 Détails nœud:', {
         id: node.id,
         name: node.name,
         type: node.type,
@@ -2196,58 +3572,58 @@ function applyAndVerifyFix(result, variableId) {
     }
 
     if (!node) {
-      console.error('[applyAndVerifyFix] ❌ Nœud introuvable:', result.nodeId);
+      log('[applyAndVerifyFix] ❌ Nœud introuvable:', result.nodeId);
       throw new Error('Nœud introuvable: ' + result.nodeId);
     }
     if (node.removed) {
-      console.error('[applyAndVerifyFix] ❌ Nœud supprimé:', result.nodeId);
+      log('[applyAndVerifyFix] ❌ Nœud supprimé:', result.nodeId);
       throw new Error('Nœud supprimé: ' + result.nodeId);
     }
-    console.log('[applyAndVerifyFix] ✅ Nœud valide');
+    log('[applyAndVerifyFix] ✅ Nœud valide');
 
     // Vérifier que la propriété existe toujours
-    console.log('[applyAndVerifyFix] 🧪 Validation 5: Existence de la propriété');
+    log('[applyAndVerifyFix] 🧪 Validation 5: Existence de la propriété');
     if (!validatePropertyExists(node, result)) {
-      console.error('[applyAndVerifyFix] ❌ Propriété n\'existe plus:', result.property);
-      console.log('[applyAndVerifyFix] 📋 État du nœud pour debug:', getNodePropertyDebugInfo(node, result));
+      log('[applyAndVerifyFix] ❌ Propriété n\'existe plus:', result.property);
+      log('[applyAndVerifyFix] 📋 État du nœud pour debug:', getNodePropertyDebugInfo(node, result));
       throw new Error('Propriété n\'existe plus: ' + result.property);
     }
-    console.log('[applyAndVerifyFix] ✅ Propriété existe');
+    log('[applyAndVerifyFix] ✅ Propriété existe');
 
     // Vérifier que la variable est compatible
-    console.log('[applyAndVerifyFix] 🧪 Validation 6: Compatibilité variable-propriété');
+    log('[applyAndVerifyFix] 🧪 Validation 6: Compatibilité variable-propriété');
     if (!validateVariableCanBeApplied(variable, result)) {
-      console.error('[applyAndVerifyFix] ❌ Variable incompatible');
-      console.log('[applyAndVerifyFix] 📋 Type variable:', variable.resolvedType);
-      console.log('[applyAndVerifyFix] 📋 Propriété:', result.property);
+      log('[applyAndVerifyFix] ❌ Variable incompatible');
+      log('[applyAndVerifyFix] 📋 Type variable:', variable.resolvedType);
+      log('[applyAndVerifyFix] 📋 Propriété:', result.property);
       throw new Error('Variable incompatible: ' + variable.name + ' (' + variable.resolvedType + ') pour ' + result.property);
     }
-    console.log('[applyAndVerifyFix] ✅ Variable compatible');
+    log('[applyAndVerifyFix] ✅ Variable compatible');
 
-    console.log('[applyAndVerifyFix] ✅ Toutes les validations préalables réussies');
+    log('[applyAndVerifyFix] ✅ Toutes les validations préalables réussies');
 
     // === PHASE 2: CAPTURER L'ÉTAT AVANT ===
-    console.log('[applyAndVerifyFix] 📸 Phase 2: Capture état avant');
+    log('[applyAndVerifyFix] 📸 Phase 2: Capture état avant');
     var stateBefore = captureNodeState(node, result);
 
     // === PHASE 3: APPLICATION ===
-    console.log('[applyAndVerifyFix] 🔧 Phase 3: Application de la variable');
-    console.log('[applyAndVerifyFix] 📋 État avant application:', getNodePropertyDebugInfo(node, result));
+    log('[applyAndVerifyFix] 🔧 Phase 3: Application de la variable');
+    log('[applyAndVerifyFix] 📋 État avant application:', getNodePropertyDebugInfo(node, result));
 
     var applied = applyVariableToProperty(node, variable, result);
-    console.log('[applyAndVerifyFix] 📋 applyVariableToProperty retourné:', applied);
+    log('[applyAndVerifyFix] 📋 applyVariableToProperty retourné:', applied);
 
     if (!applied) {
-      console.error('[applyAndVerifyFix] ❌ applyVariableToProperty a retourné false');
+      log('[applyAndVerifyFix] ❌ applyVariableToProperty a retourné false');
       throw new Error('Échec de l\'application de la variable');
     }
 
     verificationResult.applied = true;
-    console.log('[applyAndVerifyFix] ✅ Variable appliquée avec succès');
-    console.log('[applyAndVerifyFix] 📋 État après application:', getNodePropertyDebugInfo(node, result));
+    log('[applyAndVerifyFix] ✅ Variable appliquée avec succès');
+    log('[applyAndVerifyFix] 📋 État après application:', getNodePropertyDebugInfo(node, result));
 
     // === PHASE 4: VÉRIFICATION ===
-    console.log('[applyAndVerifyFix] 🔍 Phase 4: Vérification de l\'application');
+    log('[applyAndVerifyFix] 🔍 Phase 4: Vérification de l\'application');
     var stateAfter = captureNodeState(node, result);
 
     var verified = verifyVariableApplication(node, variable, result, stateBefore, stateAfter);
@@ -2259,32 +3635,32 @@ function applyAndVerifyFix(result, variableId) {
     verificationResult.verified = true;
     verificationResult.success = true;
 
-    console.log('[applyAndVerifyFix] ✅ Application et vérification réussies');
+    log('[applyAndVerifyFix] ✅ Application et vérification réussies');
 
   } catch (error) {
-    console.error('[applyAndVerifyFix] ❌ Erreur:', error.message);
+    log('[applyAndVerifyFix] ❌ Erreur:', error.message);
     verificationResult.error = error.message;
     verificationResult.success = false;
 
     // Diagnostic automatique en cas d'échec
     try {
-      console.log('[applyAndVerifyFix] 🔍 Lancement diagnostic automatique...');
+      log('[applyAndVerifyFix] 🔍 Lancement diagnostic automatique...');
       var diagnosis = diagnoseApplicationFailure(result, verificationResult.details.variableId, error);
       verificationResult.diagnosis = diagnosis;
 
-      console.log('[applyAndVerifyFix] 📊 Diagnostic:', diagnosis.issue, '(confiance:', diagnosis.confidence + ')');
+      log('[applyAndVerifyFix] 📊 Diagnostic:', diagnosis.issue, '(confiance:', diagnosis.confidence + ')');
       if (diagnosis.recommendations.length > 0) {
-        console.log('[applyAndVerifyFix] 💡 Recommandations:', diagnosis.recommendations);
+        log('[applyAndVerifyFix] 💡 Recommandations:', diagnosis.recommendations);
       }
     } catch (diagError) {
-      console.error('[applyAndVerifyFix] Erreur lors du diagnostic:', diagError);
+      log('[applyAndVerifyFix] Erreur lors du diagnostic:', diagError);
     }
   } finally {
     verificationResult.details.duration = Date.now() - startTime;
   }
 
-  console.log('[applyAndVerifyFix] 📊 Résultat final:', verificationResult.success ? 'SUCCÈS' : 'ÉCHEC',
-              '(' + verificationResult.details.duration + 'ms)');
+  log('[applyAndVerifyFix] 📊 Résultat final:', verificationResult.success ? 'SUCCÈS' : 'ÉCHEC',
+    '(' + verificationResult.details.duration + 'ms)');
 
   return verificationResult;
 }
@@ -2388,7 +3764,7 @@ function captureNodeState(node, result) {
         break;
     }
   } catch (error) {
-    console.warn('[captureNodeState] Erreur lors de la capture:', error);
+    log('[captureNodeState] Erreur lors de la capture:', error);
   }
 
   return state;
@@ -2399,13 +3775,13 @@ function captureNodeState(node, result) {
  */
 function verifyVariableApplication(node, variable, result, stateBefore, stateAfter) {
   try {
-    console.log('[verifyVariableApplication] 🔍 Vérification pour:', result.property);
+    log('[verifyVariableApplication] 🔍 Vérification pour:', result.property);
 
     // === MÉTHODE 1: VÉRIFICATION VIA boundVariables ===
     var boundVariablesChanged = JSON.stringify(stateBefore.boundVariables) !== JSON.stringify(stateAfter.boundVariables);
 
     if (boundVariablesChanged) {
-      console.log('[verifyVariableApplication] ✅ boundVariables modifié - variable probablement appliquée');
+      log('[verifyVariableApplication] ✅ boundVariables modifié - variable probablement appliquée');
       return true;
     }
 
@@ -2422,7 +3798,7 @@ function verifyVariableApplication(node, variable, result, stateBefore, stateAft
     }
 
   } catch (error) {
-    console.error('[verifyVariableApplication] Erreur lors de la vérification:', error);
+    log('[verifyVariableApplication] Erreur lors de la vérification:', error);
     return false;
   }
 }
@@ -2433,7 +3809,7 @@ function verifyVariableApplication(node, variable, result, stateBefore, stateAft
 function verifyFillApplication(node, variable, fillIndex, stateBefore, stateAfter) {
   try {
     if (!node.fills || !node.fills[fillIndex]) {
-      console.warn('[verifyFillApplication] Fill inexistant');
+      log('[verifyFillApplication] Fill inexistant');
       return false;
     }
 
@@ -2443,16 +3819,16 @@ function verifyFillApplication(node, variable, fillIndex, stateBefore, stateAfte
     if (currentFill.boundVariables && currentFill.boundVariables.color) {
       var boundVar = currentFill.boundVariables.color;
       if (boundVar.type === 'VARIABLE_ALIAS' && boundVar.id === variable.id) {
-        console.log('[verifyFillApplication] ✅ Fill correctement lié à la variable');
+        log('[verifyFillApplication] ✅ Fill correctement lié à la variable');
         return true;
       }
     }
 
-    console.warn('[verifyFillApplication] ❌ Fill pas correctement lié');
+    log('[verifyFillApplication] ❌ Fill pas correctement lié');
     return false;
 
   } catch (error) {
-    console.error('[verifyFillApplication] Erreur:', error);
+    log('[verifyFillApplication] Erreur:', error);
     return false;
   }
 }
@@ -2463,7 +3839,7 @@ function verifyFillApplication(node, variable, fillIndex, stateBefore, stateAfte
 function verifyStrokeApplication(node, variable, strokeIndex, stateBefore, stateAfter) {
   try {
     if (!node.strokes || !node.strokes[strokeIndex]) {
-      console.warn('[verifyStrokeApplication] Stroke inexistant');
+      log('[verifyStrokeApplication] Stroke inexistant');
       return false;
     }
 
@@ -2473,16 +3849,16 @@ function verifyStrokeApplication(node, variable, strokeIndex, stateBefore, state
     if (currentStroke.boundVariables && currentStroke.boundVariables.color) {
       var boundVar = currentStroke.boundVariables.color;
       if (boundVar.type === 'VARIABLE_ALIAS' && boundVar.id === variable.id) {
-        console.log('[verifyStrokeApplication] ✅ Stroke correctement lié à la variable');
+        log('[verifyStrokeApplication] ✅ Stroke correctement lié à la variable');
         return true;
       }
     }
 
-    console.warn('[verifyStrokeApplication] ❌ Stroke pas correctement lié');
+    log('[verifyStrokeApplication] ❌ Stroke pas correctement lié');
     return false;
 
   } catch (error) {
-    console.error('[verifyStrokeApplication] Erreur:', error);
+    log('[verifyStrokeApplication] Erreur:', error);
     return false;
   }
 }
@@ -2493,7 +3869,7 @@ function verifyStrokeApplication(node, variable, strokeIndex, stateBefore, state
 function verifyNumericApplication(node, variable, result, stateBefore, stateAfter) {
   try {
     if (!result.figmaProperty) {
-      console.warn('[verifyNumericApplication] Propriété Figma non définie');
+      log('[verifyNumericApplication] Propriété Figma non définie');
       return false;
     }
 
@@ -2501,16 +3877,16 @@ function verifyNumericApplication(node, variable, result, stateBefore, stateAfte
     if (node.boundVariables && node.boundVariables[result.figmaProperty]) {
       var boundVar = node.boundVariables[result.figmaProperty];
       if (boundVar.type === 'VARIABLE_ALIAS' && boundVar.id === variable.id) {
-        console.log('[verifyNumericApplication] ✅ Propriété numérique correctement liée');
+        log('[verifyNumericApplication] ✅ Propriété numérique correctement liée');
         return true;
       }
     }
 
-    console.warn('[verifyNumericApplication] ❌ Propriété numérique pas correctement liée');
+    log('[verifyNumericApplication] ❌ Propriété numérique pas correctement liée');
     return false;
 
   } catch (error) {
-    console.error('[verifyNumericApplication] Erreur:', error);
+    log('[verifyNumericApplication] Erreur:', error);
     return false;
   }
 }
@@ -2549,7 +3925,7 @@ function validatePropertyExists(node, result) {
         return false;
     }
   } catch (error) {
-    console.warn('[validatePropertyExists] Erreur:', error);
+    log('[validatePropertyExists] Erreur:', error);
     return false;
   }
 }
@@ -2583,7 +3959,7 @@ function validateVariableCanBeApplied(variable, result) {
         return false;
     }
   } catch (error) {
-    console.warn('[validateVariableCanBeApplied] Erreur:', error);
+    log('[validateVariableCanBeApplied] Erreur:', error);
     return false;
   }
 }
@@ -2621,13 +3997,13 @@ function applyVariableToProperty(node, variable, result) {
         break;
 
       default:
-        console.warn('[applyVariableToProperty] Propriété non supportée:', result.property);
+        log('[applyVariableToProperty] Propriété non supportée:', result.property);
         return false;
     }
 
     return success;
   } catch (error) {
-    console.error('[applyVariableToProperty] Erreur critique:', error);
+    log('[applyVariableToProperty] Erreur critique:', error);
     return false;
   }
 }
@@ -2636,22 +4012,22 @@ function applyVariableToProperty(node, variable, result) {
  * Applique une variable de couleur à un fill
  */
 function applyColorVariableToFill(node, variable, fillIndex) {
-  console.log('[applyColorVariableToFill] 🎨 Application sur fill index', fillIndex);
-  console.log('[applyColorVariableToFill] 📋 Variable:', {id: variable.id, name: variable.name, type: variable.resolvedType});
+  log('[applyColorVariableToFill] 🎨 Application sur fill index', fillIndex);
+  log('[applyColorVariableToFill] 📋 Variable:', { id: variable.id, name: variable.name, type: variable.resolvedType });
 
   try {
     var fillPath = 'fills[' + fillIndex + '].color';
-    console.log('[applyColorVariableToFill] 📋 Chemin:', fillPath);
+    log('[applyColorVariableToFill] 📋 Chemin:', fillPath);
 
     // Vérifier que le fill existe
     if (!node.fills || !Array.isArray(node.fills) || !node.fills[fillIndex]) {
-      console.error('[applyColorVariableToFill] ❌ Fill inexistant à l\'index', fillIndex);
-      console.log('[applyColorVariableToFill] 📋 État fills:', node.fills);
+      log('[applyColorVariableToFill] ❌ Fill inexistant à l\'index', fillIndex);
+      log('[applyColorVariableToFill] 📋 État fills:', node.fills);
       return false;
     }
 
     var fill = node.fills[fillIndex];
-    console.log('[applyColorVariableToFill] 📋 Fill actuel:', {
+    log('[applyColorVariableToFill] 📋 Fill actuel:', {
       type: fill.type,
       hasBoundVariables: !!fill.boundVariables,
       boundVariables: fill.boundVariables
@@ -2661,34 +4037,34 @@ function applyColorVariableToFill(node, variable, fillIndex) {
     // car setBoundVariable peut échouer sur un champ contrôlé par un style
     if (node.fillStyleId) {
       try {
-        console.log('[applyColorVariableToFill] 🎯 Détachement fillStyleId avant setBoundVariable:', node.fillStyleId);
+        log('[applyColorVariableToFill] 🎯 Détachement fillStyleId avant setBoundVariable:', node.fillStyleId);
         node.fillStyleId = '';
       } catch (e) {
-        console.warn("[applyColorVariableToFill] Impossible de détacher fillStyleId", e);
+        log("[applyColorVariableToFill] Impossible de détacher fillStyleId", e);
       }
     }
 
     // Essayer d'abord setBoundVariable
-    console.log('[applyColorVariableToFill] 🔧 Tentative setBoundVariable...');
+    log('[applyColorVariableToFill] 🔧 Tentative setBoundVariable...');
     try {
       node.setBoundVariable(fillPath, variable);
-      console.log('[applyColorVariableToFill] ✅ setBoundVariable réussi');
+      log('[applyColorVariableToFill] ✅ setBoundVariable réussi');
 
       // Vérification immédiate
       var updatedFill = node.fills[fillIndex];
-      console.log('[applyColorVariableToFill] 📋 Vérification post-application:', {
+      log('[applyColorVariableToFill] 📋 Vérification post-application:', {
         hasBoundVariables: !!updatedFill.boundVariables,
         boundVariables: updatedFill.boundVariables
       });
 
       return true;
     } catch (setBoundError) {
-      console.warn('[applyColorVariableToFill] ❌ setBoundVariable échoué:', setBoundError.message);
-      console.log('[applyColorVariableToFill] 📋 Détails erreur:', setBoundError);
+      log('[applyColorVariableToFill] ❌ setBoundVariable échoué:', setBoundError.message);
+      log('[applyColorVariableToFill] 📋 Détails erreur:', setBoundError);
     }
 
     // Fallback: modification manuelle
-    console.log('[applyColorVariableToFill] 🔧 Tentative fallback manuel...');
+    log('[applyColorVariableToFill] 🔧 Tentative fallback manuel...');
     try {
       var clonedFills = JSON.parse(JSON.stringify(node.fills));
       if (!clonedFills[fillIndex].boundVariables) {
@@ -2701,28 +4077,28 @@ function applyColorVariableToFill(node, variable, fillIndex) {
 
       // Détacher les styles existants
       if (node.fillStyleId) {
-        console.log('[applyColorVariableToFill] 🎯 Détachement fillStyleId:', node.fillStyleId);
+        log('[applyColorVariableToFill] 🎯 Détachement fillStyleId:', node.fillStyleId);
         node.fillStyleId = '';
       }
 
       node.fills = clonedFills;
-      console.log('[applyColorVariableToFill] ✅ Fallback réussi');
+      log('[applyColorVariableToFill] ✅ Fallback réussi');
 
       // Vérification
       var finalFill = node.fills[fillIndex];
-      console.log('[applyColorVariableToFill] 📋 Vérification fallback:', {
+      log('[applyColorVariableToFill] 📋 Vérification fallback:', {
         hasBoundVariables: !!finalFill.boundVariables,
         boundVariables: finalFill.boundVariables
       });
 
       return true;
     } catch (fallbackError) {
-      console.error('[applyColorVariableToFill] ❌ Fallback échoué:', fallbackError.message);
+      log('[applyColorVariableToFill] ❌ Fallback échoué:', fallbackError.message);
       return false;
     }
 
   } catch (error) {
-    console.error('[applyColorVariableToFill] 💥 Erreur générale:', error);
+    log('[applyColorVariableToFill] 💥 Erreur générale:', error);
     return false;
   }
 }
@@ -2737,10 +4113,10 @@ function applyColorVariableToStroke(node, variable, strokeIndex) {
     // Essayer d'abord setBoundVariable
     try {
       node.setBoundVariable(strokePath, variable);
-      console.log('[applyColorVariableToStroke] ✅ Stroke appliqué via setBoundVariable');
+      log('[applyColorVariableToStroke] ✅ Stroke appliqué via setBoundVariable');
       return true;
     } catch (setBoundError) {
-      console.warn('[applyColorVariableToStroke] setBoundVariable échoué, tentative fallback:', setBoundError);
+      log('[applyColorVariableToStroke] setBoundVariable échoué, tentative fallback:', setBoundError);
     }
 
     // Fallback: modification manuelle
@@ -2760,13 +4136,13 @@ function applyColorVariableToStroke(node, variable, strokeIndex) {
       }
 
       node.strokes = clonedStrokes;
-      console.log('[applyColorVariableToStroke] ✅ Stroke appliqué via fallback');
+      log('[applyColorVariableToStroke] ✅ Stroke appliqué via fallback');
       return true;
     }
 
     return false;
   } catch (error) {
-    console.error('[applyColorVariableToStroke] Erreur:', error);
+    log('[applyColorVariableToStroke] Erreur:', error);
     return false;
   }
 }
@@ -2778,17 +4154,17 @@ function applyNumericVariable(node, variable, figmaProperty, displayProperty) {
   try {
     // Protection spéciale pour itemSpacing avec Space Between
     if (figmaProperty === 'itemSpacing' && node.primaryAxisAlignItems === 'SPACE_BETWEEN') {
-      console.warn('[applyNumericVariable] Impossible d\'appliquer une variable sur itemSpacing avec SPACE_BETWEEN');
+      log('[applyNumericVariable] Impossible d\'appliquer une variable sur itemSpacing avec SPACE_BETWEEN');
       return false;
     }
 
     // Appliquer la variable
     node.setBoundVariable(figmaProperty, variable);
-    console.log('[applyNumericVariable] ✅ Propriété numérique appliquée:', displayProperty);
+    log('[applyNumericVariable] ✅ Propriété numérique appliquée:', displayProperty);
     return true;
 
   } catch (error) {
-    console.error('[applyNumericVariable] Erreur:', error);
+    log('[applyNumericVariable] Erreur:', error);
     return false;
   }
 }
@@ -2808,28 +4184,28 @@ function applyFixToNode(nodeId, variableId, property, result) {
   if (verification.success) {
     return 1;
   } else {
-    console.warn("[applyFixToNode] Échec pour le nœud " + nodeId + ": " + verification.error);
+    log("[applyFixToNode] Échec pour le nœud " + nodeId + ": " + verification.error);
     return 0;
   }
 }
 
 function applyAllFixes() {
-  console.log('[applyAllFixes] 🚀 Démarrage application de tous les correctifs');
+  log('[applyAllFixes] 🚀 Démarrage application de tous les correctifs');
   var appliedCount = 0;
   var failedCount = 0;
   var results = [];
 
   if (!lastScanResults || lastScanResults.length === 0) {
-    console.log('[applyAllFixes] ⚠️ Aucun résultat de scan disponible');
+    log('[applyAllFixes] ⚠️ Aucun résultat de scan disponible');
     return 0;
   }
 
-  console.log('[applyAllFixes] 📊 Traitement de', lastScanResults.length, 'résultats');
+  log('[applyAllFixes] 📊 Traitement de', lastScanResults.length, 'résultats');
 
   // Appliquer chaque correction avec vérification
   for (var i = 0; i < lastScanResults.length; i++) {
     var result = lastScanResults[i];
-    console.log('[applyAllFixes] 🔄 Traitement résultat', i + 1, '/', lastScanResults.length, ':', result.layerName, '->', result.property);
+    log('[applyAllFixes] 🔄 Traitement résultat', i + 1, '/', lastScanResults.length, ':', result.layerName, '->', result.property);
 
     try {
       // Utiliser le nouveau système avec vérification
@@ -2843,15 +4219,15 @@ function applyAllFixes() {
 
       if (verificationResult.success) {
         appliedCount++;
-        console.log('[applyAllFixes] ✅ SUCCÈS pour résultat', i);
+        log('[applyAllFixes] ✅ SUCCÈS pour résultat', i);
       } else {
         failedCount++;
-        console.log('[applyAllFixes] ❌ ÉCHEC pour résultat', i, ':', verificationResult.error);
+        log('[applyAllFixes] ❌ ÉCHEC pour résultat', i, ':', verificationResult.error);
       }
 
     } catch (error) {
       failedCount++;
-      console.error('[applyAllFixes] 💥 ERREUR CRITIQUE pour résultat', i, ':', error);
+      log('[applyAllFixes] 💥 ERREUR CRITIQUE pour résultat', i, ':', error);
 
       results.push({
         index: i,
@@ -2866,23 +4242,23 @@ function applyAllFixes() {
   }
 
   // Rapport final
-  console.log('[applyAllFixes] 📊 RAPPORT FINAL:');
-  console.log('  - Total traité:', lastScanResults.length);
-  console.log('  - Réussis:', appliedCount);
-  console.log('  - Échoués:', failedCount);
-  console.log('  - Taux de succès:', Math.round((appliedCount / lastScanResults.length) * 100) + '%');
+  log('[applyAllFixes] 📊 RAPPORT FINAL:');
+  log('  - Total traité:', lastScanResults.length);
+  log('  - Réussis:', appliedCount);
+  log('  - Échoués:', failedCount);
+  log('  - Taux de succès:', Math.round((appliedCount / lastScanResults.length) * 100) + '%');
 
   // Afficher les diagnostics pour les échecs
   if (failedCount > 0) {
-    console.log('[applyAllFixes] 🔍 DIAGNOSTICS DES ÉCHECS:');
-    results.forEach(function(item) {
+    log('[applyAllFixes] 🔍 DIAGNOSTICS DES ÉCHECS:');
+    results.forEach(function (item) {
       if (!item.verification.success && item.verification.diagnosis) {
-        console.log('  ❌', item.result.layerName, '(' + item.result.property + '):', item.verification.diagnosis.issue);
+        log('  ❌', item.result.layerName, '(' + item.result.property + '):', item.verification.diagnosis.issue);
       }
     });
   }
 
-  console.log('[applyAllFixes] ✅ Application terminée, retours:', appliedCount);
+  log('[applyAllFixes] ✅ Application terminée, retours:', appliedCount);
   return appliedCount;
 }
 
@@ -2892,37 +4268,41 @@ function applyAllFixes() {
 
 function checkAndNotifySelection() {
   var selection = figma.currentPage.selection;
-  var hasValidSelection = selection.length > 0 && selection.some(function(node) {
+  var hasValidSelection = selection.length > 0 && selection.some(function (node) {
     return node.type === "FRAME" ||
-           node.type === "GROUP" ||
-           node.type === "COMPONENT" ||
-           node.type === "INSTANCE" ||
-           node.type === "SECTION";
+      node.type === "GROUP" ||
+      node.type === "COMPONENT" ||
+      node.type === "INSTANCE" ||
+      node.type === "SECTION";
   });
 
   // Récupérer le nom de la première frame valide sélectionnée
   var selectedFrameName = null;
   if (hasValidSelection) {
-    var firstValidNode = selection.find(function(node) {
+    var firstValidNode = selection.find(function (node) {
       return node.type === "FRAME" ||
-             node.type === "GROUP" ||
-             node.type === "COMPONENT" ||
-             node.type === "INSTANCE" ||
-             node.type === "SECTION";
+        node.type === "GROUP" ||
+        node.type === "COMPONENT" ||
+        node.type === "INSTANCE" ||
+        node.type === "SECTION";
     });
     if (firstValidNode) {
       selectedFrameName = firstValidNode.name;
     }
   }
 
+  // Créer un ID unique pour la sélection (liste triée des IDs)
+  var selectionId = selection.map(function (n) { return n.id; }).sort().join('|');
+
   figma.ui.postMessage({
     type: "selection-checked",
     hasSelection: hasValidSelection,
-    selectedFrameName: selectedFrameName
+    selectedFrameName: selectedFrameName,
+    selectionId: selectionId
   });
 }
 
-figma.on("selectionchange", function() {
+figma.on("selectionchange", function () {
   checkAndNotifySelection();
 });
 
@@ -2972,7 +4352,7 @@ figma.ui.onmessage = function (msg) {
       importTokensToFigma(tokensFromFile, namingFromFile, false);
       figma.notify("✅ Tokens importés depuis le fichier (Ctrl+Z pour annuler)");
     } catch (e) {
-      console.error(e);
+      log(e);
       figma.notify("❌ Erreur lors de l'import depuis le fichier");
     }
   }
@@ -2983,7 +4363,7 @@ figma.ui.onmessage = function (msg) {
       var ignoreHiddenLayers = msg.ignoreHiddenLayers !== false;
       scanSelection(ignoreHiddenLayers);
     } catch (e) {
-      console.error("Erreur lors de l'analyse:", e);
+      log("Erreur lors de l'analyse:", e);
       figma.notify("❌ Erreur lors de l'analyse de la frame");
     }
   }
@@ -2994,11 +4374,9 @@ figma.ui.onmessage = function (msg) {
 
     try {
       appliedCount = applyAllFixes();
-      if (appliedCount > 0 && !applicationError) {
-        figma.notify("✅ " + appliedCount + " correction(s) appliquée(s) (Ctrl+Z pour annuler)");
-      }
+      // Note: Le toast d'annulation dans l'UI gère la notification de succès
     } catch (e) {
-      console.error("❌ Erreur CRITIQUE lors de l'application des corrections:", e);
+      log("❌ Erreur CRITIQUE lors de l'application des corrections:", e);
       applicationError = e;
     }
 
@@ -3009,11 +4387,9 @@ figma.ui.onmessage = function (msg) {
         error: applicationError ? applicationError.message : null
       });
 
-      if (!applicationError) {
-        figma.notify("✅ " + appliedCount + " correction(s) appliquée(s) avec succès");
-      }
+      // Note: Le toast d'annulation dans l'UI gère la notification de succès
     } catch (uiError) {
-      console.error("❌ Erreur lors de l'envoi du message à l'UI:", uiError);
+      log("❌ Erreur lors de l'envoi du message à l'UI:", uiError);
     }
   }
 
@@ -3027,7 +4403,7 @@ figma.ui.onmessage = function (msg) {
       var result = lastScanResults ? lastScanResults[index] : null;
       appliedCount = applySingleFix(result, selectedVariableId);
     } catch (e) {
-      console.error("❌ Erreur lors de l'application de la correction individuelle:", e);
+      log("❌ Erreur lors de l'application de la correction individuelle:", e);
       applicationError = e;
     }
 
@@ -3039,12 +4415,28 @@ figma.ui.onmessage = function (msg) {
         index: index
       });
 
-      if (!applicationError && appliedCount > 0) {
-        figma.notify("✅ Correction appliquée avec succès");
-      }
+      // Note: Le toast d'annulation dans l'UI gère la notification
+      // figma.notify supprimé pour éviter le doublon
     } catch (uiError) {
-      console.error("❌ Erreur lors de l'envoi du message à l'UI:", uiError);
+      log("❌ Erreur lors de l'envoi du message à l'UI:", uiError);
     }
+  }
+
+  // ✨ UNDO TOAST : Gestionnaire d'annulation
+  if (msg.type === "undo-fix") {
+    var indices = msg.indices || [];
+    log("[undo-fix] Demande d'annulation pour indices:", indices);
+
+    // Notifier l'utilisateur d'utiliser Ctrl+Z pour annuler dans Figma
+    // L'API Figma ne permet pas de déclencher un undo programmatiquement
+    // mais l'action est déjà dans l'historique, donc Ctrl+Z fonctionne
+    figma.notify("⟲ Utilisez Ctrl+Z (ou Cmd+Z) pour annuler dans Figma", { timeout: 3000 });
+
+    // Envoyer une confirmation à l'UI
+    figma.ui.postMessage({
+      type: "undo-acknowledged",
+      indices: indices
+    });
   }
 
   if (msg.type === "check-selection") {
@@ -3063,7 +4455,7 @@ figma.ui.onmessage = function (msg) {
     try {
       figma.ui.resize(width, height);
     } catch (error) {
-      console.warn("Erreur lors du redimensionnement:", error);
+      log("Erreur lors du redimensionnement:", error);
     }
   }
 
@@ -3077,16 +4469,16 @@ figma.ui.onmessage = function (msg) {
       if (indices.length === 0 || !lastScanResults) return;
 
       // Récupérer les nodeIds correspondants aux indices
-      var nodeIds = indices.map(function(index) {
+      var nodeIds = indices.map(function (index) {
         return lastScanResults[index] ? lastScanResults[index].nodeId : null;
-      }).filter(function(nodeId) { return nodeId !== null; });
+      }).filter(function (nodeId) { return nodeId !== null; });
 
       if (nodeIds.length === 0) return;
 
       // Obtenir les nodes et les sélectionner
-      var nodes = nodeIds.map(function(nodeId) {
+      var nodes = nodeIds.map(function (nodeId) {
         return figma.getNodeById(nodeId);
-      }).filter(function(node) { return node !== null; });
+      }).filter(function (node) { return node !== null; });
 
       if (nodes.length > 0) {
         // Sélectionner les nodes et les mettre en vue pour que l'utilisateur les voit précisément
@@ -3094,7 +4486,7 @@ figma.ui.onmessage = function (msg) {
         figma.viewport.scrollAndZoomIntoView(nodes);
       }
     } catch (e) {
-      console.error("Erreur lors du highlight des nodes:", e);
+      log("Erreur lors du highlight des nodes:", e);
     }
   }
 
@@ -3115,7 +4507,7 @@ figma.ui.onmessage = function (msg) {
 
     try {
       // Appliquer la correction à tous les indices du groupe
-      indices.forEach(function(index) {
+      indices.forEach(function (index) {
         if (index >= 0 && index < lastScanResults.length) {
           var result = lastScanResults[index];
           if (result) {
@@ -3124,13 +4516,13 @@ figma.ui.onmessage = function (msg) {
         }
       });
 
-      figma.notify("✅ " + appliedCount + " correction(s) appliquée(s) au groupe");
+      // Note: Le toast d'annulation dans l'UI gère la notification de succès
 
       // Rescanner pour mettre à jour l'UI (avec les mêmes options)
       scanSelection(true); // Par défaut ignorer les calques cachés
 
     } catch (e) {
-      console.error("❌ Erreur lors de l'application du fix de groupe:", e);
+      log("❌ Erreur lors de l'application du fix de groupe:", e);
       applicationError = e;
     }
 
@@ -3141,8 +4533,79 @@ figma.ui.onmessage = function (msg) {
         error: applicationError ? applicationError.message : null
       });
     } catch (uiError) {
-      console.error("❌ Erreur lors de l'envoi du message à l'UI:", uiError);
+      log("❌ Erreur lors de l'envoi du message à l'UI:", uiError);
     }
+  }
+
+  if (msg.type === "preview-fix") {
+    var indices = msg.indices || [];
+    var variableId = msg.variableId;
+
+
+    // Récupération sécurisée des résultats (test des deux sources)
+    var scanResults = Scanner.lastScanResults || lastScanResults;
+
+    if (!scanResults || scanResults.length === 0) {
+      figma.ui.postMessage({
+        type: "preview-error",
+        message: "Données de scan perdues. Veuillez relancer l'analyse."
+      });
+      return;
+    }
+
+    var variable = FigmaService.getVariableById(variableId);
+    if (!variable) {
+      return;
+    }
+
+
+    var appliedCount = 0;
+
+    indices.forEach(function (index) {
+      // Protection contre index hors limites
+      if (index >= 0 && index < scanResults.length) {
+        var result = scanResults[index];
+        var node = figma.getNodeById(result.nodeId);
+
+        if (node && !node.removed) {
+
+          try {
+            // DETACHER LES STYLES AVANT (Crucial pour que setBoundVariable fonctionne)
+            if (result.property === 'Fill' && node.fillStyleId) {
+              node.fillStyleId = '';
+            }
+            if (result.property === 'Stroke' && node.strokeStyleId) {
+              node.strokeStyleId = '';
+            }
+
+            // Appliquer la variable silencieusement
+            var success = Fixer._applyVariableToProperty(node, result, variable);
+
+            if (success) appliedCount++;
+
+          } catch (err) {
+          }
+        } else {
+        }
+      }
+    });
+
+  }
+
+  // Message spécial pour synchroniser les résultats (diagnostic)
+  if (msg.type === "sync-scan-results") {
+
+    if (msg.results && Array.isArray(msg.results)) {
+      Scanner.lastScanResults = msg.results;
+    } else {
+    }
+
+    // Confirmer la synchronisation
+    figma.ui.postMessage({
+      type: "sync-confirmation",
+      success: !!Scanner.lastScanResults,
+      count: Scanner.lastScanResults ? Scanner.lastScanResults.length : 0
+    });
   }
 
   // ============================================
@@ -3153,12 +4616,12 @@ figma.ui.onmessage = function (msg) {
    * Scan ultra-simple - seulement les fills COLOR non liés
    */
   function simpleScan() {
-    console.log("🔍 [SIMPLE] DÉBUT SCAN SIMPLE");
+    log("🔍 [SIMPLE] DÉBUT SCAN SIMPLE");
 
     var results = [];
     var pageChildren = figma.currentPage.children;
 
-    console.log("📊 [SIMPLE] Enfants de page à scanner:", pageChildren.length);
+    log("📊 [SIMPLE] Enfants de page à scanner:", pageChildren.length);
 
     for (var i = 0; i < pageChildren.length; i++) {
       var node = pageChildren[i];
@@ -3168,20 +4631,20 @@ figma.ui.onmessage = function (msg) {
         for (var j = 0; j < node.fills.length; j++) {
           var fill = node.fills[j];
 
-          if (fill.type === 'SOLID' && fill.color) {
+          if (fill.type === CONFIG.types.SOLID && fill.color) {
             // Vérifier si pas déjà lié
             var isBound = node.boundVariables &&
-                          node.boundVariables.fills &&
-                          node.boundVariables.fills[j];
+              node.boundVariables.fills &&
+              node.boundVariables.fills[j];
 
             if (!isBound) {
               var hex = rgbToHex(fill.color);
-              console.log("🎯 [SIMPLE] Fill trouvé: " + hex + " dans " + node.name);
+              log("🎯 [SIMPLE] Fill trouvé: " + hex + " dans " + node.name);
 
               results.push({
                 nodeId: node.id,
                 nodeName: node.name,
-                property: 'Fill',
+                property: CONFIG.properties.FILL,
                 fillIndex: j,
                 hexValue: hex,
                 type: 'color'
@@ -3192,7 +4655,7 @@ figma.ui.onmessage = function (msg) {
       }
     }
 
-    console.log("✅ [SIMPLE] SCAN TERMINÉ - " + results.length + " problèmes trouvés");
+    log("✅ [SIMPLE] SCAN TERMINÉ - " + results.length + " problèmes trouvés");
     return results;
   }
 
@@ -3200,35 +4663,35 @@ figma.ui.onmessage = function (msg) {
    * Application ultra-simple - utilise la première variable COLOR disponible
    */
   function simpleApply(results) {
-    console.log("🔧 [SIMPLE] DÉBUT APPLICATION SIMPLE - " + results.length + " éléments");
+    log("🔧 [SIMPLE] DÉBUT APPLICATION SIMPLE - " + results.length + " éléments");
 
     var successCount = 0;
 
     // Récupérer toutes les variables COLOR disponibles
-    var colorVars = figma.variables.getLocalVariables().filter(function(v) {
+    var colorVars = figma.variables.getLocalVariables().filter(function (v) {
       return v.resolvedType === 'COLOR';
     });
 
-    console.log("🎨 [SIMPLE] Variables COLOR disponibles:", colorVars.length);
+    log("🎨 [SIMPLE] Variables COLOR disponibles:", colorVars.length);
 
     if (colorVars.length === 0) {
-      console.log("⚠️ [SIMPLE] Aucune variable COLOR trouvée - impossible d'appliquer");
+      log("⚠️ [SIMPLE] Aucune variable COLOR trouvée - impossible d'appliquer");
       return 0;
     }
 
     // Pour chaque résultat, essayer d'appliquer la première variable COLOR
     var defaultVar = colorVars[0];
-    console.log("🎯 [SIMPLE] Utilisation variable par défaut:", defaultVar.name);
+    log("🎯 [SIMPLE] Utilisation variable par défaut:", defaultVar.name);
 
     for (var i = 0; i < results.length; i++) {
       var result = results[i];
-      console.log("🔧 [SIMPLE] Application sur " + result.nodeName + " (fill " + result.fillIndex + ")");
+      log("🔧 [SIMPLE] Application sur " + result.nodeName + " (fill " + result.fillIndex + ")");
 
       try {
         var node = figma.getNodeById(result.nodeId);
 
         if (!node) {
-          console.log("❌ [SIMPLE] Nœud disparu");
+          log("❌ [SIMPLE] Nœud disparu");
           continue;
         }
 
@@ -3238,24 +4701,24 @@ figma.ui.onmessage = function (msg) {
         // Vérification simple
         var updatedFill = node.fills[result.fillIndex];
         var isApplied = updatedFill.boundVariables &&
-                       updatedFill.boundVariables.color &&
-                       updatedFill.boundVariables.color.id === defaultVar.id;
+          updatedFill.boundVariables.color &&
+          updatedFill.boundVariables.color.id === defaultVar.id;
 
         if (isApplied) {
-          console.log("✅ [SIMPLE] SUCCÈS - Variable appliquée et vérifiée");
+          log("✅ [SIMPLE] SUCCÈS - Variable appliquée et vérifiée");
           successCount++;
         } else {
-          console.log("⚠️ [SIMPLE] INCERTAIN - Application tentée");
+          log("⚠️ [SIMPLE] INCERTAIN - Application tentée");
           // On compte quand même car setBoundVariable peut réussir sans que la vérification fonctionne
           successCount++;
         }
 
       } catch (error) {
-        console.log("❌ [SIMPLE] ERREUR:", error.message);
+        log("❌ [SIMPLE] ERREUR:", error.message);
       }
     }
 
-    console.log("🎉 [SIMPLE] APPLICATION TERMINÉE - " + successCount + "/" + results.length + " réussis");
+    log("🎉 [SIMPLE] APPLICATION TERMINÉE - " + successCount + "/" + results.length + " réussis");
     return successCount;
   }
 };

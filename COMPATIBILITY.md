@@ -76,3 +76,5 @@ Si le projet évolue vers un système de build (webpack, esbuild, etc.), consid�
 </xai:function_call">Créer un fichier de documentation sur la compatibilité JavaScript
 
 
+
+

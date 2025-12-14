@@ -1,3889 +1,4 @@
-<!DOCTYPE html>
-<html lang="fr">
 
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    /* ============================================
-       POLYCEA THEME - Variables CSS
-       ============================================ */
-    :root {
-      --poly-bg: #07190F;
-      --poly-surface: #0E2416;
-      --poly-surface-soft: #122D1D;
-      --poly-accent: #8AD53F;
-      --poly-accent-rgb: 138, 213, 63;
-      --poly-accent-hover: #A6E766;
-      --poly-text: #F9FAFB;
-      --poly-text-muted: #9CA3AF;
-      --poly-border-subtle: #1F3A25;
-      --poly-success: #16A34A;
-      --poly-success-hover: #15803D;
-      --poly-info: #2563EB;
-      --poly-warning: #F59E0B;
-      --poly-error: #DC2626;
-      --poly-error-hover: #B91C1C;
-      --poly-success-light: rgba(22, 163, 74, 0.1);
-      --poly-error-light: rgba(220, 38, 38, 0.1);
-      --poly-radius: 12px;
-      --poly-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
-      --poly-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.2);
-      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-    }
-
-    * {
-      box-sizing: border-box;
-    }
-
-    /* ============================================
-       RESIZE HANDLE STYLES
-       ============================================ */
-
-    /* Fixed Unified List for proper scrolling */
-    #unifiedCleaningList {
-      flex: 1;
-      overflow-y: auto;
-      padding: 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      /* Espacement entre les cartes */
-      min-height: 0;
-      /* CRITICAL for Flexbox scroll */
-      margin-top: 0;
-      border-top: none;
-      /* Le flex: 1 permet au conteneur de prendre tout l'espace disponible restant */
-    }
-
-    /* Dashboard Header Scan */
-    .dashboard-header-scan {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 16px 20px;
-      background: var(--poly-surface);
-      border-bottom: 1px solid var(--poly-border-subtle);
-      border-top-left-radius: var(--poly-radius);
-      border-top-right-radius: var(--poly-radius);
-      /* Ensure it's sticky or just top of the card */
-    }
-
-    .dashboard-header-scan .title-group h5 {
-      margin: 0;
-      font-size: 14px;
-      font-weight: 700;
-      color: var(--poly-text);
-      letter-spacing: -0.01em;
-    }
-
-    .dashboard-header-scan .title-group p {
-      margin: 2px 0 0 0;
-      font-size: 12px;
-      color: var(--poly-text-muted);
-    }
-
-    /* Scan Info Row Layout */
-    .scan-info-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      margin-bottom: 24px;
-    }
-
-    .scan-info-row .title-group {
-      flex: 1;
-      margin-right: 16px;
-    }
-
-    .scan-info-row .progress-gauge-container {
-      flex-shrink: 0;
-    }
-
-    /* Progress Gauge Resized (via CSS scaling of SVG) */
-    .progress-gauge {
-      width: 44px !important;
-      height: 44px !important;
-      position: relative;
-      display: none;
-      /* JS will toggle flex */
-      align-items: center;
-      justify-content: center;
-    }
-
-    .progress-gauge svg {
-      width: 44px !important;
-      height: 44px !important;
-      transform: rotate(0deg);
-      /* JS handles rotation usually or we rotate the circle */
-    }
-
-    .progress-gauge .progress-text {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      font-size: 10px;
-      font-weight: 700;
-      color: var(--poly-text);
-    }
-
-    .progress-gauge .percent-symbol {
-      font-size: 8px;
-      opacity: 0.8;
-    }
-
-    .progress-gauge .progress-label {
-      display: none;
-      /* Hide label "Nettoyage" */
-    }
-
-    /* Magic Button Bar */
-    .scan-actions-bar {
-      padding: 12px 20px;
-      background: var(--poly-surface);
-      border-bottom: 1px solid var(--poly-border-subtle);
-      display: flex;
-      justify-content: center;
-    }
-
-    /* .btn-magic removed to enforce Polycea Theme */
-
-    /* Compact Filter System */
-    .filter-system-compact {
-      display: flex;
-      gap: 8px;
-      padding: 8px 20px;
-      background: var(--poly-surface-soft);
-      border-bottom: 1px solid var(--poly-border-subtle);
-      align-items: center;
-    }
-
-    .filter-btn {
-      flex: 1;
-      justify-content: center;
-      height: 28px !important;
-      padding: 0 12px !important;
-      font-size: 12px !important;
-      background: transparent;
-      border: 1px solid transparent;
-      border-radius: 6px;
-      color: var(--poly-text-muted);
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .filter-btn:hover {
-      background: rgba(255, 255, 255, 0.05);
-      color: var(--poly-text);
-    }
-
-    .filter-btn.active {
-      background: var(--poly-surface);
-      border-color: var(--poly-border-subtle);
-      color: var(--poly-text);
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-    }
-
-    .filter-btn svg {
-      width: 14px;
-      height: 14px;
-      opacity: 0.7;
-    }
-
-    .filter-btn.active svg path {
-      fill: var(--poly-text);
-    }
-
-
-    /* Custom scrollbar for unified cleaning list */
-    #unifiedCleaningList::-webkit-scrollbar {
-
-      width: 6px;
-    }
-
-    #unifiedCleaningList::-webkit-scrollbar-track {
-      background: var(--poly-surface-soft);
-      border-radius: 3px;
-    }
-
-    #unifiedCleaningList::-webkit-scrollbar-thumb {
-      background: var(--poly-accent);
-      border-radius: 3px;
-    }
-
-    #unifiedCleaningList::-webkit-scrollbar-thumb:hover {
-      background: var(--poly-accent-hover);
-    }
-
-    #resize-handle {
-      opacity: 0.8;
-      transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    }
-
-    #resize-handle:hover {
-      opacity: 1;
-      transform: scale(1.1);
-    }
-
-    /* Prevent selection during resize */
-    .resizing * {
-      user-select: none !important;
-      cursor: nw-resize !important;
-    }
-
-    /* Prevent scroll during resize */
-    .resizing {
-      overflow: hidden !important;
-    }
-
-    body {
-      margin: 0;
-      padding: 0;
-      background-color: var(--poly-bg);
-      color: var(--poly-text);
-      font-size: 14px;
-      line-height: 1.5;
-      position: relative;
-      /* Pour le positionnement du handle de redimensionnement */
-      min-width: 400px;
-      min-height: 500px;
-    }
-
-    /* ============================================
-       APP LAYOUT & HEADER
-       ============================================ */
-    .app {
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-
-    .app-header {
-      background: var(--poly-surface);
-      border-bottom: 1px solid var(--poly-border-subtle);
-      padding: 16px 24px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      min-height: 72px;
-      flex-shrink: 0;
-      position: relative;
-      /* Pour le debug si nécessaire */
-    }
-
-    .header-logo-section {
-      flex: 0 0 auto;
-      /* Ne prend que l'espace nécessaire */
-      min-width: 0;
-      /* Permet de réduire si nécessaire */
-      max-width: 60%;
-      /* Maximum 60% de la largeur du header */
-      display: flex;
-      align-items: center;
-    }
-
-    .header-controls {
-      flex: 0 0 auto;
-      /* Ne prend que l'espace nécessaire */
-      margin-left: auto;
-      /* Pousse vers la droite */
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .logo {
-      height: 32px !important;
-      width: auto !important;
-      min-width: 0 !important;
-      object-fit: contain;
-      display: block;
-      flex-shrink: 0 !important;
-    }
-
-    .header-left {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      flex-shrink: 0;
-    }
-
-
-    /* App body - Unique Scrollable Zone logic handled by steps */
-    .app-body {
-      display: flex;
-      flex-direction: column;
-      flex: 1;
-      height: 100%;
-      overflow: hidden;
-      padding: 20px;
-      padding-bottom: 0 !important;
-    }
-
-    /* ============================================
-       WIZARD STEPS & CARDS (The Logic)
-       ============================================ */
-    .wizard-step {
-      display: none;
-    }
-
-    /* DEFAULT STATE (Steps 0, 1, 2): Hug Content & Page Scroll */
-    .wizard-step.active {
-      display: flex;
-      flex-direction: column;
-      height: auto;
-      width: 100%;
-    }
-
-    /* Allow specific steps to scroll the page body */
-    #wizardStep0.active,
-    #wizardStep1.active,
-    #wizardStep2.active {
-      overflow-y: auto;
-      height: 100%;
-      display: block;
-      padding-bottom: 120px;
-      /* Clear footer */
-    }
-
-    #wizardStep4.active {
-      height: 100%;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      padding-bottom: 0;
-    }
-
-    #scanResults {
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      flex: 1;
-      height: 100%;
-      min-height: 0;
-      /* Ensure container matches parent */
-    }
-
-    #scanResults .card {
-      padding: 0;
-      overflow: hidden;
-      gap: 0;
-      border: 1px solid var(--poly-border-subtle);
-      display: flex;
-      flex-direction: column;
-      flex: 1;
-      min-height: 0;
-      margin-bottom: 80px;
-      /* Space for footer */
-    }
-
-    .card {
-      display: flex;
-      flex-direction: column;
-      height: auto;
-      flex-grow: 0;
-      background: var(--poly-surface-soft);
-      padding: 20px;
-      border-radius: var(--poly-radius);
-      border: 1px solid var(--poly-border-subtle);
-      box-shadow: var(--poly-shadow-sm);
-      margin-bottom: 20px;
-    }
-
-    /* --- STEP 0: No borders for sections --- */
-    #wizardStep0 .card.choice-section {
-      border: none;
-      box-shadow: none;
-    }
-
-    /* --- No borders for correction cards --- */
-    .cleaning-result-card {
-      border: none;
-      box-shadow: none;
-    }
-
-
-    /* --- STEP 3 EXCEPTION: Full Height & Internal Scroll --- */
-    #wizardStep3.active {
-      height: 100%;
-      flex: 1;
-      overflow: hidden;
-      /* No outer scroll */
-      display: flex;
-      flex-direction: column;
-      min-height: 0;
-    }
-
-    #wizardStep3 .card {
-      height: 100%;
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      min-height: 0;
-      /* Allows children to shrink */
-      margin-bottom: 0;
-      border-bottom-left-radius: 0;
-      border-bottom-right-radius: 0;
-      border-bottom: none;
-      padding-bottom: 0;
-      overflow: visible;
-      /* Remove scroll from card container */
-    }
-
-    /* ============================================
-       DESIGNER & DEV VIEWS (Step 3)
-       ============================================ */
-
-    /* Designer View (Token Table) */
-    #designerView {
-      display: flex;
-      flex-direction: column;
-      flex: 1;
-      min-height: 0;
-      overflow: hidden;
-      padding: 0 4px 120px 0;
-      /* Bottom padding for footer */
-    }
-
-    .preview-section {
-      flex: 1;
-      overflow-y: auto;
-      min-height: 0;
-    }
-
-    /* Developer View (Code Editor) */
-    #devView {
-      display: flex;
-      flex-direction: column;
-      flex: 1;
-      overflow: hidden;
-      gap: 0;
-      min-height: 0;
-      /* CRITICAL for scroll */
-    }
-
-    /* Spacing fixes for Dev View */
-    #devView h3 {
-      margin: 0 0 8px 0;
-      font-size: 16px;
-      font-weight: 600;
-      color: var(--poly-text);
-    }
-
-    #devView p {
-      margin: 0 0 20px 0;
-      font-size: 13px;
-      color: var(--poly-text-muted);
-      line-height: 1.4;
-    }
-
-    #devView label {
-      display: block;
-      margin-bottom: 6px;
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      color: var(--poly-text-muted);
-    }
-
-    #devView select {
-      margin-bottom: 16px;
-      width: 100%;
-    }
-
-    /* Code Editor Wrapper & Container */
-    .editor-wrapper {
-      position: relative;
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      border: 1px solid var(--poly-border-subtle);
-      border-radius: 8px;
-      min-height: 0;
-      /* CRITICAL for scroll */
-    }
-
-    .editor-container {
-      flex: 1;
-      background: #1E1E1E;
-      border: none;
-      border-radius: 0;
-      overflow: auto;
-      /* Internal Scroll */
-      padding: 16px 16px 120px 16px;
-      /* Huge bottom padding */
-      font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
-      font-size: 12px;
-      line-height: 1.5;
-      color: #D4D4D4;
-      white-space: pre;
-      user-select: text;
-      cursor: text;
-    }
-
-    /* Syntax Highlighting */
-    .syn-key {
-      color: #9CDCFE;
-    }
-
-    .syn-string {
-      color: #CE9178;
-    }
-
-    .syn-number {
-      color: #B5CEA8;
-    }
-
-    .syn-comment {
-      color: #6A9955;
-    }
-
-    .syn-kwd {
-      color: #C586C0;
-    }
-
-    .syn-punc {
-      color: #D4D4D4;
-    }
-
-    /* ============================================
-       COMPONENTS (Inputs, Buttons, etc.)
-       ============================================ */
-    .card h3 {
-      margin: 0 0 16px;
-      font-size: 16px;
-      font-weight: 600;
-      color: var(--poly-text);
-    }
-
-    .card p {
-      color: var(--poly-text-muted);
-      font-size: 13px;
-      margin: 0 0 16px;
-    }
-
-    label {
-      font-size: 12px;
-      font-weight: 600;
-      display: block;
-      margin-bottom: 8px;
-      color: var(--poly-text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    input[type="text"],
-    select {
-      width: 100%;
-      padding: 12px 16px;
-      font-size: 14px;
-      border-radius: 8px;
-      border: 1px solid var(--poly-border-subtle);
-      margin-bottom: 16px;
-      font-family: inherit;
-      background: var(--poly-surface);
-      color: var(--poly-text);
-      transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    }
-
-    input[type="text"]:focus,
-    select:focus {
-      outline: none;
-      border-color: var(--poly-accent);
-      box-shadow: 0 0 0 3px rgba(138, 213, 63, 0.15);
-    }
-
-    /* Color Input Group */
-    .color-input-group {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      /* Center alignment */
-      margin-bottom: 16px;
-      width: 100%;
-    }
-
-    /* Middle Input Wrapper */
-    .color-input-wrapper {
-      flex: 1;
-      display: flex;
-    }
-
-    /* Force input to match height and remove margin inside group */
-    .color-input-group input[type="text"] {
-      margin-bottom: 0;
-      height: 48px;
-    }
-
-    /* Ensure button doesn't look weird */
-    .color-input-group button {
-      height: 48px;
-      width: auto !important;
-      /* Force auto width */
-      flex-shrink: 0;
-      margin: 0;
-      /* Remove default margins if any */
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .color-preview {
-      width: 48px;
-      height: 48px;
-      border-radius: 8px;
-      border: 2px solid var(--poly-border-subtle);
-      cursor: pointer;
-      position: relative;
-      overflow: hidden;
-      transition: border-color 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    }
-
-    .color-preview:hover {
-      border-color: var(--poly-accent);
-    }
-
-    .color-preview input[type="color"] {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      border: none;
-      padding: 0;
-      margin: 0;
-      cursor: pointer;
-      opacity: 0;
-    }
-
-    .color-preview-bg {
-      width: 100%;
-      height: 100%;
-    }
-
-    /* Buttons */
-    button {
-      background: var(--poly-accent);
-      color: var(--poly-bg);
-      border: none;
-      padding: 12px 24px;
-      border-radius: 8px;
-      width: 100%;
-      font-size: 14px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    }
-
-    button:hover {
-      background: var(--poly-accent-hover);
-      transform: translateY(-1px);
-    }
-
-    button:disabled {
-      background: var(--poly-surface-soft);
-      color: var(--poly-text-muted);
-      border: 1px solid var(--poly-border-subtle);
-      cursor: not-allowed;
-      opacity: 0.6;
-      transform: none;
-    }
-
-    .btn-secondary {
-      background: var(--poly-surface);
-      color: var(--poly-text);
-      border: 1px solid var(--poly-border-subtle);
-    }
-
-    .btn-secondary:hover {
-      background: var(--poly-surface-soft);
-      border-color: var(--poly-accent);
-    }
-
-    .btn-soft-primary {
-      background: rgba(138, 213, 63, 0.15); /* Vert très clair */
-      color: var(--poly-accent);             /* Texte vert vif */
-      border: 1px solid rgba(138, 213, 63, 0.3);
-      font-weight: 600;
-      transition: all 0.2s ease;
-    }
-
-    .btn-soft-primary:hover {
-      background: rgba(138, 213, 63, 0.25);
-      transform: translateY(-1px);
-    }
-
-    .btn-icon {
-      background: transparent;
-      border: none;
-      padding: 2px 6px;
-      cursor: pointer;
-      font-size: 14px;
-      opacity: 0.6;
-      width: auto;
-    }
-
-    .btn-icon:hover {
-      opacity: 1;
-      color: var(--poly-error);
-    }
-
-    .btn-icon svg {
-      width: 16px;
-      height: 16px;
-      stroke-width: 2;
-    }
-
-    /* Tabs */
-
-    /* Onglets de génération de tokens - style original restauré */
-    /* Onglets de génération de tokens & Filtres Scan */
-    .tabs {
-      display: flex;
-      gap: 4px;
-      margin-bottom: 16px;
-      background: var(--poly-surface);
-      padding: 6px;
-      border: 1px solid rgba(138, 213, 63, 0.3);
-      border-radius: 12px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-
-    .tabs .tab {
-      flex: 1;
-      padding: 10px 16px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: 500;
-      text-align: center;
-      border: none;
-      background: transparent;
-      color: var(--poly-text-muted);
-      transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-      position: relative;
-      text-transform: none;
-      letter-spacing: normal;
-    }
-
-    .tabs .tab.active {
-      background: var(--poly-accent);
-      color: var(--poly-bg);
-      font-weight: 600;
-      box-shadow: 0 2px 8px rgba(138, 213, 63, 0.3);
-    }
-
-    .tabs .tab:hover:not(.active) {
-      color: var(--poly-accent);
-      background: rgba(138, 213, 63, 0.1);
-      transform: translateY(-1px);
-      border-color: var(--poly-accent);
-      /* Ajout visible */
-    }
-
-    .tabs .tab:focus:not(.active) {
-      outline: none;
-      color: var(--poly-accent);
-      background: rgba(138, 213, 63, 0.1);
-      box-shadow: 0 0 0 2px rgba(138, 213, 63, 0.2);
-    }
-
-    /* Locked Banner */
-    .locked-banner {
-      margin-top: 16px;
-      padding: 12px 16px;
-      background: rgba(138, 213, 63, 0.1);
-      border: 1px solid rgba(138, 213, 63, 0.2);
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      color: var(--poly-accent);
-    }
-
-    .locked-banner-text {
-      font-size: 12px;
-      font-weight: 500;
-      color: var(--poly-text);
-      line-height: 1.4;
-    }
-
-    .locked-banner-sub {
-      font-size: 11px;
-      color: var(--poly-text-muted);
-      display: block;
-      margin-top: 2px;
-    }
-
-    /* Mode Toggle */
-    .mode-toggle {
-      display: inline-flex;
-      background: var(--poly-surface);
-      border: 1px solid var(--poly-border-subtle);
-      border-radius: 6px;
-      padding: 2px;
-      gap: 2px;
-    }
-
-    .mode-toggle-btn {
-      padding: 4px 12px;
-      font-size: 11px;
-      font-weight: 600;
-      border: none;
-      background: transparent;
-      color: var(--poly-text-muted);
-      border-radius: 4px;
-      cursor: pointer;
-      text-transform: uppercase;
-    }
-
-    .mode-toggle-btn.active {
-      background: var(--poly-accent);
-      color: var(--poly-bg);
-    }
-
-    .mode-toggle-btn:hover,
-    .mode-toggle-btn:focus {
-      background: rgba(138, 213, 63, 0.15);
-      color: var(--poly-accent);
-      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-    }
-
-    .mode-toggle-btn.active:hover,
-    .mode-toggle-btn.active:focus {
-      background: var(--poly-accent-hover);
-      color: var(--poly-bg);
-    }
-
-    .hidden {
-      display: none !important;
-    }
-
-    /* Library Grid & Icons */
-    .library-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 12px;
-      margin-top: 16px;
-    }
-
-    /* --- LIBRARY CARD STYLES (Harmonized with Step 0) --- */
-
-    /* 1. The Container (Card) */
-    .library-option {
-      background: var(--poly-surface);
-      padding: 20px;
-      border-radius: var(--poly-radius);
-      border: 2px solid var(--poly-border-subtle);
-      cursor: pointer;
-      transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-      text-align: center;
-      font-weight: 600;
-      font-size: 14px;
-      color: var(--poly-text);
-      min-height: 110px;
-      /* Increased slightly for the circle */
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-    }
-
-    /* 2. Hover on Card (Lift effect) */
-    .library-option:hover {
-      border-color: var(--poly-accent);
-      background: var(--poly-surface-soft);
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    }
-
-    .library-option.selected {
-      border-color: var(--poly-accent);
-      background: var(--poly-surface-soft);
-      color: var(--poly-accent);
-      box-shadow: 0 0 0 3px rgba(138, 213, 63, 0.15);
-    }
-
-    /* 3. The Icon (Circle Style) */
-    .library-option .icon {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-
-      /* Dimensions (Match Step 0) */
-      width: 40px !important;
-      height: 40px !important;
-      min-width: 40px !important;
-      min-height: 40px !important;
-
-      /* Shape & Color */
-      border-radius: 50%;
-      background: var(--poly-surface-soft);
-      border: 1px solid var(--poly-border-subtle);
-      color: var(--poly-accent);
-
-      margin-bottom: 8px;
-      flex-shrink: 0 !important;
-      transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    }
-
-    /* 4. Hover on Icon (Invert Colors + Scale) */
-    .library-option:hover .icon,
-    .library-option.selected .icon {
-      background: var(--poly-accent);
-      border-color: var(--poly-accent);
-      color: var(--poly-bg) !important;
-      /* Icon turns dark */
-      transform: scale(1.1);
-    }
-
-
-    /* Choice Grid (Vue 0) */
-    .choice-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 12px;
-      margin-bottom: 20px;
-    }
-
-    .choice-card {
-      background: var(--poly-surface);
-      border: 1px solid var(--poly-border-subtle);
-      border-radius: 8px;
-      padding: 16px;
-      cursor: pointer;
-      transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 4px;
-      height: 100%;
-    }
-
-    .choice-card:hover {
-      border-color: var(--poly-accent);
-      background: var(--poly-surface-soft);
-    }
-
-    .choice-card.active {
-      border-color: var(--poly-accent);
-      background: rgba(138, 213, 63, 0.05);
-      box-shadow: 0 0 0 1px var(--poly-accent);
-    }
-
-    .choice-card .icon {
-      border-radius: 50%;
-      background: var(--poly-surface-soft);
-      width: 40px;
-      height: 40px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--poly-accent);
-      margin-bottom: 8px;
-      border: 1px solid var(--poly-border-subtle);
-    }
-
-    /* Hover and active effects for choice-card icons (make them dark) */
-    .choice-card:hover .icon,
-    .choice-card.active .icon {
-      background: var(--poly-accent);
-      border-color: var(--poly-accent);
-      color: var(--poly-bg) !important;
-      /* Icon turns dark */
-      transform: scale(1.1);
-    }
-
-    .choice-card .icon svg {
-      width: 20px;
-      height: 20px;
-    }
-
-    /* Sticky Footer */
-    .sticky-footer {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      width: 100%;
-      background: rgba(14, 36, 22, 0.95);
-      backdrop-filter: blur(8px);
-      border-top: 1px solid var(--poly-border-subtle);
-      padding: 12px 20px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
-      z-index: 100;
-      box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.2);
-    }
-
-    .sticky-footer-content {
-      width: 100%;
-      display: flex;
-      justify-content: flex-end;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .footer-signature {
-      font-size: 10px;
-      color: var(--poly-text-muted);
-      opacity: 0.7;
-    }
-
-    .footer-signature a {
-      color: var(--poly-accent-hover);
-      text-decoration: none;
-      border-bottom: 1px dotted var(--poly-text-muted);
-    }
-
-    /* Token Table */
-    .token-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 8px;
-    }
-
-    .token-table th {
-      text-align: left;
-      padding: 6px 8px;
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--poly-text-muted);
-      text-transform: uppercase;
-      border-bottom: 2px solid var(--poly-border-subtle);
-    }
-
-    .token-table td {
-      padding: 6px 8px;
-      border-bottom: 1px solid var(--poly-border-subtle);
-      font-size: 12px;
-      vertical-align: middle;
-    }
-
-    .token-table tr:hover {
-      background: rgba(138, 213, 63, 0.05);
-    }
-
-    .color-swatch {
-      width: 20px;
-      height: 20px;
-      border-radius: 4px;
-      border: 1px solid var(--poly-border-subtle);
-      display: inline-block;
-    }
-
-    .table-input {
-      width: 100%;
-      border: 1px solid transparent;
-      background: transparent;
-      padding: 3px 6px;
-      font-family: 'Monaco', 'Courier New', monospace;
-      font-size: 11px;
-      border-radius: 4px;
-      color: inherit;
-    }
-
-    .table-input.locked {
-      cursor: default;
-      pointer-events: none;
-      opacity: 1;
-      color: var(--poly-text-muted);
-      border: 1px solid transparent;
-    }
-
-    /* Animations */
-    @keyframes fadeInUp {
-      0% {
-        opacity: 0;
-        transform: translateY(20px);
-      }
-
-      60% {
-        opacity: 0.8;
-        transform: translateY(-2px);
-      }
-
-      100% {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    .token-table tr {
-      opacity: 0;
-      animation: fadeInUp 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
-    }
-
-    .token-table tr:nth-child(1) {
-      animation-delay: 0.05s;
-    }
-
-    .token-table tr:nth-child(2) {
-      animation-delay: 0.1s;
-    }
-
-    .token-table tr:nth-child(3) {
-      animation-delay: 0.15s;
-    }
-
-    .token-table tr:nth-child(4) {
-      animation-delay: 0.2s;
-    }
-
-    .token-table tr:nth-child(5) {
-      animation-delay: 0.25s;
-    }
-
-    .token-table tr:nth-child(6) {
-      animation-delay: 0.3s;
-    }
-
-    .token-table tr:nth-child(7) {
-      animation-delay: 0.35s;
-    }
-
-    .token-table tr:nth-child(8) {
-      animation-delay: 0.4s;
-    }
-
-    .token-table tr:nth-child(9) {
-      animation-delay: 0.45s;
-    }
-
-    .token-table tr:nth-child(10) {
-      animation-delay: 0.5s;
-    }
-
-    /* Animation pour les cartes de corrections */
-    .cleaning-result-card {
-      opacity: 0;
-      animation: fadeInUp 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
-    }
-
-    .cleaning-result-card:nth-child(1) {
-      animation-delay: 0.05s;
-    }
-
-    .cleaning-result-card:nth-child(2) {
-      animation-delay: 0.1s;
-    }
-
-    .cleaning-result-card:nth-child(3) {
-      animation-delay: 0.15s;
-    }
-
-    .cleaning-result-card:nth-child(4) {
-      animation-delay: 0.2s;
-    }
-
-    .cleaning-result-card:nth-child(5) {
-      animation-delay: 0.25s;
-    }
-
-    .cleaning-result-card:nth-child(6) {
-      animation-delay: 0.3s;
-    }
-
-    .cleaning-result-card:nth-child(7) {
-      animation-delay: 0.35s;
-    }
-
-    .cleaning-result-card:nth-child(8) {
-      animation-delay: 0.4s;
-    }
-
-    .cleaning-result-card:nth-child(9) {
-      animation-delay: 0.45s;
-    }
-
-    .cleaning-result-card:nth-child(10) {
-      animation-delay: 0.5s;
-    }
-
-    .cleaning-result-card:nth-child(n+11) {
-      animation-delay: 0.5s;
-    }
-
-    /* Popular Badge */
-    .popular-badge {
-      display: inline-block;
-      padding: 3px 8px;
-      background: rgba(180, 220, 80, 0.2);
-      color: #B4DC50;
-      font-size: 9px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      border-radius: 4px;
-      border: 1px solid rgba(180, 220, 80, 0.3);
-      line-height: 1.2;
-    }
-
-    .file-info:hover {
-      border-color: var(--poly-accent);
-    }
-
-    /* ============================================
-       UTILITY CLASSES
-       ============================================ */
-    .hidden {
-      display: none !important;
-    }
-
-    .text-sm {
-      font-size: 12px;
-    }
-
-    /* ============================================
-       TEXTAREA (for export)
-       ============================================ */
-    textarea {
-      background: var(--poly-surface);
-      color: var(--poly-text);
-      border: 1px solid var(--poly-border-subtle);
-      border-radius: 8px;
-      font-family: 'Monaco', 'Courier New', monospace;
-      resize: vertical;
-    }
-
-    textarea:focus {
-      outline: none;
-      border-color: var(--poly-accent);
-      box-shadow: 0 0 0 3px rgba(138, 213, 63, 0.15);
-    }
-
-    /* ============================================
-       CHECKBOX STYLING
-       ============================================ */
-    input[type="checkbox"] {
-      accent-color: var(--poly-accent);
-      cursor: pointer;
-    }
-
-    /* ============================================
-       NOUVELLE INTERFACE NETTOYAGE - Hiérarchie claire
-       ============================================ */
-
-    /* Tableau de bord récapitulatif */
-    .cleaning-dashboard {
-      background: var(--poly-surface-soft);
-      border: 1px solid var(--poly-border-subtle);
-      border-radius: var(--poly-radius);
-      padding: 20px;
-      margin-bottom: 20px;
-      box-shadow: var(--poly-shadow-sm);
-    }
-
-    .dashboard-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 12px;
-    }
-
-    .dashboard-stats {
-      display: flex;
-      gap: 16px;
-    }
-
-    .stat-item {
-      text-align: center;
-      min-width: 60px;
-    }
-
-    .stat-number {
-      display: block;
-      font-size: 20px;
-      font-weight: 700;
-      color: var(--poly-accent);
-      line-height: 1;
-    }
-
-    .stat-label {
-      font-size: 10px;
-      color: var(--poly-text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-top: 2px;
-    }
-
-    /* ============================================
-       FILTER SYSTEM (remplace les onglets)
-       ============================================ */
-
-    .content-header {
-      margin-bottom: 16px;
-    }
-
-    .content-header h5 {
-      margin-bottom: 4px;
-    }
-
-    .filter-system {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      flex-wrap: wrap;
-      gap: 16px;
-    }
-
-    .filter-buttons {
-      display: flex;
-      gap: 4px;
-      background: var(--poly-surface);
-      padding: 6px;
-      border: 1px solid rgba(138, 213, 63, 0.3);
-      border-radius: 12px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-
-    .filter-btn {
-      flex: 1;
-      padding: 10px 16px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 13px;
-      font-weight: 500;
-      text-align: center;
-      border: none;
-      background: transparent;
-      color: var(--poly-text-muted);
-      transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-      position: relative;
-      text-transform: none;
-      letter-spacing: normal;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-    }
-
-    .filter-btn:hover:not(.active) {
-      color: var(--poly-accent);
-      background: rgba(138, 213, 63, 0.1);
-      transform: translateY(-1px);
-    }
-
-    .filter-btn.active {
-      background: var(--poly-accent);
-      color: var(--poly-bg);
-      font-weight: 600;
-      box-shadow: 0 2px 8px rgba(138, 213, 63, 0.3);
-    }
-
-    .filter-count {
-      font-size: 11px;
-      font-weight: 600;
-      background: rgba(255, 255, 255, 0.2);
-      padding: 2px 6px;
-      border-radius: 10px;
-      min-width: 16px;
-      text-align: center;
-    }
-
-    .filter-btn.active .filter-count {
-      background: rgba(7, 25, 15, 0.3);
-    }
-
-    .filter-actions {
-      display: flex;
-      gap: 8px;
-    }
-
-    /* ============================================
-       BULK ACTIONS ENHANCED
-       ============================================ */
-
-    .bulk-actions-enhanced {
-      animation: slideUp 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    }
-
-    .bulk-stats {
-      font-size: 14px;
-      color: var(--poly-text);
-    }
-
-    .selection-info {
-      font-weight: 500;
-    }
-
-    .progress-bar {
-      position: relative;
-      background: var(--poly-surface-soft);
-      border-radius: 2px;
-      overflow: hidden;
-    }
-
-    .progress-fill {
-      height: 100%;
-      background: linear-gradient(90deg, var(--poly-accent), var(--poly-accent-hover));
-      transition: width 1.2s cubic-bezier(0.4, 0.0, 0.2, 1);
-      border-radius: 2px;
-      position: relative;
-      overflow: hidden;
-    }
-
-    .progress-fill::after {
-      content: '';
-      position: absolute;
-      top: 0;
-      left: -100%;
-      width: 100%;
-      height: 100%;
-      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
-      animation: progressShimmer 3s infinite;
-    }
-
-    @keyframes progressShimmer {
-      0% {
-        left: -100%;
-      }
-
-      100% {
-        left: 100%;
-      }
-    }
-
-    .bulk-buttons {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-    }
-
-    .bulk-buttons .btn-primary,
-    .bulk-buttons .btn-outline {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 12px 20px;
-      font-size: 14px;
-      font-weight: 500;
-      transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    }
-
-    .btn-icon {
-      font-size: 16px;
-    }
-
-    .btn-count {
-      opacity: 0.8;
-      font-weight: 400;
-    }
-
-    /* ============================================
-       ANIMATIONS ET TRANSITIONS
-       ============================================ */
-
-    @keyframes slideUp {
-      0% {
-        opacity: 0;
-        transform: translateY(15px);
-      }
-
-      70% {
-        opacity: 0.9;
-        transform: translateY(-1px);
-      }
-
-      100% {
-        opacity: 1;
-        transform: translateY(0);
-      }
-    }
-
-    @keyframes fadeIn {
-      0% {
-        opacity: 0;
-      }
-
-      50% {
-        opacity: 0.7;
-      }
-
-      100% {
-        opacity: 1;
-      }
-    }
-
-    /* Live Preview Status Animation */
-    .live-preview-status {
-      animation: fadeInStatus 0.3s ease;
-    }
-
-    @keyframes fadeInStatus {
-      from { opacity: 0; transform: translateY(-10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-
-    @keyframes pulse {
-
-      0%,
-      100% {
-        opacity: 1;
-        transform: scale(1);
-      }
-
-      50% {
-        opacity: 0.8;
-        transform: scale(1.05);
-      }
-    }
-
-    @keyframes skeletonPulse {
-      0%, 100% {
-        opacity: 0.4;
-      }
-      50% {
-        opacity: 0.8;
-      }
-    }
-
-    @keyframes fadeInCard {
-      0% {
-        opacity: 0;
-        transform: translateY(15px) scale(0.95);
-      }
-      60% {
-        opacity: 0.8;
-        transform: translateY(-2px) scale(1.02);
-      }
-      100% {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-      }
-    }
-
-    .fade-in-card {
-      animation: fadeInCard 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-    }
-
-    .content-loaded .cleaning-result-card {
-      opacity: 0;
-      transform: translateY(10px);
-    }
-
-    .content-loaded .cleaning-result-card {
-      opacity: 0;
-      transform: translateY(15px) scale(0.95);
-      transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); /* bounce effect */
-    }
-
-    .content-loaded .cleaning-result-card.fade-in-card {
-      opacity: 1;
-      transform: translateY(0);
-    }
-
-    .fade-in {
-      animation: fadeIn 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    }
-
-    .pulse {
-      animation: pulse 2s infinite;
-    }
-
-    /* ============================================
-       LOADING STATES
-       ============================================ */
-
-    .loading-spinner {
-      display: inline-block;
-      width: 16px;
-      height: 16px;
-      border: 2px solid rgba(255, 255, 255, 0.3);
-      border-radius: 50%;
-      border-top-color: var(--poly-accent);
-      animation: spin 1.5s ease-in-out infinite;
-      margin-right: 8px;
-    }
-
-    @keyframes spin {
-      to {
-        transform: rotate(360deg);
-      }
-    }
-
-    @keyframes loadingPulse {
-      0% {
-        width: 25%;
-        opacity: 0.8;
-      }
-
-      50% {
-        width: 75%;
-        opacity: 1;
-      }
-
-      100% {
-        width: 25%;
-        opacity: 0.8;
-      }
-    }
-
-    .btn-loading {
-      pointer-events: none;
-      opacity: 0.7;
-    }
-
-    .btn-loading .btn-text::after {
-      content: " (en cours...)";
-      font-weight: 400;
-    }
-
-    /* ============================================
-       ENHANCED EMPTY STATES
-       ============================================ */
-
-    .empty-state-enhanced {
-      text-align: center;
-      padding: 32px 20px;
-      background: linear-gradient(135deg, var(--poly-surface-soft), var(--poly-surface));
-      border-radius: var(--poly-radius);
-      border: 1px dashed var(--poly-border-subtle);
-    }
-
-    .empty-state-enhanced .empty-icon {
-      width: 80px;
-      height: 80px;
-      margin: 0 auto 24px;
-      opacity: 0.6;
-      background: linear-gradient(135deg, var(--poly-accent), var(--poly-accent-hover));
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 36px;
-    }
-
-    .empty-state-enhanced h3 {
-      margin-bottom: 12px;
-      font-size: 20px;
-      font-weight: 600;
-      color: var(--poly-text);
-    }
-
-    .empty-state-enhanced p {
-      margin-bottom: 24px;
-      color: var(--poly-text-muted);
-      max-width: 400px;
-      margin-left: auto;
-      margin-right: auto;
-    }
-
-    /* ✨ CÉLÉBRATION : Animation de pulsation pour 100% */
-    .celebration-pulse {
-      animation: celebrationPulse 2.5s ease-in-out infinite;
-    }
-
-    @keyframes celebrationPulse {
-
-      0%,
-      100% {
-        transform: scale(1);
-        opacity: 1;
-        filter: brightness(1);
-      }
-
-      50% {
-        transform: scale(1.08);
-        opacity: 0.95;
-        filter: brightness(1.1);
-      }
-    }
-
-    .celebration-confetti {
-      position: relative;
-      overflow: hidden;
-    }
-
-    .celebration-confetti::before,
-    .celebration-confetti::after {
-      content: '🎉';
-      position: absolute;
-      font-size: 24px;
-      animation: confettiFall 4s ease-in-out infinite;
-    }
-
-    .celebration-confetti::before {
-      top: -20px;
-      left: 20%;
-      animation-delay: 0s;
-    }
-
-    .celebration-confetti::after {
-      top: -20px;
-      right: 20%;
-      animation-delay: 1s;
-    }
-
-    @keyframes confettiFall {
-      0% {
-        transform: translateY(-100px) rotate(0deg) scale(1);
-        opacity: 1;
-      }
-
-      50% {
-        transform: translateY(0px) rotate(180deg) scale(1.2);
-        opacity: 0.8;
-      }
-
-      100% {
-        transform: translateY(100px) rotate(360deg) scale(0.8);
-        opacity: 0;
-      }
-    }
-
-    @keyframes pop {
-      0% {
-        transform: scale(1);
-      }
-
-      50% {
-        transform: scale(1.2);
-      }
-
-      100% {
-        transform: scale(1);
-      }
-    }
-
-    .zero-issues-badge {
-      animation: pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-      background: var(--poly-success);
-      color: white;
-      box-shadow: 0 4px 12px var(--poly-success-light);
-    }
-
-    .empty-actions {
-      display: flex;
-      gap: 12px;
-      justify-content: center;
-      flex-wrap: wrap;
-    }
-
-    .empty-actions .btn-primary,
-    .empty-actions .btn-secondary {
-      padding: 12px 24px;
-      font-size: 14px;
-    }
-
-    /* ============================================
-       CHECKBOXES ET SÉLECTIONS
-       ============================================ */
-
-    .item-checkbox {
-      appearance: none;
-      width: 18px;
-      height: 18px;
-      border: 2px solid var(--poly-border-subtle);
-      border-radius: 4px;
-      background: var(--poly-surface);
-      cursor: pointer;
-      position: relative;
-      transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    }
-
-    .item-checkbox:checked {
-      background: var(--poly-accent);
-      border-color: var(--poly-accent);
-    }
-
-    .item-checkbox:checked::after {
-      content: '✓';
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      color: white;
-      font-size: 12px;
-      font-weight: bold;
-    }
-
-    .item-checkbox:hover {
-      border-color: var(--poly-accent);
-    }
-
-
-    .cleaning-result-card.selected {
-      border-color: var(--poly-accent);
-      background: rgba(138, 213, 63, 0.05);
-    }
-
-    /* ============================================
-       RESPONSIVE DESIGN AMÉLIORÉ
-       ============================================ */
-
-    @media (max-width: 800px) {
-      .filter-system {
-        flex-direction: column;
-        align-items: stretch;
-        gap: 12px;
-      }
-
-      .filter-buttons {
-        justify-content: center;
-      }
-
-      .bulk-buttons {
-        flex-direction: column;
-      }
-
-      .bulk-buttons .btn-primary,
-      .bulk-buttons .btn-outline {
-        width: 100%;
-        justify-content: center;
-      }
-    }
-
-    @media (max-width: 600px) {
-      .cleaning-result-card {
-        flex-direction: column;
-        gap: 12px;
-        align-items: flex-start;
-        padding: 12px;
-      }
-
-    }
-
-    /* Contenu des onglets */
-    .tab-content {
-      min-height: 200px;
-    }
-
-    .tab-pane {
-      display: none;
-    }
-
-    .tab-pane.active {
-      display: block;
-    }
-
-    /* En-têtes de section */
-    .section-header {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      margin-bottom: 16px;
-      align-items: flex-start;
-    }
-
-    .section-header h5 {
-      margin: 0 0 4px 0;
-      color: var(--poly-text);
-      font-size: 14px;
-      font-weight: 600;
-    }
-
-    .section-desc {
-      margin: 0;
-      font-size: 12px;
-      color: var(--poly-text-muted);
-      line-height: 1.4;
-    }
-
-    /* Actions groupées */
-    .bulk-actions {
-      margin-top: 16px;
-      padding: 16px;
-      background: var(--poly-surface-soft);
-      border-radius: 8px;
-      text-align: center;
-    }
-
-    .bulk-actions .btn-primary {
-      padding: 10px 20px;
-      font-size: 13px;
-    }
-
-    /* État vide pour les onglets */
-    .status-empty {
-      text-align: center;
-      padding: 40px 20px;
-      color: var(--poly-text-muted);
-    }
-
-    .status-empty span {
-      display: block;
-      margin-bottom: 8px;
-    }
-
-    /* Amélioration des cartes de résultats - Structure Header + Body */
-    .cleaning-result-card {
-      display: flex;
-      flex-direction: column;
-      padding: 16px;
-      background: var(--poly-surface);
-      border: 1px solid rgba(138, 213, 63, 0.3);
-      border-radius: 12px;
-      transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    }
-
-    /* Conteneur de grille pour les cartes de nettoyage */
-    .cleaning-cards-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-      gap: 16px;
-      margin-bottom: 16px;
-    }
-
-    /* Ajustements pour les cartes en grille */
-    .cleaning-cards-grid .cleaning-result-card {
-      margin-bottom: 0;
-    }
-
-    /* Assurer que seuls les éléments individuels ont des effets de hover */
-    #unifiedCleaningList:hover {
-      background: transparent;
-    }
-
-    /* Responsive pour la grille */
-    @media (max-width: 600px) {
-      .cleaning-cards-grid {
-        grid-template-columns: 1fr;
-        gap: 8px;
-      }
-    }
-
-
-    /* Styles pour la structure Header + Body */
-    .cleaning-result-card .card-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 12px;
-    }
-
-    .cleaning-result-card .card-body {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    /* Style spécifique pour les cartes Auto-Fix (Design Row) */
-    .cleaning-result-card.auto-fixable {
-      display: flex;
-      flex-direction: column;
-      padding: 12px 16px;
-      background: var(--poly-surface);
-      border: 1px solid rgba(138, 213, 63, 0.3);
-      border-radius: 12px;
-      margin-bottom: 8px;
-    }
-
-
-    .auto-card-content {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      align-items: flex-start;
-    }
-
-    .property-badge {
-      align-self: flex-start;
-      background: rgba(138, 213, 63, 0.15);
-      color: var(--poly-accent);
-      font-size: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      padding: 3px 6px 1px 6px;
-      border-radius: 4px;
-      margin-bottom: 0;
-      line-height: 1;
-    }
-
-    .transformation-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-family: 'Inter', sans-serif;
-      font-size: 13px;
-      color: #fff;
-    }
-
-    .trans-arrow {
-      color: #6B7280;
-      font-size: 12px;
-    }
-
-    .var-name {
-      color: var(--poly-accent);
-      font-weight: 600;
-      font-family: monospace;
-    }
-
-    .var-value-muted {
-      color: #6B7280;
-      font-size: 12px;
-    }
-
-    /* Zone Actions à droite */
-    .auto-card-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .btn-see-layers {
-      background: rgba(255, 255, 255, 0.1);
-      color: #E5E7EB;
-      border: none;
-      padding: 6px 12px;
-      border-radius: 6px;
-      font-size: 12px;
-      font-weight: 500;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      transition: background 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-      white-space: nowrap;
-      flex-shrink: 0;
-      width: fit-content;
-    }
-
-    .btn-see-layers:hover {
-      background: rgba(255, 255, 255, 0.2);
-    }
-
-    /* Styles pour les cartes manuelles */
-    .manual-card-content {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      flex: 1;
-    }
-
-    .value-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-family: 'Inter', sans-serif;
-      font-size: 13px;
-      color: #fff;
-    }
-
-    .variable-selector-row {
-      margin-top: 4px;
-    }
-
-    .manual-card-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .manual-apply-btn:disabled {
-      background: #374151 !important;
-      color: #6B7280 !important;
-      cursor: not-allowed !important;
-      opacity: 0.6;
-    }
-
-
-    .cleaning-result-card.manual-fix {
-      border-left: 4px solid var(--poly-warning);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-    }
-
-    /* Indicateurs de priorité */
-    .priority-indicator {
-      display: inline-flex;
-      align-items: center;
-      padding: 2px 8px;
-      border-radius: 12px;
-      font-size: 10px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      margin-right: 12px;
-    }
-
-    .priority-indicator.auto {
-      background: var(--poly-success);
-      color: white;
-    }
-
-    .priority-indicator.manual {
-      background: var(--poly-warning);
-      color: white;
-    }
-
-    /* Actions globales */
-    .global-actions {
-      background: var(--poly-surface-soft);
-      border-radius: 8px;
-      padding: 16px;
-    }
-
-    .global-actions .btn-outline {
-      border: 1px solid var(--poly-border-subtle);
-      background: transparent;
-      color: var(--poly-text);
-    }
-
-    .global-actions .btn-outline:hover {
-      background: var(--poly-surface);
-      border-color: var(--poly-accent);
-    }
-
-    /* Bouton Voir avec fond légèrement vert */
-    .btn-view {
-      background: rgba(138, 213, 63, 0.1) !important;
-      border-color: rgba(138, 213, 63, 0.3) !important;
-      color: var(--poly-accent) !important;
-    }
-
-    .btn-view:hover {
-      background: rgba(138, 213, 63, 0.2) !important;
-      border-color: var(--poly-accent) !important;
-    }
-
-    /* Jauge de progression circulaire */
-    .progress-gauge {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .progress-circle {
-      position: relative;
-      width: 80px;
-      height: 80px;
-    }
-
-    .progress-circle svg {
-      width: 100%;
-      height: 100%;
-    }
-
-    /* NOUVEAU: Animation fluide de la jauge */
-    .progress-circle svg circle {
-      stroke-dashoffset: 219.91px;
-      /* Valeur initiale pour le moteur de rendu */
-      transition: stroke-dashoffset 1s ease-out, stroke 0.3s ease;
-    }
-
-    .progress-text {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      text-align: center;
-      font-weight: 600;
-      color: var(--poly-text);
-    }
-
-    #progressPercentage {
-      font-size: 18px;
-      line-height: 1;
-    }
-
-    .percent-symbol {
-      font-size: 12px;
-      color: var(--poly-text-muted);
-    }
-
-    .progress-label {
-      font-size: 11px;
-      color: var(--poly-text-muted);
-      text-align: center;
-      font-weight: 500;
-    }
-
-    /* Responsive pour la jauge de progression */
-    @media (max-width: 600px) {
-      .content-header {
-        flex-direction: column !important;
-        gap: 16px !important;
-      }
-
-      .progress-gauge {
-        align-self: center;
-      }
-
-      .progress-circle {
-        width: 70px;
-        height: 70px;
-      }
-
-      .progress-circle svg {
-        width: 100%;
-        height: 100%;
-      }
-
-      #progressPercentage {
-        font-size: 16px;
-      }
-
-      .percent-symbol {
-        font-size: 10px;
-      }
-    }
-
-    /* Mini-swatches pour les couleurs */
-    .mini-swatch {
-      width: 16px;
-      height: 16px;
-      border-radius: 3px;
-      border: 1px solid var(--poly-border-subtle);
-      display: inline-block;
-      vertical-align: middle;
-      margin-right: 6px;
-    }
-
-    /* Indicateurs de statut pour les cartes */
-    .cleaning-result-card.ready-to-apply {
-      border-color: var(--poly-success);
-      background: rgba(22, 163, 74, 0.05);
-    }
-
-    /* Labels de propriétés */
-    .property-label {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--poly-accent);
-      background: var(--poly-surface);
-      padding: 2px 6px;
-      border-radius: 4px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .cleaning-result-card.ready-to-apply .priority-indicator.manual {
-      background: var(--poly-success);
-      color: white;
-    }
-
-    /* Améliorations pour les sélecteurs manuels */
-    .manual-select {
-      transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
-      position: relative;
-    }
-
-    .manual-select:focus {
-      outline: none;
-      border-color: var(--poly-accent);
-      box-shadow: 0 0 0 3px rgba(138, 213, 63, 0.15);
-      /* Poly Accent Alpha */
-      transform: scale(1.02);
-      background: var(--poly-surface);
-    }
-
-    .manual-select:not(:disabled):hover {
-      border-color: var(--poly-accent);
-      box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
-    }
-
-    /* Animation de pulsation pour attirer l'attention */
-    @keyframes manualFocusPulse {
-
-      0%,
-      100% {
-        box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.3);
-        transform: scale(1);
-      }
-
-      50% {
-        box-shadow: 0 0 0 6px rgba(99, 102, 241, 0);
-        transform: scale(1.01);
-      }
-    }
-
-    .manual-select.manual-focus-attention {
-      animation: manualFocusPulse 2.5s infinite;
-    }
-
-    /* Animation pour les notifications */
-    @keyframes slideInRight {
-      0% {
-        transform: translateX(100%);
-        opacity: 0;
-      }
-
-      60% {
-        transform: translateX(-5%);
-        opacity: 0.8;
-      }
-
-      100% {
-        transform: translateX(0);
-        opacity: 1;
-      }
-    }
-
-    /* ✨ UNDO TOAST : Toast d'annulation premium */
-    .toast-container {
-      position: fixed;
-      bottom: 32px;
-      left: 50%;
-      transform: translateX(-50%) translateY(100px);
-      background: #0F2918;
-      border: 1px solid #4ADE80;
-      padding: 12px 24px;
-      border-radius: 50px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(74, 222, 128, 0.15);
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      z-index: 10000;
-      opacity: 0;
-      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-      pointer-events: none;
-    }
-
-    .toast-container.visible {
-      transform: translateX(-50%) translateY(0);
-      opacity: 1;
-      pointer-events: auto;
-    }
-
-    /* Contenu du toast - Structure verticale */
-    .toast-content {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-
-    .toast-title {
-      color: #4ADE80;
-      font-weight: 700;
-      text-transform: uppercase;
-      font-size: 10px;
-      letter-spacing: 0.5px;
-    }
-
-    .toast-detail {
-      color: white;
-      font-size: 13px;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .toast-detail .variable-name {
-      color: #4ADE80;
-      font-weight: 600;
-    }
-
-    .toast-detail .arrow {
-      color: rgba(255, 255, 255, 0.5);
-      margin: 0 4px;
-    }
-
-    .toast-btn {
-      background: #582328;
-      border: none;
-      color: #FFCDD2;
-      font-weight: 600;
-      cursor: pointer;
-      padding: 8px 16px;
-      border-radius: 6px;
-      font-size: 12px;
-      transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-      white-space: nowrap;
-    }
-
-    .toast-btn:hover {
-      background: #6B2F33;
-      transform: scale(1.05);
-    }
-
-    .toast-close {
-      background: transparent;
-      border: none;
-      color: rgba(255, 255, 255, 0.5);
-      cursor: pointer;
-      padding: 4px;
-      font-size: 14px;
-      line-height: 1;
-      transition: all 0.2s ease;
-    }
-
-    .toast-close:hover {
-      color: white;
-    }
-
-    /* ✨ KEYBOARD NAVIGATION : Styles pour la navigation au clavier */
-    .cleaning-result-card.keyboard-selected {
-      border-color: var(--poly-accent) !important;
-      box-shadow: 0 0 0 2px rgba(138, 213, 63, 0.2) !important;
-      background: var(--poly-surface-soft) !important;
-    }
-
-    .cleaning-result-card.keyboard-selected .variable-pill {
-      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
-      transform: scale(1.02);
-    }
-
-    /* Boutons d'action dans les cartes de correction et scan */
-    .cleaning-result-card .btn-primary,
-    .cleaning-result-card .btn-outline,
-    .cleaning-result-card .btn-x,
-    .scan-result-card .btn-primary,
-    .scan-result-card .btn-outline,
-    .scan-result-card .btn-x {
-      width: 32px;
-      height: 32px;
-      padding: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
-    }
-
-    .cleaning-result-card .btn-primary svg,
-    .cleaning-result-card .btn-outline svg,
-    .cleaning-result-card .btn-x svg,
-    .scan-result-card .btn-primary svg,
-    .scan-result-card .btn-outline svg,
-    .scan-result-card .btn-x svg {
-      width: 16px;
-      height: 16px;
-    }
-
-    /* Améliorations responsive */
-    @media (max-width: 600px) {
-      .dashboard-stats {
-        grid-template-columns: 1fr;
-        gap: 8px;
-      }
-
-      .tab-buttons {
-        flex-wrap: wrap;
-      }
-
-      .tab-btn {
-        flex: 1;
-        min-width: 120px;
-        font-size: 12px;
-      }
-
-      .cleaning-result-card {
-        flex-direction: column;
-        gap: 12px;
-        align-items: flex-start;
-      }
-
-      .cleaning-result-card .btn-primary {
-        width: 100%;
-        max-width: none;
-      }
-
-      .global-actions {
-        flex-direction: column;
-        gap: 8px;
-      }
-
-      .global-actions .btn-secondary,
-      .global-actions .btn-primary {
-        width: 100%;
-      }
-    }
-
-    /* ============================================
-       TOKEN EDIT BUTTONS
-       ============================================ */
-    .btn-icon {
-      background: transparent;
-      border: none;
-      padding: 2px 6px;
-      cursor: pointer;
-      font-size: 14px;
-      opacity: 0.6;
-      transition: opacity 0.2s;
-      width: auto;
-    }
-
-    .btn-icon:hover {
-      opacity: 1;
-      transform: none;
-      box-shadow: none;
-    }
-
-    /* ============================================
-       MODAL
-       ============================================ */
-    .modal {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0, 0, 0, 0.7);
-      z-index: 1000;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .modal.active {
-      display: flex;
-    }
-
-    .modal-content {
-      background: var(--poly-surface);
-      padding: 24px;
-      border-radius: var(--poly-radius);
-      border: 1px solid var(--poly-border-subtle);
-      max-width: 400px;
-      width: 90%;
-      box-shadow: var(--poly-shadow);
-    }
-
-    .modal-content h3 {
-      margin: 0 0 16px;
-      color: var(--poly-text);
-    }
-
-    .modal-actions {
-      display: flex;
-      gap: 10px;
-      margin-top: 16px;
-    }
-
-    /* ============================================
-       INLINE ICONS
-       ============================================ */
-    .icon {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 1.2em;
-      height: 1.2em;
-      margin-right: 6px;
-      vertical-align: middle;
-      line-height: 1;
-    }
-
-    h3 .icon {
-      font-size: 1.1em;
-      margin-right: 8px;
-      vertical-align: text-bottom;
-    }
-
-    button .icon {
-      margin-right: 4px;
-      vertical-align: middle;
-    }
-
-    .btn-secondary .icon {
-      font-size: 0.95em;
-    }
-
-    .btn-icon {
-      font-size: 14px;
-      line-height: 1;
-    }
-
-    /* ============================================
-       WIZARD STYLES
-       ============================================ */
-    .wizard-step {
-      display: none;
-    }
-
-    /* 1. Allow the step container to shrink */
-    .wizard-step.active {
-      display: flex;
-      flex-direction: column;
-      /* REMOVED: flex: 1 and height: 100% */
-      height: auto;
-      width: 100%;
-    }
-
-    /* EXCEPTION: Step 3 (Dashboard) MUST be Full Height */
-    #wizardStep3.active {
-      height: 100%;
-      flex: 1;
-      overflow: hidden;
-    }
-
-    /* Cards de choix (Vue 0) */
-    .choice-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 12px;
-      margin-bottom: 20px;
-    }
-
-    /* Sections organisées */
-    .choice-section {
-      padding: 20px;
-      margin-bottom: 24px;
-      background: linear-gradient(135deg, var(--poly-surface) 0%, var(--poly-surface-soft) 100%);
-      border: 1px solid var(--poly-accent);
-      border-radius: var(--poly-radius);
-      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
-    }
-
-    .choice-section:last-child {
-      margin-bottom: 0;
-    }
-
-    .section-header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 16px;
-    }
-
-    .section-icon {
-      font-size: 16px;
-      opacity: 0.8;
-    }
-
-    .section-title {
-      font-size: 12px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--poly-accent);
-      margin: 0;
-    }
-
-    /* Variations de couleur pour chaque section */
-    .section-create {
-      background: linear-gradient(135deg, rgba(10, 36, 22, 0.95) 0%, rgba(18, 45, 29, 0.95) 100%);
-      border-left: 3px solid var(--poly-accent);
-    }
-
-    .section-analyze {
-      background: linear-gradient(135deg, var(--poly-surface-soft) 0%, rgba(var(--poly-accent-rgb, 0.05), 0.05) 100%);
-      border-left: 3px solid #4ADE80;
-    }
-
-    .choice-card {
-      background: var(--poly-surface);
-      border: 1px solid var(--poly-border-subtle);
-      border-radius: 8px;
-      padding: 16px;
-      cursor: pointer;
-      transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 4px;
-      height: 100%;
-    }
-
-    .choice-card:hover {
-      border-color: var(--poly-accent);
-      background: var(--poly-surface-soft);
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    }
-
-    .choice-card .icon {
-      /* Forme ronde pour éviter l'effet checkbox */
-      border-radius: 50%;
-      background: var(--poly-surface-soft);
-      /* Fond plus neutre par défaut */
-      width: 40px;
-      height: 40px;
-      padding: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--poly-accent);
-      margin-bottom: 8px;
-      transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-      border: 1px solid var(--poly-border-subtle);
-    }
-
-    .choice-card:hover .icon,
-    .choice-card.active .icon {
-      background: var(--poly-accent);
-      color: var(--poly-bg);
-      border-color: var(--poly-accent);
-      transform: scale(1.1);
-    }
-
-    /* État actif sélectionné */
-    .choice-card.active {
-      border-color: var(--poly-accent);
-      background: rgba(138, 213, 63, 0.05);
-      box-shadow: 0 0 0 1px var(--poly-accent);
-    }
-
-
-
-    /* Footer Sticky pour les boutons d'action */
-    .sticky-footer {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      width: 100%;
-      background: var(--poly-surface);
-      border-top: 1px solid var(--poly-border-subtle);
-      padding: 12px 20px;
-      display: flex;
-      flex-direction: column;
-      /* Stack bouton et signature */
-      align-items: center;
-      /* Aligner à droite */
-      gap: 8px;
-      z-index: 100;
-      box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.2);
-    }
-
-    /* Masquer tous les sticky-footer par défaut */
-    .sticky-footer {
-      display: none !important;
-    }
-
-    /* Afficher le footer seulement quand l'étape parente est active */
-    #wizardStep0.active .sticky-footer,
-    #wizardStep1.active .sticky-footer,
-    #wizardStep2.active .sticky-footer,
-    #wizardStep3.active .sticky-footer,
-    #wizardStep4.active .sticky-footer {
-      display: flex !important;
-    }
-
-    .sticky-footer-content {
-      width: 100%;
-      display: flex;
-      justify-content: flex-end;
-      /* Boutons à droite */
-      align-items: center;
-      gap: 12px;
-    }
-
-    /* Cas particulier pour les steps avec bouton retour à gauche */
-    .sticky-footer-content.space-between {
-      justify-content: space-between;
-    }
-
-    .footer-signature {
-      font-size: 10px;
-      color: var(--poly-text-muted);
-      text-align: right;
-      opacity: 0.7;
-    }
-
-    .footer-signature a {
-      color: var(--poly-accent-hover);
-      text-decoration: none;
-      border-bottom: 1px dotted var(--poly-text-muted);
-      transition: color 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    }
-
-    .footer-signature a:hover {
-      color: var(--poly-accent);
-      border-bottom-color: var(--poly-accent);
-    }
-
-    /* SVG styling dans les cartes */
-    .choice-card .icon svg {
-      width: 20px;
-      height: 20px;
-      stroke-width: 2;
-    }
-
-    .choice-card h3 {
-      font-size: 13px;
-      font-weight: 600;
-      margin: 0;
-      color: var(--poly-text);
-    }
-
-    .choice-card p {
-      font-size: 13px;
-      /* Plus lisible */
-      color: var(--poly-text-muted);
-      margin: 0;
-      line-height: 1.4;
-    }
-
-    /* Bouton supprimer SVG */
-    .btn-icon svg {
-      width: 16px;
-      height: 16px;
-      stroke-width: 2;
-    }
-
-    /* Library Grid (Vue 1) */
-    .library-grid {
-      display: grid;
-      grid-template-columns: repeat(2, 1fr);
-      gap: 12px;
-      margin-top: 16px;
-    }
-
-    /* --- LIBRARY CARD STYLES (Harmonized with Step 0) --- */
-
-
-    /* Ajustement de l'SVG à l'intérieur */
-    .library-option .icon svg {
-      width: 20px;
-      height: 20px;
-      display: block;
-      flex-shrink: 0;
-      /* On retire object-fit qui ne sert à rien sur un SVG inline */
-    }
-
-    /* Ajustement spécifique pour l'icône des variables (viewBox 90x104) */
-    #choiceManageTokens .icon svg {
-      width: 18px;
-      height: 20px;
-    }
-
-    /* 4. Hover on Icon (Invert Colors + Scale) */
-    .library-option:hover .icon,
-    .library-option.selected .icon {
-      background: var(--poly-accent);
-      border-color: var(--poly-accent);
-      color: var(--poly-bg) !important;
-      /* Icon turns dark */
-      transform: scale(1.1);
-    }
-
-
-    .popular-badge {
-      display: inline-block;
-      padding: 3px 8px;
-      background: rgba(180, 220, 80, 0.2);
-      color: #B4DC50;
-      font-size: 9px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      border-radius: 4px;
-      border: 1px solid rgba(180, 220, 80, 0.3);
-      line-height: 1.2;
-    }
-
-    /* ============================================
-       VARIABLE SELECTOR STYLES
-       ============================================ */
-
-    .variable-selector {
-      transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    }
-
-    .variable-selector:hover {
-      opacity: 0.9;
-    }
-
-    .variable-selector:focus {
-      outline: none;
-      border-color: var(--poly-accent);
-      box-shadow: 0 0 0 3px rgba(138, 213, 63, 0.15);
-    }
-
-    /* ============================================
-       BADGES EXACT / APPROX (Premium UX)
-       ============================================ */
-    .badge-exact {
-      display: inline-block;
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-size: 10px;
-      font-weight: 700;
-      background: rgba(22, 163, 74, 0.15);
-      color: var(--poly-success);
-      border: 1px solid var(--poly-success);
-      margin-left: 8px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    .badge-approx {
-      display: inline-block;
-      padding: 4px 8px;
-      border-radius: 4px;
-      font-size: 10px;
-      font-weight: 700;
-      background: rgba(245, 158, 11, 0.15);
-      color: var(--poly-warning);
-      border: 1px solid var(--poly-warning);
-      margin-left: 8px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-
-    /* ============================================
-       ANIMATIONS PREMIUM
-       ============================================ */
-    @keyframes breathing {
-
-      0%,
-      100% {
-        transform: scale(1);
-        opacity: 0.8;
-      }
-
-      50% {
-        transform: scale(1.05);
-        opacity: 1;
-      }
-    }
-
-    .scan-loading-icon {
-      animation: breathing 2s ease-in-out infinite;
-    }
-
-    @keyframes success-ripple {
-      0% {
-        box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.7);
-      }
-
-      70% {
-        box-shadow: 0 0 0 10px rgba(22, 163, 74, 0);
-      }
-
-      100% {
-        box-shadow: 0 0 0 0 rgba(22, 163, 74, 0);
-      }
-    }
-
-    .cleaning-result-card.success {
-      animation: success-ripple 0.6s ease-out;
-    }
-
-    @keyframes skeleton-loading {
-      0% {
-        background-position: 200% 0;
-      }
-
-      100% {
-        background-position: -200% 0;
-      }
-    }
-
-    .skeleton-card {
-      padding: 24px;
-      background: var(--poly-surface-soft);
-      border-radius: var(--poly-radius);
-      border: 1px solid var(--poly-border-subtle);
-      margin-bottom: 16px;
-    }
-
-    .skeleton-line {
-      height: 12px;
-      background: linear-gradient(90deg,
-          var(--poly-surface-soft) 25%,
-          var(--poly-surface) 50%,
-          var(--poly-surface-soft) 75%);
-      background-size: 200% 100%;
-      animation: skeleton-loading 1.5s ease-in-out infinite;
-      border-radius: 4px;
-      margin-bottom: 8px;
-    }
-
-    /* Toast Notifications Premium */
-    .toast {
-      position: fixed;
-      bottom: 80px;
-      right: 20px;
-      background: var(--poly-surface);
-      border: 1px solid var(--poly-border-subtle);
-      border-radius: 8px;
-      padding: 12px 16px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      box-shadow: var(--poly-shadow);
-      transform: translateY(100px);
-      opacity: 0;
-      transition: all 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-      z-index: 1000;
-    }
-
-    .toast-show {
-      transform: translateY(0);
-      opacity: 1;
-    }
-
-    .toast-success {
-      border-left: 3px solid var(--poly-success);
-    }
-
-    .toast-error {
-      border-left: 3px solid var(--poly-error);
-    }
-
-    .toast-icon {
-      font-size: 18px;
-    }
-
-    /* ============================================
-       CUSTOM DROPDOWN (Remplacement du Select)
-       ============================================ */
-    .custom-select-container {
-      position: relative;
-      width: 100%;
-      cursor: pointer;
-      user-select: none;
-    }
-
-    .select-trigger {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 12px;
-      background: var(--poly-surface);
-      border: 1px solid var(--poly-border-subtle);
-      border-radius: 8px;
-      transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-      min-height: 40px;
-    }
-
-    .select-trigger:hover {
-      border-color: var(--poly-accent);
-      background: var(--poly-surface-soft);
-    }
-
-    .custom-select-container.open .select-trigger {
-      border-color: var(--poly-accent);
-      box-shadow: 0 0 0 3px rgba(138, 213, 63, 0.15);
-    }
-
-    .select-trigger .color-dot {
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-      border: 1px solid var(--poly-border-subtle);
-      flex-shrink: 0;
-    }
-
-    .select-trigger .selected-label {
-      flex: 1;
-      color: var(--poly-text);
-      font-size: 13px;
-      font-weight: 500;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .select-trigger .chevron {
-      width: 16px;
-      height: 16px;
-      color: var(--poly-text-muted);
-      transition: transform 0.25s ease;
-      flex-shrink: 0;
-    }
-
-    .custom-select-container.open .select-trigger .chevron {
-      transform: rotate(180deg);
-    }
-
-    .select-options {
-      position: absolute;
-      bottom: calc(100% + 4px);
-      /* Position au-dessus */
-      top: auto;
-      left: 0;
-      right: 0;
-      background: var(--poly-surface);
-      border: 1px solid var(--poly-accent);
-      /* Bordure accentuée pour visibilité */
-      border-radius: 8px;
-      box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.4);
-      /* Ombre forte vers le haut */
-      max-height: 240px;
-      overflow-y: auto;
-      z-index: 1000;
-      opacity: 0;
-      transform: translateY(8px);
-      /* Animation venant du bas */
-      pointer-events: none;
-      transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    }
-
-    .custom-select-container.open .select-options {
-      opacity: 1;
-      transform: translateY(0);
-      pointer-events: all;
-    }
-
-    .option-item {
-      padding: 10px 12px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      border-bottom: 1px solid var(--poly-border-subtle);
-    }
-
-    .option-item:last-child {
-      border-bottom: none;
-    }
-
-    .option-item:hover {
-      background: rgba(138, 213, 63, 0.1);
-    }
-
-    .option-item.selected {
-      background: rgba(138, 213, 63, 0.15);
-    }
-
-    .option-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .option-row .swatch {
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-      border: 1px solid var(--poly-border-subtle);
-      flex-shrink: 0;
-    }
-
-    .option-row .name {
-      flex: 1;
-      color: var(--poly-text);
-      font-size: 13px;
-      font-weight: 500;
-    }
-
-    .option-row .value {
-      color: var(--poly-text-muted);
-      font-size: 11px;
-      font-family: 'Menlo', 'Monaco', monospace;
-    }
-
-    /* Scrollbar pour le dropdown */
-    .select-options::-webkit-scrollbar {
-      width: 6px;
-    }
-
-    .select-options::-webkit-scrollbar-track {
-      background: var(--poly-surface-soft);
-      border-radius: 3px;
-    }
-
-    .select-options::-webkit-scrollbar-thumb {
-      background: var(--poly-accent);
-      border-radius: 3px;
-    }
-
-    .variable-badge.exact-match {
-      transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    }
-
-    .variable-badge.exact-match:hover {
-      opacity: 0.9;
-    }
-
-    /* ============================================
-       COMPACT TABLE STYLES - Scan Results UX
-       ============================================ */
-
-    /* Catégories Pliables */
-    details.category-group {
-      margin-bottom: 12px;
-      border: 1px solid var(--poly-border-subtle);
-      border-radius: 8px;
-      background: var(--poly-surface);
-      overflow: hidden;
-    }
-
-    summary.category-header {
-      padding: 12px 16px;
-      background: rgba(255, 255, 255, 0.03);
-      cursor: pointer;
-      font-weight: 600;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      list-style: none;
-      /* Cache la flèche par défaut */
-    }
-
-    summary.category-header:hover {
-      background: rgba(255, 255, 255, 0.05);
-    }
-
-    /* Style pour les détails ouverts/fermés */
-    details.category-group summary::before {
-      content: "▶";
-      margin-right: 8px;
-      transition: transform 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-      color: var(--poly-accent);
-    }
-
-    details.category-group[open] summary::before {
-      transform: rotate(90deg);
-    }
-
-    /* Cacher la flèche par défaut */
-    details.category-group summary::-webkit-details-marker {
-      display: none;
-    }
-
-    /* Lignes Compactes - Nouvelle structure Grid */
-    .compact-row {
-      display: grid;
-      grid-template-columns: 1.5fr 0.8fr 2fr 30px;
-      /* Grille précise */
-      align-items: center;
-      padding: 16px 20px;
-      border-bottom: 1px solid var(--poly-border-subtle);
-      gap: 16px;
-      transition: background 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-      margin-bottom: 8px;
-    }
-
-    .compact-row:hover {
-      background: var(--poly-surface-soft);
-    }
-
-    /* Colonne Problème (Valeur Actuelle) */
-    .col-problem {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-family: 'Monaco', monospace;
-      font-size: 12px;
-      color: var(--poly-text);
-    }
-
-
-    .value-display {
-      font-weight: bold;
-    }
-
-    .mini-swatch {
-      width: 16px;
-      height: 16px;
-      border-radius: 4px;
-      border: 1px solid var(--poly-border-subtle);
-      display: inline-block;
-    }
-
-    /* Colonne Flèche (Lien) */
-    .col-arrow {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      opacity: 0.6;
-    }
-
-    .arrow-symbol {
-      font-size: 14px;
-      color: var(--poly-text-muted);
-    }
-
-    .layer-count-badge {
-      font-size: 9px;
-      padding: 4px 8px;
-      background: rgba(255, 255, 255, 0.05);
-      border-radius: 4px;
-      cursor: inherit;
-      margin-top: 6px;
-      transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    }
-
-    .layer-count-badge:hover {
-      background: var(--poly-accent);
-      color: #000;
-    }
-
-    /* Colonne Solution (Variable) */
-    .col-solution {
-      display: flex;
-      align-items: center;
-      width: 100%;
-    }
-
-    .variable-pill {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      width: 100%;
-      padding: 6px 10px;
-      color: var(--poly-accent);
-      font-weight: 500;
-      font-size: 12px;
-      cursor: pointer;
-      transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    }
-
-    .variable-pill:hover {
-      color: #000;
-    }
-
-    .variable-icon {
-      width: 12px;
-      height: 12px;
-      opacity: 0.7;
-    }
-
-    /* Selecteur en cas de conflit */
-    .conflict-select {
-      width: 100%;
-      padding: 6px 10px;
-      border-radius: 6px;
-      background: var(--poly-surface);
-      color: var(--poly-warning);
-      border: 1px solid var(--poly-warning);
-      font-size: 12px;
-      font-weight: 500;
-      cursor: pointer;
-    }
-
-    .conflict-select:focus {
-      outline: none;
-      box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.3);
-    }
-
-    /* Bouton Ignorer (X) */
-    .btn-x {
-      background: transparent;
-      border: none;
-      color: var(--poly-text-muted);
-      cursor: pointer;
-      font-size: 14px;
-      padding: 2px;
-      border-radius: 4px;
-      transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    }
-
-    .btn-x:hover {
-      color: var(--poly-error);
-      background: rgba(239, 68, 68, 0.1);
-    }
-
-    /* Bouton Tout Corriger */
-    .btn-fix-all {
-      background: var(--poly-accent);
-      color: var(--poly-bg);
-      border: none;
-      padding: 6px 12px;
-      border-radius: 6px;
-      font-size: 11px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    }
-
-    .btn-fix-all:hover {
-      background: var(--poly-accent-hover);
-      transform: translateY(-1px);
-    }
-  </style>
-</head>
-
-<body>
-  <div class="app">
-    <!-- ============================================
-         HEADER RECONÇU - Structure optimisée
-         - Logo dans section dédiée avec contraintes flexibles
-         - Contrôles séparés pour éviter les conflits d'espace
-         ============================================ -->
-    <header class="app-header">
-      <!-- Logo Section - Priorité haute -->
-      <div class="header-logo-section"></div>
-
-      <!-- Controls Section - Priorité basse -->
-      <div class="header-controls">
-
-        <!-- Mode Toggle (Designer / Developer) - Masqué par défaut -->
-        <div class="mode-toggle hidden" id="modeToggle">
-          <button class="mode-toggle-btn active" id="modeDesigner">Designer</button>
-          <button class="mode-toggle-btn" id="modeDev">Developer</button>
-        </div>
-      </div>
-    </header>
-
-    <!-- ============================================
-         BODY - Contenu principal
-         ============================================ -->
-    <main class="app-body">
-
-      <!-- ============================================
-           VUE 0: ACCUEIL - Choix du parcours
-           ============================================ -->
-      <div id="wizardStep0" class="wizard-step active">
-        <div class="card">
-          <h3 style="margin-bottom: 4px;">Générez, importez et synchronisez vos variables Figma avec votre code
-          </h3>
-          <p style="margin-bottom: 24px;">Choisissez comment vous souhaitez commencer :</p>
-
-          <!-- Section 1: CRÉER & IMPORTER -->
-          <div class="card choice-section section-create">
-            <div class="section-header">
-              <span class="section-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                  <path
-                    d="M2.5 7C2.5 9.48528 4.51472 11.5 7 11.5C9.48528 11.5 11.5 9.48528 11.5 7C11.5 4.51472 9.48528 2.5 7 2.5C4.51472 2.5 2.5 4.51472 2.5 7ZM2.5 17C2.5 19.4853 4.51472 21.5 7 21.5C9.48528 21.5 11.5 19.4853 11.5 17C11.5 14.5147 9.48528 12.5 7 12.5C4.51472 12.5 2.5 14.5147 2.5 17ZM12.5 17C12.5 19.4853 14.5147 21.5 17 21.5C19.4853 21.5 21.5 19.4853 21.5 17C21.5 14.5147 19.4853 12.5 17 12.5C14.5147 12.5 12.5 14.5147 12.5 17ZM16 11V8H13V6H16V3H18V6H21V8H18V11H16Z">
-                  </path>
-                </svg>
-              </span>
-              <h4 class="section-title">CRÉER & IMPORTER</h4>
-            </div>
-            <div class="choice-grid">
-              <!-- Option A: Créer un nouveau système -->
-              <div class="choice-card" id="choiceNewSystem">
-                <span class="icon">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path
-                      d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
-                  </svg>
-                </span>
-                <h3>Démarrer un nouveau système</h3>
-                <p>Générez automatiquement une palette complète et des échelles standards à partir d'une couleur
-                  principale.</p>
-              </div>
-
-              <!-- Option B: Importer un fichier -->
-              <div class="choice-card" id="choiceImportFile">
-                <span class="icon">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
-                    <path d="M12 12v9" />
-                    <path d="m16 16-4-4-4 4" />
-                  </svg>
-                </span>
-                <h3>Importer les tokens de votre code</h3>
-                <p>Depuis un fichier JSON ou CSS.</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Section 2: ANALYSER & CORRIGER -->
-          <div class="card choice-section section-analyze" style="display: none;">
-            <div class="section-header">
-              <span class="section-icon">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                  <path
-                    d="M9 7.53861L15 21.5386L18.6594 13H23V11H17.3406L15 16.4614L9 2.46143L5.3406 11H1V13H6.6594L9 7.53861Z">
-                  </path>
-                </svg>
-              </span>
-              <h4 class="section-title">ANALYSER & CORRIGER</h4>
-            </div>
-            <div class="choice-grid">
-              <!-- Option C: Gérer mes tokens (visible uniquement si tokens existent) -->
-              <div class="choice-card hidden" id="choiceManageTokens">
-                <span class="icon" style="color: var(--poly-accent);">
-                  <svg width="90" height="104" viewBox="0 0 90 104" fill="currentColor"
-                    xmlns="http://www.w3.org/2000/svg">
-                    <path fill-rule="evenodd" clip-rule="evenodd"
-                      d="M9 31.176L45 10.386L81 31.176V72.747L45 93.537L9 72.747V31.176ZM45 0.00900002L90 25.992V77.949L45 103.932L0 77.949V25.983L45 0V0.00900002ZM54 51.939C54 56.916 49.968 60.939 45 60.939C40.032 60.939 36 56.916 36 51.939C36 46.971 40.032 42.939 45 42.939C49.968 42.939 54 46.971 54 51.939Z" />
-                  </svg>
-                </span>
-                <h3>Bibliothèque de Variables</h3>
-                <p id="existingTokensInfo" style="margin-bottom: 4px;">Chargement...</p>
-                <p style="font-size: 10px; opacity: 0.7; margin: 0;">
-                  <span id="existingTokensCount">0 tokens</span>
-                </p>
-              </div>
-
-              <!-- Option D: Vérifier une Frame -->
-              <div class="choice-card" id="choiceVerifyFrames">
-                <span class="icon">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <circle cx="11" cy="11" r="8" />
-                    <path d="m21 21-4.35-4.35" />
-                  </svg>
-                </span>
-                <h3>Vérifier une Frame</h3>
-                <p>Détectez les valeurs en dur et remplacez-les par vos variables.</p>
-              </div>
-            </div>
-          </div>
-
-          <!-- Input file caché (pour l'import) -->
-          <input id="realFileInput" type="file" accept=".json,.css" style="display:none;" />
-
-          <!-- Footer Sticky Vue 0 -->
-          <div class="sticky-footer">
-            <div class="sticky-footer-content">
-              <button id="step0Next" class="btn-primary" disabled>Continuer</button>
-            </div>
-            <div class="footer-signature">
-              Designed and developed by <a href="https://www.linkedin.com/in/emma-jan/" target="_blank">Emma Jan</a>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- ============================================
-           VUE 1: LIBRAIRIE - Choix de la librairie
-           ============================================ -->
-      <div id="wizardStep1" class="wizard-step">
-        <div class="card">
-          <h3>Choisissez votre librairie</h3>
-          <p style="margin-bottom: 4px;">PolyToken adaptera les noms, les échelles de couleurs et les espacements pour
-            correspondre parfaitement à votre framework !</p>
-
-          <div class="library-grid">
-            <div class="library-option" data-library="tailwind" aria-label="Tailwind / Shadcn - Option populaire">
-              <span class="icon" style="color: var(--poly-accent);">
-                <svg role="img" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
-                  <path
-                    d="M12.001,4.8c-3.2,0-5.2,1.6-6,4.8c1.2-1.6,2.6-2.2,4.2-1.8c0.913,0.228,1.565,0.89,2.288,1.624 C13.666,10.618,15.027,12,18.001,12c3.2,0,5.2-1.6,6-4.8c-1.2,1.6-2.6,2.2-4.2,1.8c-0.913-0.228-1.565-0.89-2.288-1.624 C16.337,6.182,14.976,4.8,12.001,4.8z M6.001,12c-3.2,0-5.2,1.6-6,4.8c1.2-1.6,2.6-2.2,4.2-1.8c0.913,0.228,1.565,0.89,2.288,1.624 c1.177,1.194,2.538,2.576,5.512,2.576c3.2,0,5.2-1.6,6-4.8c-1.2,1.6-2.6,2.2-4.2,1.8c-0.913-0.228-1.565-0.89-2.288-1.624 C10.337,13.382,8.976,12,6.001,12z" />
-                </svg>
-              </span>
-              <span>Tailwind / Shadcn</span>
-              <span class="popular-badge" aria-hidden="true" style="margin-top: 4px;">Populaire</span>
-            </div>
-
-            <div class="library-option" data-library="mui">
-              <span class="icon" style="color: var(--poly-accent);">
-                <svg viewBox="0 0 24 24" role="img" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
-                  <title>Material-UI icon</title>
-                  <path
-                    d="M0 2.475v10.39l3 1.733V7.67l6 3.465 6-3.465v3.465l-6 3.463v3.464l6 3.463 9-5.195V9.402l-3 1.733v3.463l-6 3.464-3-1.732 6-3.465V2.475L9 7.67 0 2.475zm24 0l-3 1.73V7.67l3-1.732V2.474Z" />
-                </svg>
-              </span>
-              <span>Material UI</span>
-            </div>
-
-            <div class="library-option" data-library="ant">
-              <span class="icon" style="color: var(--poly-accent);">
-                <svg viewBox="0 0 24 24" role="img" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
-                  <path
-                    d="M17.451 6.68c.51-.506.51-1.33 0-1.837L15.578 2.97l.003.002-2.554-2.55a1.463 1.463 0 0 0-2.05.013L.427 10.98a1.443 1.443 0 0 0 0 2.047l10.549 10.54a1.45 1.45 0 0 0 2.05 0l4.423-4.42a1.297 1.297 0 0 0 0-1.838 1.305 1.305 0 0 0-1.84 0l-3.35 3.354a.346.346 0 0 1-.495 0l-8.427-8.419a.346.346 0 0 1 0-.495l8.424-8.42c.01-.01.024-.018.035-.029a.34.34 0 0 1 .46.03l3.354 3.35a1.3 1.3 0 0 0 1.841 0zm-8.245 5.376a2.848 2.846 0 1 0 5.697 0 2.848 2.846 0 1 0-5.697 0zm14.368-1.034L20.28 7.743a1.303 1.303 0 0 0-1.841.003 1.297 1.297 0 0 0 0 1.838l2.224 2.222c.14.139.14.356 0 .495l-2.192 2.19a1.297 1.297 0 0 0 0 1.837 1.305 1.305 0 0 0 1.84 0l3.264-3.26a1.445 1.445 0 0 0-.002-2.047z" />
-                </svg>
-              </span>
-              <span>Ant Design</span>
-            </div>
-
-            <div class="library-option" data-library="bootstrap">
-              <span class="icon" style="color: var(--poly-accent);">
-                <svg viewBox="0 0 24 24" role="img" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
-                  <path
-                    d="M11.77 11.24H9.956V8.202h2.152c1.17 0 1.834.522 1.834 1.466 0 1.008-.773 1.572-2.174 1.572zm.324 1.206H9.957v3.348h2.231c1.459 0 2.232-.585 2.232-1.685s-.795-1.663-2.326-1.663zM24 11.39v1.218c-1.128.108-1.817.944-2.226 2.268-.407 1.319-.463 2.937-.42 4.186.045 1.3-.968 2.5-2.337 2.5H4.985c-1.37 0-2.383-1.2-2.337-2.5.043-1.249-.013-2.867-.42-4.186-.41-1.324-1.1-2.16-2.228-2.268V11.39c1.128-.108 1.819-.944 2.227-2.268.408-1.319.464-2.937.42-4.186-.045-1.3.968-2.5 2.338-2.5h14.032c1.37 0 2.382 1.2 2.337 2.5-.043 1.249.013 2.867.42 4.186.409 1.324 1.098 2.16 2.226 2.268zm-7.927 2.817c0-1.354-.953-2.333-2.368-2.488v-.057c1.04-.169 1.856-1.135 1.856-2.213 0-1.537-1.213-2.538-3.062-2.538h-4.16v10.172h4.181c2.218 0 3.553-1.086 3.553-2.876z" />
-                </svg>
-              </span>
-              <span>Bootstrap</span>
-            </div>
-
-            <div class="library-option" data-library="chakra">
-              <span class="icon" style="color: var(--poly-accent);">
-                <svg viewBox="0 0 24 24" role="img" xmlns="http://www.w3.org/2000/svg" fill="currentColor">
-                  <path
-                    d="M12 0C5.352 0 0 5.352 0 12s5.352 12 12 12 12-5.352 12-12S18.648 0 12 0zm2.8 4.333c.13-.004.248.136.171.278l-3.044 5.58a.187.187 0 0 0 .164.276h5.26c.17 0 .252.207.128.323l-9.22 8.605c-.165.154-.41-.063-.278-.246l4.364-6.021a.187.187 0 0 0-.151-.296H6.627a.187.187 0 0 1-.131-.32l8.18-8.123a.182.182 0 0 1 .125-.056z" />
-                </svg>
-              </span>
-              <span>Chakra UI</span>
-            </div>
-
-            <div class="library-option" data-library="custom">
-              <span class="icon" style="color: var(--poly-accent);">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-                  <path
-                    d="M8 3H15V0.5L18.5 4L15 7.5V5H8V7.5L4.5 4L8 0.5V3ZM3 17V6.5H5V17C5 18.1046 5.89543 19 7 19H17.5V21H7C4.79086 21 3 19.2091 3 17ZM21 16V9H23.5L20 5.5L16.5 9H19V16H16.5L20 19.5L23.5 16H21Z" />
-                </svg>
-              </span>
-              <span>Custom</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Sticky Footer for Vue 1 -->
-        <!-- Sticky Footer for Vue 1 -->
-        <div class="sticky-footer">
-          <div class="sticky-footer-content space-between">
-            <button class="btn-secondary" id="step1Back" style="flex: 1;">← Retour</button>
-            <button class="btn-primary" id="step1Next" disabled style="flex: 1;">Suivant →</button>
-          </div>
-          <div class="footer-signature">
-            Designed and developed by <a href="https://www.linkedin.com/in/emma-jan/" target="_blank">Emma Jan</a>
-          </div>
-        </div>
-      </div>
-
-      <!-- ============================================
-           VUE 2: COULEUR - Sélecteur de couleur primaire
-           ============================================ -->
-      <div id="wizardStep2" class="wizard-step">
-        <div class="card">
-          <h3>Définissez votre identité de marque</h3>
-          <p style="margin-bottom: 16px;">Cette couleur servira de pivot pour générer toutes vos nuances sémantiques et
-            vos états (hover, active, etc.)</p>
-
-          <label>Primary Color</label>
-          <div class="color-input-group">
-            <div class="color-preview">
-              <div class="color-preview-bg" id="colorPreviewBg"></div>
-              <input type="color" id="colorPicker" value="#6366F1">
-            </div>
-            <div class="color-input-wrapper">
-              <input type="text" id="colorInput" value="#6366F1" placeholder="#6366F1">
-            </div>
-            <button class="btn-secondary" id="randomBtn">Random</button>
-          </div>
-        </div>
-
-        <!-- Sticky Footer for Vue 2 -->
-        <div class="sticky-footer">
-          <div class="sticky-footer-content space-between">
-            <button class="btn-secondary" id="step2Back" style="flex: 1;">← Retour</button>
-            <button class="btn-primary" id="step2Generate" style="flex: 1;">Générer les Tokens →</button>
-          </div>
-          <div class="footer-signature">
-            DesDesigned and developed by <a href="https://www.linkedin.com/in/emma-jan/" target="_blank">Emma Jan</a>
-          </div>
-        </div>
-      </div>
-
-      <!-- ============================================
-           VUE 3: RÉSULTAT - Preview & Export
-           ============================================ -->
-      <div id="wizardStep3" class="wizard-step">
-
-        <!-- Card unique contenant les deux vues -->
-        <div class="card">
-          <!-- Dashboard Header (Live Color & Library) -->
-          <div class="dashboard-header"
-            style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid var(--poly-border-subtle);">
-            <div class="mini-color-control" style="display: flex; align-items: center; gap: 10px;">
-              <div class="color-preview" style="width: 32px; height: 32px; border-radius: 6px;">
-                <div class="color-preview-bg" id="dashboardColorPreviewBg"
-                  style="background-color: var(--poly-accent);"></div>
-                <input type="color" id="dashboardColorPicker">
-              </div>
-              <div>
-                <label style="margin: 0; font-size: 10px; cursor: pointer;" for="dashboardColorPicker">Primary
-                  Color</label>
-                <div id="dashboardColorValue" style="font-family: monospace; font-size: 12px; color: var(--poly-text);">
-                  #6366F1</div>
-              </div>
-            </div>
-
-            <div id="activeLibraryBadge"
-              style="font-size: 11px; background: var(--poly-surface-soft); padding: 4px 8px; border-radius: 6px; border: 1px solid var(--poly-border-subtle); color: var(--poly-text-muted);">
-              Library: <span id="libraryNameDisplay"
-                style="color: var(--poly-accent); font-weight: 600;">Tailwind</span>
-            </div>
-          </div>
-
-          <!-- Designer View -->
-          <div id="designerView">
-            <div class="tabs" id="tokenTabs">
-              <button class="tab active" data-category="brand">Brand</button>
-              <button class="tab" data-category="system">System</button>
-              <button class="tab" data-category="gray">Gray</button>
-              <button class="tab" data-category="spacing">Spacing</button>
-              <button class="tab" data-category="radius">Radius</button>
-              <button class="tab" data-category="typography">Typography</button>
-              <button class="tab" data-category="border">Border</button>
-            </div>
-
-            <div class="preview-section" id="tokenPreview"></div>
-          </div>
-
-          <!-- Developer View -->
-          <div id="devView" class="hidden">
-            <h3>Handoff Développeur</h3>
-            <p style="font-size: 12px; color: var(--poly-text-muted); margin-bottom: 12px;">
-              Récupérez le code prêt à copier-coller pour votre projet.
-            </p>
-
-            <label>Format</label>
-            <select id="exportFormat">
-              <option value="css">CSS Variables (:root)</option>
-              <option value="json">JSON (Design Tokens)</option>
-              <option value="tailwind">Tailwind Config (JS)</option>
-              <option value="scss">SCSS Variables</option>
-            </select>
-
-            <!-- Code Editor Wrapper -->
-            <div class="editor-wrapper">
-              <div id="codeEditor" class="editor-container" tabindex="0"></div>
-            </div>
-
-            <!-- Removed old buttons div here, moved to sticky footer -->
-          </div>
-        </div>
-
-        <!-- Action Buttons (Sticky Footer) -->
-        <div class="sticky-footer">
-
-          <!-- Checkbox Overwrite (Designer Only) -->
-          <div id="overwriteCheckboxContainer" class="hidden"
-            style="width: 100%; display: flex; justify-content: center; margin-bottom: 4px;">
-            <label
-              style="display: flex; align-items: center; cursor: pointer; text-transform: none; color: var(--poly-text); font-weight: 500; font-size: 13px; margin: 0;">
-              <input type="checkbox" id="overwriteCheckbox" style="width: auto; margin: 0 8px 0 0;">
-              Mettre à jour les variables existantes.
-            </label>
-          </div>
-
-          <!-- Footer Content: Designer View -->
-          <div id="footerDesignerOps" class="sticky-footer-content" style="gap: 10px; width: 100%;">
-            <button class="btn-secondary" id="backToLibBtn" style="flex: 1;">← Retour</button>
-            <button class="btn-primary" id="importBtn" style="flex: 2;">Synchroniser avec Figma</button>
-          </div>
-
-          <!-- Footer Content: Developer View -->
-          <div id="footerDevOps" class="sticky-footer-content hidden" style="gap: 10px; width: 100%;">
-            <button class="btn-secondary" id="downloadBtn" style="flex: 1;">
-              <span class="icon" style="margin-right: 6px;">⬇</span> Télécharger
-            </button>
-            <button class="btn-primary" id="copyBtnFooter" style="flex: 1;">
-              Copier le code
-            </button>
-          </div>
-
-          <div class="footer-signature">
-            Designed and developed by <a href="https://www.linkedin.com/in/emma-jan/" target="_blank">Emma Jan</a>
-          </div>
-        </div>
-      </div>
-
-      <!-- ============================================
-           VUE 4: NETTOYAGE INTELLIGENT - Analyse & Corrections
-           ============================================ -->
-      <div id="wizardStep4" class="wizard-step">
-        <div class="card">
-
-
-
-          <!-- État vide amélioré -->
-          <div id="scanEmptyState" class="empty-state-enhanced">
-            <div class="empty-icon">🎯</div>
-            <h3>Aucune sélection pour l'audit</h3>
-            <p
-              style="text-align: left; color: var(--poly-text-muted); font-size: 13px; margin: 16px auto; max-width: 320px; line-height: 1.6;">
-              Sélectionnez une zone à auditer. PolyToken détectera automatiquement les incohérences de design.
-            </p>
-            <div class="empty-actions">
-              <!-- Button removed -->
-            </div>
-          </div>
-
-          <!-- Zone des résultats avec nouvelle hiérarchie -->
-          <div id="scanResults" class="hidden" style="margin-top: 32px;">
-            <div class="card"
-              style="padding: 0; gap: 0; border: 1px solid var(--poly-border-subtle); max-height: 70vh; display: flex; flex-direction: column;">
-
-              <!-- 2. Unified Dashboard Header (fixed at top) -->
-              <div class="dashboard-header-scan"
-                style="margin-top: 0; padding: 16px; flex-direction: column; gap: 8px; align-items: stretch; flex-shrink: 0;">
-
-                <!-- Filter Tabs moved to top -->
-                  <div id="filterTabsScan" class="tabs"
-                    style="margin: 0; width: 100%; border: none; background: var(--poly-surface-soft); padding: 4px;">
-                    <button class="tab active" data-filter="auto" style="flex: 1; justify-content: center;">Auto</button>
-                    <button class="tab" data-filter="manual" style="flex: 1; justify-content: center;">Manuel</button>
-                  </div>
-
-                <!-- Info Row: Title + Description + Gauge -->
-                <div id="scanInfoRow" class="scan-info-row" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px;">
-                  <!-- Left Column: Title + Description -->
-                  <div class="title-group">
-                    <h5 id="scanInfoTitle">Corrections automatiques</h5>
-                    <p id="scanInfoDescription">Ces problèmes peuvent être corrigés automatiquement par le système.</p>
-                  </div>
-                  <!-- Right Column: Progress Gauge -->
-                  <div class="progress-gauge-container">
-                    <div class="progress-gauge">
-                      <svg width="44" height="44" viewBox="0 0 44 44">
-                        <circle cx="22" cy="22" r="19" stroke="var(--poly-border-subtle)" stroke-width="3" fill="none"/>
-                        <circle id="progressRing" cx="22" cy="22" r="19" stroke="var(--poly-accent)" stroke-width="3" fill="none" stroke-linecap="round" stroke-dasharray="119.38" stroke-dashoffset="119.38" transform="rotate(-90 22 22)"/>
-                        <text id="progressPercentage" x="22" y="22" text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="600" fill="var(--poly-text)">0</text>
-                        <text class="progress-label" x="22" y="28" text-anchor="middle" font-size="8" fill="var(--poly-text-muted)">%</text>
-                      </svg>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- Bottom Row: Magic Button (Moved inside header) -->
-                <button onclick="applyAllAutoFixes()" class="btn-soft-primary" id="applyAllAutoBtn"
-                  style="width: 100%; margin: 0;">
-                  <span style="font-size: 16px;">✨</span> Appliquer <span id="autoCountMagic">X</span> corrections
-                </button>
-              </div>
-
-              <!-- 4. Content List -->
-              <div id="unifiedCleaningList" class="unified-list">
-                <!-- Content injected by JS -->
-              </div>
-
-              <!-- Empty States & Bulk Actions -->
-              <div id="filteredEmptyState" class="filtered-empty-state" style="display: none;">
-                <div style="text-align: center; padding: 40px 20px;">
-                  <div style="margin-bottom: 16px;">
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"
-                      style="opacity: 0.4;">
-                      <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round" />
-                    </svg>
-                  </div>
-                  <h5 style="margin-bottom: 8px; color: var(--poly-text-muted);">Aucun problème dans cette catégorie
-                  </h5>
-                </div>
-              </div>
-
-              <div id="bulkActions" class="bulk-actions-enhanced"
-                style="display: none; padding: 16px; border-top: 1px solid var(--poly-border-subtle); background: var(--poly-surface);">
-                <div class="bulk-stats"
-                  style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                  <div class="selection-info"><span id="selectedCount">0</span> élément(s)</div>
-                  <div class="progress-indicator">
-                    <div class="progress-bar"
-                      style="width: 100px; height: 4px; background: var(--poly-surface-soft); border-radius: 2px; overflow: hidden;">
-                      <div id="progressFill" class="progress-fill"
-                        style="height: 100%; background: var(--poly-accent); width: 0%;"></div>
-                    </div>
-                  </div>
-                </div>
-                <div class="bulk-buttons" style="display: flex; gap: 8px;">
-                  <button class="btn-primary" id="applySelectedBtn" disabled>
-                    <span class="btn-text">Appliquer</span> <span class="btn-count" id="applyCount">(0)</span>
-                  </button>
-                  <button class="btn-outline" id="ignoreSelectedBtn" disabled>
-                    <span class="btn-text">Ignorer</span> <span class="btn-count" id="ignoreCount">(0)</span>
-                  </button>
-                </div>
-              </div>
-
-            </div>
-          </div>
-        </div>
-
-        <!-- Sticky Footer -->
-        <div class="sticky-footer">
-          <div class="sticky-footer-content">
-            <button class="btn-secondary" id="step4Back">← Retour</button>
-            <button class="btn-secondary" id="scanBtn" disabled style="margin-left: 12px;">Auditer la sélection</button>
-            <button class="btn-primary" id="step4ApplyAll" style="display: none; margin-left: auto;">✅ Valider</button>
-          </div>
-          <div class="footer-signature">
-            Designed and developed by <a href="https://www.linkedin.com/in/emma-jan/" target="_blank">Emma Jan</a>
-          </div>
-        </div>
-      </div>
-
-    </main>
-
-    <!-- Modal for Token Edit/Add -->
-    <div id="tokenModal" class="modal">
-      <div class="modal-content">
-        <h3 id="modalTitle">Edit Token</h3>
-        <label>Token Name</label>
-        <input type="text" id="modalTokenName" placeholder="e.g., primary-500">
-        <label>Token Value</label>
-        <input type="text" id="modalTokenValue" placeholder="e.g., #6366F1">
-        <div class="modal-actions">
-          <button class="btn-secondary" onclick="closeModal()" style="flex: 1;">Cancel</button>
-          <button id="modalSaveBtn" onclick="saveToken()" style="flex: 1;">Save</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <script>
     // ============================================
     // STATE
     // ============================================
@@ -4138,6 +253,8 @@
         realFileInput.click(); // Open file picker
       }
       else if (currentStartOption === 'manage') {
+        // Charger les tokens existants
+        console.log("Chargement des tokens existants...");
         currentTokens = existingTokensData;
         currentNaming = existingLibrary || "tailwind";
 
@@ -4179,6 +296,7 @@
 
               // Petit feedback visuel optionnel pour dire que le fichier est chargé
               // (Pas figma.notify car le plugin ne sait rien pour l'instant)
+              console.log("Fichier chargé en mémoire, prêt à être importé.");
             }
           } catch (err) {
             alert("Error parsing file: " + err.message);
@@ -4355,8 +473,11 @@
       // Masquer tous les états par défaut
       var scanResults = document.getElementById("scanResults");
       var scanEmptyState = document.getElementById("scanEmptyState");
+      var scanLoadingState = document.getElementById("scanLoadingState");
+
       if (scanResults) scanResults.classList.add('hidden');
       if (scanEmptyState) scanEmptyState.classList.remove('hidden'); // Afficher l'état vide par défaut
+      if (scanLoadingState) scanLoadingState.classList.add('hidden');
 
       // Vérifier si une sélection existe dans Figma
       parent.postMessage({
@@ -4546,6 +667,7 @@
     function highlightLayers(indices) {
       // Activer le verrou pour 2 secondes
       window.ignoreSelectionChangeUntil = Date.now() + 2000;
+      console.log('[UI] Verrouillage Auto-Scan activé pour 2s');
 
       parent.postMessage({
         pluginMessage: {
@@ -4593,11 +715,18 @@
     // ============================================
 
     function displayScanResults(results) {
+      console.log('[displayScanResults] Démarrage affichage de', results ? results.length : 0, 'résultats');
+      console.log('[displayScanResults] Résultats bruts:', results);
 
       try {
         // 1. ARRÊT IMPÉRATIF DU LOADING (Sécurité maximale)
         hideScanLoading();
-        // Note: scanResults reste visible - on remplace juste les skeletons par le vrai contenu
+
+        var loadingState = document.getElementById('scanLoadingState');
+        if (loadingState) {
+          loadingState.classList.add('hidden');
+          loadingState.style.display = 'none';
+        }
 
         // 2. Gestion et vérification des données
         var emptyState = document.getElementById('scanEmptyState');
@@ -4647,11 +776,8 @@
         livePreviewReady = true;
         initialProblemCount = results.length;
 
-
-
         // Mise à jour UI
         updateFilterCounts(stats);
-        updateFilterContent(currentFilter || 'auto');
 
         // 6. Génération HTML (avec tolérance aux pannes)
         var unifiedHtml = generateUnifiedCleaningContent(groups, stats);
@@ -4661,51 +787,19 @@
           listContainer.innerHTML = unifiedHtml;
         }
 
-        // 7. Initialisation des vrais résultats (même si masqués temporairement)
+        // 7. Initialisation Jauge & Events
         if (typeof updateProgressGauge === 'function') updateProgressGauge(results.length);
         if (typeof attachCardEventHandlers === 'function') attachCardEventHandlers();
-        if (typeof attachActionHandlers === 'function') attachActionHandlers();
         if (typeof enableVariableSelectors === 'function') enableVariableSelectors();
 
         // 8. Application du Filtre par défaut
         if (!currentFilter) currentFilter = 'auto';
         if (typeof applyFilter === 'function') applyFilter(currentFilter);
 
-        // 9. TRANSITION FLUIDE SUR PLACE
-        // Les skeletons sont déjà affichés dans scanResults, on les remplace par le vrai contenu
-        if (listContainer && unifiedHtml) {
-          // Remplacer les skeletons par le vrai contenu avec animation
-          listContainer.innerHTML = unifiedHtml;
-          listContainer.classList.add('content-loaded');
-
-          // Activer et mettre à jour le bouton
-          var applyBtn = document.getElementById('applyAllAutoBtn');
-          if (applyBtn) {
-            applyBtn.disabled = false;
-            applyBtn.style.opacity = '1';
-            applyBtn.style.cursor = 'pointer';
-            applyBtn.textContent = '✨ Appliquer ' + stats.autoFixable + ' corrections';
-          }
-
-          // Animation ultra-fluide : les vraies cartes apparaissent en cascade élégante
-          setTimeout(function() {
-            var cards = listContainer.querySelectorAll('.cleaning-result-card');
-            cards.forEach(function(card, index) {
-              setTimeout(function() {
-                card.classList.add('fade-in-card');
-              }, index * 45); // Délai de 45ms pour une cascade plus serrée et fluide
-            });
-          }, 100); // Petit délai pour laisser le contenu s'installer
-        } else {
-          // Fallback si quelque chose ne va pas
-          if (loadingState) {
-            loadingState.classList.add("hidden");
-            loadingState.style.display = "none";
-          }
-          if (resultsDiv) {
-            resultsDiv.classList.remove("hidden");
-            resultsDiv.style.display = "flex";
-          }
+        // 9. AFFICHAGE FINAL
+        if (resultsDiv) {
+          resultsDiv.classList.remove("hidden");
+          resultsDiv.style.display = "flex";
         }
 
         // 10. Mise à jour Footer
@@ -4713,7 +807,7 @@
 
       } catch (error) {
         console.error("🔥 CRASH DISPLAY:", error);
-        var ls = document.getElementById('scanResults');
+        var ls = document.getElementById('scanLoadingState');
         var rd = document.getElementById('scanResults');
         if (ls) ls.style.display = 'none';
         if (rd) rd.style.display = 'flex'; // Tenter d'afficher quand même
@@ -4722,11 +816,13 @@
 
     // Fonction pour activer les sélecteurs de variables après un scan
     function enableVariableSelectors() {
+      console.log('[UI] Activation des sélecteurs de variables après scan - lastScanResults:', lastScanResults ? lastScanResults.length + ' éléments' : 'NON DEFINI');
 
-      // Activer les anciens sélecteurs (select natifs)
-      var nativeSelectors = document.querySelectorAll('select.variable-selector');
+      var selectors = document.querySelectorAll('.variable-selector');
+      console.log('[UI] Nombre de sélecteurs trouvés:', selectors.length);
 
-      nativeSelectors.forEach(function (selector, index) {
+      selectors.forEach(function (selector, index) {
+        console.log('[UI] Activation sélecteur', index + 1, '- état avant:', selector.disabled);
         selector.disabled = false;
         selector.style.background = 'var(--poly-bg)';
         selector.style.color = 'var(--poly-text)';
@@ -4742,37 +838,17 @@
           }, 3000);
         }
 
+        console.log('[UI] Activation sélecteur', index + 1, '- état après:', selector.disabled);
 
         // Remettre l'option par défaut appropriée
         var defaultOption = selector.querySelector('option[value=""]');
         if (defaultOption) {
           defaultOption.textContent = 'Choisir une variable...';
+          console.log('[UI] Option par défaut mise à jour pour sélecteur', index + 1);
         }
       });
 
-      // Activer les dropdowns custom
-      var customSelectors = document.querySelectorAll('.custom-select-container.variable-selector-dropdown.disabled');
-
-      customSelectors.forEach(function (container, index) {
-        container.classList.remove('disabled');
-        container.style.opacity = '1';
-        container.style.pointerEvents = 'auto';
-
-        // Mettre à jour le label
-        var label = container.querySelector('.selected-label');
-        if (label && label.textContent === '🔍 Analyse requise') {
-          label.textContent = 'Choisir une variable...';
-        }
-
-        // Animation d'attention
-        if (container.closest('.manual-fix')) {
-          container.classList.add('manual-focus-attention');
-          setTimeout(function () {
-            container.classList.remove('manual-focus-attention');
-          }, 3000);
-        }
-      });
-
+      console.log('[UI] Activation terminée');
     }
 
 
@@ -4835,8 +911,7 @@
           try { cardDataJson = JSON.stringify({ property: group.property, value: group.value, suggestions: group.suggestions }).replace(/"/g, '&quot;'); } catch (e) { }
 
           // DEBUT CARTE
-          var suggestedVariableId = bestSuggestion ? bestSuggestion.id : '';
-          html += '<div class="' + cardClass + '" data-indices="' + indicesJson + '" data-group-index="' + index + '" data-suggested-variable="' + suggestedVariableId + '" style="display: flex; flex-direction: column; padding: 12px 16px; margin-bottom: 8px; background: var(--poly-surface); border: 1px solid var(--poly-border-subtle); border-radius: 12px;">';
+          html += '<div class="' + cardClass + '" data-indices="' + indicesJson + '" style="display: flex; flex-direction: column; padding: 12px 16px; margin-bottom: 8px; background: var(--poly-surface); border: 1px solid var(--poly-border-subtle); border-radius: 12px;">';
 
           // HEADER (Propriété + Actions)
           html += '<div class="card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">';
@@ -4896,8 +971,26 @@
           if (isOrphan) {
             html += '<span style="color: var(--poly-warning); font-size: 11px; font-style: italic;">Aucune variable compatible</span>';
           } else if (hasConflicts) {
-            // CUSTOM DROPDOWN POUR LES CONFLITS MANUELS
-            html += generateCustomVariableSelector(group.suggestions, group.originalIndices);
+            // CUSTOM DROPDOWN AVEC LIVE PREVIEW
+            html += '<div class="custom-select-container variable-selector-container" data-indices="' + indicesJson + '" style="width: 100%;">';
+            html += '<div class="select-trigger" style="padding: 6px 8px; min-height: 32px;">';
+            html += '<span class="selected-label" style="font-size: 11px;">Choisir une variable...</span>';
+            html += '<svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6,9 12,15 18,9"></polyline></svg>';
+            html += '</div>';
+            html += '<div class="select-options" style="max-height: 200px;">';
+            html += '<div class="option-item" data-variable-id="" style="font-size: 11px; padding: 8px 12px;">Choisir...</div>';
+            group.suggestions.forEach(function (s) {
+              var valDisplay = s.hex || s.value || '';
+              var isColor = valDisplay && valDisplay.startsWith('#');
+              html += '<div class="option-item" data-variable-id="' + s.id + '" data-variable-name="' + s.name + '" data-variable-value="' + valDisplay + '" style="font-size: 11px; padding: 8px 12px; display: flex; align-items: center; gap: 8px;">';
+              if (isColor) {
+                html += '<div style="width: 12px; height: 12px; border-radius: 2px; background-color: ' + valDisplay + '; border: 1px solid var(--poly-border-subtle); flex-shrink: 0;"></div>';
+              }
+              html += '<span>' + s.name + (valDisplay ? ' (' + valDisplay + ')' : '') + '</span>';
+              html += '</div>';
+            });
+            html += '</div>';
+            html += '</div>';
           } else if (isAutoFixable && bestSuggestion) {
             // Auto-fixable display
             html += '<div style="display: flex; align-items: center; gap: 6px; padding: 6px; background: rgba(138, 213, 63, 0.1); border-radius: 6px; border: 1px solid rgba(138, 213, 63, 0.3);">';
@@ -4977,7 +1070,10 @@
         });
       });
 
-      // 2. Dropdowns
+      // 2. Actions groupées
+      attachGroupedActionHandlers();
+
+      // 3. Dropdowns
       setupDropdownDelegation();
     }
 
@@ -5065,16 +1161,21 @@
 
     // Gestion de la sélection pour les cartes groupées
     function handleGroupedItemSelection(card, isSelected) {
+      console.log('[handleGroupedItemSelection] 🎯 Changement de sélection pour carte:', card.textContent, '->', isSelected);
 
       var dataIndices = card.getAttribute('data-indices');
+      console.log('[handleGroupedItemSelection] 📋 data-indices:', dataIndices);
 
       if (isSelected) {
+        console.log('[handleGroupedItemSelection] ✅ Sélection de la carte');
         card.classList.add('selected');
 
         if (dataIndices) {
           try {
             var indicesToAdd = JSON.parse(dataIndices);
+            console.log('[handleGroupedItemSelection] 📊 Indices à ajouter:', indicesToAdd);
             selectedIndices = selectedIndices.concat(indicesToAdd);
+            console.log('[handleGroupedItemSelection] 📊 selectedIndices après ajout:', selectedIndices);
           } catch (parseError) {
             console.error('[handleGroupedItemSelection] ❌ Erreur parsing data-indices:', parseError);
           }
@@ -5082,21 +1183,25 @@
           console.warn('[handleGroupedItemSelection] ⚠️ Attribut data-indices manquant sur la carte');
         }
       } else {
+        console.log('[handleGroupedItemSelection] ❌ Désélection de la carte');
         card.classList.remove('selected');
 
         if (dataIndices) {
           try {
             var cardIndices = JSON.parse(dataIndices);
+            console.log('[handleGroupedItemSelection] 📊 Indices à retirer:', cardIndices);
             var beforeLength = selectedIndices.length;
             selectedIndices = selectedIndices.filter(function (idx) {
               return cardIndices.indexOf(idx) === -1;
             });
+            console.log('[handleGroupedItemSelection] 📊 selectedIndices après retrait:', selectedIndices, '(retiré:', beforeLength - selectedIndices.length, ')');
           } catch (parseError) {
             console.error('[handleGroupedItemSelection] ❌ Erreur parsing data-indices:', parseError);
           }
         }
       }
 
+      console.log('[handleGroupedItemSelection] 🔄 Appel de updateBulkActionsVisibility');
       updateBulkActionsVisibility();
       updateBulkActionsCounts();
     }
@@ -5160,6 +1265,7 @@
     // ============================================
 
     function applyGroupedFix(indices, variableId) {
+      console.log('[applyGroupedFix] Application groupée pour indices:', indices, 'avec variable:', variableId);
 
       // Trouver et animer la card avant l'application
       var card = document.querySelector('.cleaning-result-card[data-indices*="' + indices[0] + '"]');
@@ -5190,8 +1296,11 @@
       indices.forEach(function (index) {
         if (lastScanResults && lastScanResults[index]) {
           var result = lastScanResults[index];
+          console.log('[DEBUG applyGroupedFix] Résultat trouvé pour index', index, ':', result);
+          console.log('[DEBUG applyGroupedFix] ID suggéré vs ID demandé:', result.suggestedVariableId, 'vs', variableId);
 
           // Envoyer un message au plugin principal pour appliquer la correction
+          console.log('[DEBUG applyGroupedFix] Envoi du message apply-single-fix pour index', index);
           parent.postMessage({
             pluginMessage: {
               type: "apply-single-fix",
@@ -5200,11 +1309,13 @@
             }
           }, "*");
         } else {
+          console.log('[DEBUG applyGroupedFix] ERREUR: Pas de résultat pour index', index);
         }
       });
     }
 
     function ignoreGroupedItems(indices) {
+      console.log('[ignoreGroupedItems] Ignorer les éléments:', indices);
 
       // Trouver la card et animer avant suppression
       var card = document.querySelector('.cleaning-result-card[data-indices*="' + indices[0] + '"]');
@@ -5250,15 +1361,22 @@
     }
 
     function updateBulkActionsVisibility() {
+      console.log('[updateBulkActionsVisibility] 🔄 Mise à jour visibilité bouton');
+      console.log('[updateBulkActionsVisibility] 📊 selectedIndices.length:', selectedIndices.length);
+      console.log('[updateBulkActionsVisibility] 📋 selectedIndices:', selectedIndices);
 
       var bulkContainer = document.getElementById('bulkActionsContainer');
       var bulkBtn = document.getElementById('bulkFixBtn');
 
+      console.log('[updateBulkActionsVisibility] 🔍 bulkContainer trouvé:', !!bulkContainer);
+      console.log('[updateBulkActionsVisibility] 🔍 bulkBtn trouvé:', !!bulkBtn);
 
       if (selectedIndices.length > 0 && bulkContainer && bulkBtn) {
+        console.log('[updateBulkActionsVisibility] ✅ Affichage du bouton (sélection active)');
         bulkContainer.style.display = 'block';
         bulkBtn.disabled = false;
       } else if (bulkContainer) {
+        console.log('[updateBulkActionsVisibility] ❌ Masquage du bouton (pas de sélection)');
         bulkContainer.style.display = 'none';
       } else {
         console.warn('[updateBulkActionsVisibility] ⚠️ bulkContainer non trouvé dans le DOM');
@@ -5274,6 +1392,7 @@
     }
 
     function applyBulkFixes() {
+      console.log('[applyBulkFixes] 🚀 Démarrage application en masse pour', selectedIndices.length, 'éléments');
 
       var indicesToRemove = selectedIndices.slice(); // Copier les indices avant de les vider
       var results = {
@@ -5289,6 +1408,7 @@
         if (lastScanResults && lastScanResults[index]) {
           var scanResult = lastScanResults[index];
 
+          console.log('[applyBulkFixes] 📋 Traitement index', index, ':', scanResult.layerName, '->', scanResult.property);
 
           try {
             // Utiliser le nouveau système avec vérification
@@ -5296,8 +1416,10 @@
 
             if (verificationResult.success) {
               results.successful++;
+              console.log('[applyBulkFixes] ✅ SUCCÈS pour index', index, '(' + verificationResult.details.duration + 'ms)');
             } else {
               results.failed++;
+              console.log('[applyBulkFixes] ❌ ÉCHEC pour index', index, ':', verificationResult.error);
             }
 
             // Stocker les détails pour analyse
@@ -5346,6 +1468,11 @@
       updateUILocally(indicesToRemove);
 
       // Notification détaillée
+      console.log('[applyBulkFixes] 📊 RÉSULTATS FINAUX:');
+      console.log('  - Total traité:', results.total);
+      console.log('  - Réussis:', results.successful);
+      console.log('  - Échoués:', results.failed);
+      console.log('  - Taux de succès:', Math.round((results.successful / results.total) * 100) + '%');
 
       if (results.successful > 0) {
         figma.notify('✅ ' + results.successful + '/' + results.total + ' corrections appliquées avec succès');
@@ -5374,9 +1501,13 @@
         });
 
         // Afficher le rapport groupé
+        console.log('[applyBulkFixes] 📊 RAPPORT D\'ERREURS:');
         Object.keys(errorGroups).forEach(function (issue) {
           var group = errorGroups[issue];
+          console.log('  ❌', issue + ':', group.count, 'cas');
+          console.log('    📝 Exemples:', group.examples.join(', '));
           if (group.recommendations.length > 0) {
+            console.log('    💡 Solutions:', group.recommendations.join(' | '));
           }
         });
 
@@ -5388,6 +1519,7 @@
     }
 
     function updateUILocally(removedIndices) {
+      console.log('[updateUILocally] Mise à jour locale de l\'UI pour indices supprimés:', removedIndices);
 
       // Supprimer les cartes correspondantes du DOM
       removedIndices.forEach(function (index) {
@@ -5407,6 +1539,8 @@
 
       // Masquer la jauge de progression si plus de problèmes (elle sera remplacée par la célébration)
       if (remainingCards === 0) {
+        var progressGauge = document.querySelector('.progress-gauge');
+        if (progressGauge) progressGauge.style.display = 'none';
 
         // ✨ CÉLÉBRATION : Afficher la célébration pour 100%
         var scanResults = document.getElementById('scanResults');
@@ -5438,14 +1572,27 @@
         loadingBar.style.display = 'block';
       }
 
-      // Fonction désactivée - le chargement se fait maintenant de manière fluide sur place
-      // Les skeletons sont automatiquement remplacés par le vrai contenu
-      console.log('Loading progress:', progress, status);
+      // Mettre à jour le texte de statut
+      var loadingText = document.querySelector('#scanLoadingState h3');
+      if (loadingText) {
+        loadingText.textContent = status || 'Analyse en cours...';
+      }
+
+      // Masquer la progression quand terminée
+      if (progress >= 100) {
+        setTimeout(function () {
+          var loadingState = document.getElementById('scanLoadingState');
+          if (loadingState) {
+            loadingState.style.display = 'none';
+          }
+        }, 500);
+      }
     }
 
     function selectNodesInFigma(indices) {
       // Activer le verrou pour éviter l'auto-scan intempestif
       window.ignoreSelectionChangeUntil = Date.now() + 2000;
+      console.log('[UI selectNodesInFigma] Verrouillage Auto-Scan activé pour 2s');
 
       // Envoyer les indices des résultats pour sélectionner les nœuds dans Figma
       parent.postMessage({
@@ -5457,6 +1604,7 @@
     }
 
     function handleSingleFixApplied(appliedCount, error, index) {
+      console.log('[DEBUG handleSingleFixApplied] Réponse reçue - appliedCount:', appliedCount, 'error:', error, 'index:', index);
 
       if (error) {
         console.error('[DEBUG handleSingleFixApplied] Erreur lors de l\'application:', error);
@@ -5477,13 +1625,11 @@
         });
 
         if (targetCard) {
-          // Ne faire l'animation que si la carte n'est pas déjà en cours d'animation depuis l'UI
-          if (targetCard.style.opacity !== '0' && targetCard.style.display !== 'none') {
-            // Animation de succès
-            targetCard.style.transition = 'all 0.3s ease';
-            targetCard.style.backgroundColor = 'var(--poly-success-light)';
-            targetCard.style.borderColor = 'var(--poly-success)';
-          }
+          console.log('[DEBUG handleSingleFixApplied] Animation de la card pour index', index);
+          // Animation de succès
+          targetCard.style.transition = 'all 0.3s ease';
+          targetCard.style.backgroundColor = 'var(--poly-success-light)';
+          targetCard.style.borderColor = 'var(--poly-success)';
 
           // Désactiver les contrôles
           var buttons = targetCard.querySelectorAll('button[data-action]');
@@ -5573,6 +1719,7 @@
           }
         }
       } else {
+        console.log('[DEBUG handleSingleFixApplied] Aucune correction appliquée pour index', index);
         showNotification('La correction n\'a pas pu être appliquée', 'warning');
 
         // Remettre la card à l'état normal en cas d'échec
@@ -5592,6 +1739,7 @@
     }
 
     function handleGroupFixApplied(appliedCount, error, indices) {
+      console.log('[DEBUG handleGroupFixApplied] Réponse reçue - appliedCount:', appliedCount, 'error:', error, 'indices:', indices);
 
       if (error) {
         console.error('[DEBUG handleGroupFixApplied] Erreur lors de l\'application du groupe:', error);
@@ -5616,6 +1764,7 @@
         });
 
         if (targetCard) {
+          console.log('[DEBUG handleGroupFixApplied] Animation de la carte pour le groupe d\'indices:', indices);
 
           // Marquer tous les indices comme appliqués
           if (!targetCard._appliedIndices) {
@@ -5714,6 +1863,7 @@
           console.warn('[DEBUG handleGroupFixApplied] Aucune carte trouvée pour les indices:', indices);
         }
       } else {
+        console.log('[DEBUG handleGroupFixApplied] Aucune correction appliquée pour le groupe');
         showNotification('Les corrections de groupe n\'ont pas pu être appliquées', 'warning');
       }
     }
@@ -5876,8 +2026,14 @@
         // Sélecteur de variable
         html += '<div class="variable-selector-row">';
         if (group.suggestions.length > 1) {
-          // CUSTOM DROPDOWN POUR LES CONFLITS MANUELS (DÉSACTIVÉ AU DÉPART)
-          html += generateCustomVariableSelector(group.suggestions, group.originalIndices, null, true); // true = disabled
+          html += '<select class="variable-selector manual-select" data-indices="' + group.originalIndices.join(',') + '" disabled style="width: 100%; padding: 6px; border-radius: 6px; border: 1px solid var(--poly-border-subtle); background: var(--poly-surface); color: var(--poly-text-muted); font-size: 12px; cursor: not-allowed;" title="Lancez d\'abord une analyse pour activer le Live Preview">';
+          html += '<option value="" disabled selected>🔍 Analyse requise</option>';
+          group.suggestions.forEach(function (suggestion, idx) {
+            var distanceIndicator = suggestion.isExact ? '' : ' ≈';
+            var valuePreview = suggestion.hex ? suggestion.hex : (suggestion.value || "");
+            html += '<option value="' + suggestion.id + '">' + suggestion.name + ' (' + valuePreview + ')' + distanceIndicator + '</option>';
+          });
+          html += '</select>';
         } else {
           html += '<div style="padding: 6px; background: var(--poly-surface-soft); border-radius: 6px; font-size: 12px; color: var(--poly-text-muted);">Variable suggérée : ' + group.suggestions[0].name + '</div>';
         }
@@ -5980,6 +2136,7 @@
     }
 
     function getPropertyIcon(property) {
+      console.log('[getPropertyIcon] Propriété demandée:', '"' + property + '"');
       switch (property) {
         case 'Fill':
           return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 10 10" fill="none" style="margin-right: 3px; vertical-align: middle;"><path d="M2.5 2.5H7.5V7.5H2.5V2.5Z" fill="currentColor"/><path fill-rule="evenodd" clip-rule="evenodd" d="M2 1.5H8C8.13261 1.5 8.25979 1.55268 8.35355 1.64645C8.44732 1.74021 8.5 1.86739 8.5 2V8C8.5 8.13261 8.44732 8.25979 8.35355 8.35355C8.25979 8.44732 8.13261 8.5 8 8.5H2C1.86739 8.5 1.74021 8.44732 1.64645 8.35355C1.55268 8.44732 1.5 8.13261 1.5 8V2C1.5 1.86739 1.55268 1.74021 1.64645 1.64645C1.74021 1.55268 1.86739 1.5 2 1.5ZM0.5 2C0.5 1.46957 0.710714 0.960859 1.08579 0.585786C1.46086 0.210714 1.96957 0 2.5 0H7.5C8.03043 0 8.53914 0.210714 8.91421 0.585786C9.28929 0.960859 9.5 1.46957 9.5 2V8C9.5 8.53043 9.28929 9.03914 8.91421 9.41421C8.53914 9.78929 8.03043 10 7.5 10H2.5C1.96957 10 1.46086 9.78929 1.08579 9.41421C0.710714 9.03914 0.5 8.53043 0.5 8V2ZM2.5 7.5V2.5H7.5V7.5H2.5ZM2 2.25C2 2.11193 2.11193 2 2.25 2H7.75C7.88807 2 8 2.11193 8 2.25V7.75C8 7.88807 7.88807 8 7.75 8H2.25C2.11193 8 2 7.88807 2 7.75V2.25Z" fill="currentColor"/></svg><span class="property-label">Fond</span>';
@@ -6034,29 +2191,9 @@
       });
     }
 
-    // ✅ MISE À JOUR DU CONTENU DU HEADER SELON L'ONGLET
-    function updateFilterContent(filterType) {
-      var titleElement = document.getElementById('scanInfoTitle');
-      var descriptionElement = document.getElementById('scanInfoDescription');
-
-      if (!titleElement || !descriptionElement) return;
-
-      if (filterType === 'auto') {
-        titleElement.textContent = 'Corrections automatiques';
-        descriptionElement.textContent = 'Ces problèmes peuvent être corrigés automatiquement par le système.';
-      } else if (filterType === 'manual') {
-        titleElement.textContent = 'Corrections manuelles';
-        descriptionElement.textContent = 'Ces problèmes nécessitent une intervention manuelle pour être résolus.';
-      }
-    }
-
     // ✅ FIX DES FILTRES (ONGLETS)
     function applyFilter(filterType) {
       currentFilter = filterType;
-
-      // Mettre à jour le contenu du header
-      updateFilterContent(filterType);
-
       var cards = document.querySelectorAll('.cleaning-result-card');
       var visibleCount = 0;
 
@@ -6088,16 +2225,7 @@
         if (unifiedList) unifiedList.style.display = 'block';
       }
 
-
-      // Gestion de la visibilité du bouton d'action selon l'onglet
-      var applyAllAutoBtn = document.getElementById('applyAllAutoBtn');
-      if (applyAllAutoBtn) {
-        if (filterType === 'manual') {
-          applyAllAutoBtn.style.display = 'none';
-        } else if (filterType === 'auto') {
-          applyAllAutoBtn.style.display = 'flex';
-        }
-      }
+      updateFilterContent(filterType);
     }
 
     // Déterminer si une carte doit être affichée selon le filtre
@@ -6121,6 +2249,22 @@
       }
     }
 
+    // Mettre à jour le contenu selon le filtre actif
+    function updateFilterContent(filterType) {
+      var titleElement = document.getElementById('contentTitle');
+      var descElement = document.getElementById('contentDesc');
+
+      switch (filterType) {
+        case 'auto':
+          titleElement.textContent = 'Corrections automatiques';
+          descElement.textContent = 'Ces valeurs correspondent exactement à vos variables et peuvent être corrigées automatiquement.';
+          break;
+        case 'manual':
+          titleElement.textContent = 'Corrections manuelles';
+          descElement.textContent = 'Ces valeurs ont plusieurs correspondances possibles. Choisissez la variable appropriée pour chaque cas.';
+          break;
+      }
+    }
 
     // Sélectionner tous les éléments visibles
     function selectAllVisibleItems() {
@@ -6296,54 +2440,36 @@
     function showScanLoading() {
       // Protection: Ne pas relancer si déjà en cours (sauf si forcé)
       if (isScanning) {
+        console.log('[Scanner] Scan already in progress, skipping UI update');
         return;
       }
 
       isScanning = true;
       var scanEmptyState = document.getElementById('scanEmptyState');
       var scanResults = document.getElementById('scanResults');
+      var unifiedList = document.getElementById('unifiedCleaningList');
 
-      // Masquer l'état vide
       if (scanEmptyState) {
         scanEmptyState.classList.add('hidden');
         scanEmptyState.style.display = 'none';
       }
 
-      // Afficher scanResults avec les skeletons
+      // Afficher le conteneur de résultats
       if (scanResults) {
         scanResults.classList.remove('hidden');
         scanResults.style.display = 'flex';
+      }
 
-        // Injecter les skeletons dans la liste
-        var unifiedList = document.getElementById('unifiedCleaningList');
-        if (unifiedList) {
-          unifiedList.innerHTML = `
-            <div class="cleaning-result-card skeleton" style="min-height: 80px; background: var(--poly-surface-soft); border-radius: 8px; padding: 12px; border: 1px solid var(--poly-border-subtle);">
-              <div class="skeleton-line" style="height: 12px; background: var(--poly-border-subtle); border-radius: 4px; margin-bottom: 8px; width: 70%; animation: skeletonPulse 1.5s ease-in-out infinite;"></div>
-              <div class="skeleton-line" style="height: 10px; background: var(--poly-border-subtle); border-radius: 4px; margin-bottom: 6px; width: 90%; animation: skeletonPulse 1.5s ease-in-out infinite; animation-delay: 0.1s;"></div>
-              <div class="skeleton-line" style="height: 10px; background: var(--poly-border-subtle); border-radius: 4px; width: 60%; animation: skeletonPulse 1.5s ease-in-out infinite; animation-delay: 0.2s;"></div>
-            </div>
-            <div class="cleaning-result-card skeleton" style="min-height: 80px; background: var(--poly-surface-soft); border-radius: 8px; padding: 12px; border: 1px solid var(--poly-border-subtle);">
-              <div class="skeleton-line" style="height: 12px; background: var(--poly-border-subtle); border-radius: 4px; margin-bottom: 8px; width: 65%; animation: skeletonPulse 1.5s ease-in-out infinite; animation-delay: 0.3s;"></div>
-              <div class="skeleton-line" style="height: 10px; background: var(--poly-border-subtle); border-radius: 4px; margin-bottom: 6px; width: 85%; animation: skeletonPulse 1.5s ease-in-out infinite; animation-delay: 0.4s;"></div>
-              <div class="skeleton-line" style="height: 10px; background: var(--poly-border-subtle); border-radius: 4px; width: 75%; animation: skeletonPulse 1.5s ease-in-out infinite; animation-delay: 0.5s;"></div>
-            </div>
-            <div class="cleaning-result-card skeleton" style="min-height: 80px; background: var(--poly-surface-soft); border-radius: 8px; padding: 12px; border: 1px solid var(--poly-border-subtle);">
-              <div class="skeleton-line" style="height: 12px; background: var(--poly-border-subtle); border-radius: 4px; margin-bottom: 8px; width: 80%; animation: skeletonPulse 1.5s ease-in-out infinite; animation-delay: 0.6s;"></div>
-              <div class="skeleton-line" style="height: 10px; background: var(--poly-border-subtle); border-radius: 4px; margin-bottom: 6px; width: 95%; animation: skeletonPulse 1.5s ease-in-out infinite; animation-delay: 0.7s;"></div>
-              <div class="skeleton-line" style="height: 10px; background: var(--poly-border-subtle); border-radius: 4px; width: 50%; animation: skeletonPulse 1.5s ease-in-out infinite; animation-delay: 0.8s;"></div>
-            </div>
-          `;
-
-          // Désactiver le bouton pendant le chargement
-          var applyBtn = document.getElementById('applyAllAutoBtn');
-          if (applyBtn) {
-            applyBtn.disabled = true;
-            applyBtn.style.opacity = '0.6';
-            applyBtn.style.cursor = 'not-allowed';
-            applyBtn.textContent = '🔍 Analyse en cours...';
-          }
+      // Injecter le Skeleton
+      if (unifiedList) {
+        var skeletonHTML = '';
+        for (var i = 0; i < 4; i++) {
+          skeletonHTML += '<div class="cleaning-result-card skeleton-card" style="height: 100px; padding: 16px; display: flex; flex-direction: column; gap: 12px; border: 1px solid var(--poly-border-subtle); margin-bottom: 8px;">';
+          skeletonHTML += '<div style="display: flex; justify-content: space-between;"><div class="skeleton-line" style="width: 120px; height: 16px; border-radius: 4px; background: rgba(255,255,255,0.05);"></div><div class="skeleton-line" style="width: 80px; height: 24px; border-radius: 4px; background: rgba(255,255,255,0.05);"></div></div>';
+          skeletonHTML += '<div style="display: flex; gap: 12px; align-items: center;"><div class="skeleton-line" style="width: 24px; height: 24px; border-radius: 4px; background: rgba(255,255,255,0.05);"></div><div class="skeleton-line" style="flex: 1; height: 12px; border-radius: 4px; background: rgba(255,255,255,0.05);"></div></div>';
+          skeletonHTML += '</div>';
         }
+        unifiedList.innerHTML = skeletonHTML;
       }
 
       // 🛡️ WATCHDOG TIMER : Si pas de réponse dans 8s, on libère
@@ -6370,6 +2496,7 @@
 
       // On ne cache pas scanResults ici, car on veut afficher le contenu réel
       // La responsabilité de masquer le loading visuel est implicite (skeleton remplacé par contenu)
+      console.log('✅ Loading state cleared');
     }
 
     // Fonction pour mettre à jour le bouton principal selon l'onglet actif
@@ -6404,12 +2531,6 @@
           var card = select.closest('.cleaning-result-card') || select.closest('.scan-result-card');
           if (!card) return;
 
-
-          var select = e.target;
-          var variableId = select.value;
-          var card = select.closest('.cleaning-result-card') || select.closest('.scan-result-card');
-          if (!card) return;
-
           // Récupérer les boutons de validation
           var applyBtn = card.querySelector('.manual-apply-btn') || card.querySelector('button[data-action="apply"]');
 
@@ -6436,6 +2557,7 @@
             card.classList.add('ready-to-apply');
 
             // 3. ✨ PREVIEW : Envoyer le message de prévisualisation
+            console.log('[UI] Triggering Preview for variable:', variableId, 'on indices:', indices);
             sendPreviewFix(indices, variableId);
 
             // Mise à jour des boutons globaux si c'est du manuel
@@ -6455,181 +2577,6 @@
       });
     }
 
-    // ============================================
-    // CUSTOM DROPDOWN SYSTEM FOR VARIABLE SELECTORS
-    // ============================================
-
-    function generateCustomVariableSelector(suggestions, indices, selectedVariableId, disabled) {
-      var indicesJson = JSON.stringify(indices);
-      var suggestionsJson = JSON.stringify(suggestions);
-      var containerId = 'custom-select-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-      var disabledClass = disabled ? ' disabled' : '';
-      var disabledStyle = disabled ? ' opacity: 0.6; pointer-events: none;' : '';
-
-      var html = '<div class="custom-select-container variable-selector-dropdown' + disabledClass + '" id="' + containerId + '" data-indices="' + indicesJson + '" data-suggestions="' + suggestionsJson.replace(/"/g, '&quot;') + '" style="' + disabledStyle + '">';
-
-      // Trigger (bouton principal)
-      var triggerLabel = disabled ? '🔍 Analyse requise' : 'Choisir une variable...';
-      html += '<div class="select-trigger">';
-      html += '<div class="selected-label">' + triggerLabel + '</div>';
-      html += '<div class="live-preview-indicator" style="display: none; color: var(--poly-accent); font-size: 10px; margin-right: 6px;">👁️ Live</div>';
-      html += '<div class="chevron">▼</div>';
-      html += '</div>';
-
-      // Options container
-      html += '<div class="select-options">';
-
-      suggestions.forEach(function (s, index) {
-        var valDisplay = s.hex || s.value || '';
-        var displayText = s.name + (valDisplay ? ' (' + valDisplay + ')' : '');
-        var variableValue = s.hex || s.value || '';
-
-        html += '<div class="option-item" data-variable-id="' + s.id + '" data-variable-name="' + s.name.replace(/"/g, '&quot;') + '" data-variable-value="' + variableValue + '">';
-
-        // Pour les couleurs, afficher un swatch
-        if (s.hex) {
-          html += '<div class="option-row">';
-          html += '<div class="swatch" style="background-color: ' + s.hex + ';"></div>';
-          html += '<div class="name">' + s.name + '</div>';
-          html += '<div class="value">' + s.hex + '</div>';
-          html += '</div>';
-        } else {
-          html += '<div class="option-row">';
-          html += '<div class="name" style="grid-column: 2 / span 2;">' + displayText + '</div>';
-          html += '</div>';
-        }
-
-        html += '</div>';
-      });
-
-      html += '</div>'; // Fin select-options
-      html += '</div>'; // Fin custom-select-container
-
-      return html;
-    }
-
-    function updateCustomDropdownTrigger(container, selectedSuggestion) {
-      var trigger = container.querySelector('.select-trigger');
-      var label = trigger.querySelector('.selected-label');
-      var liveIndicator = trigger.querySelector('.live-preview-indicator');
-
-      if (selectedSuggestion) {
-        var valDisplay = selectedSuggestion.hex || selectedSuggestion.value || '';
-        var displayText = selectedSuggestion.name + (valDisplay ? ' (' + valDisplay + ')' : '');
-
-        label.textContent = displayText;
-
-        // Montrer l'indicateur de live preview
-        if (liveIndicator) {
-          liveIndicator.style.display = 'block';
-        }
-
-        // Ajouter un color dot si c'est une couleur
-        if (selectedSuggestion.hex) {
-          // Supprimer l'ancien color dot s'il existe
-          var existingDot = trigger.querySelector('.color-dot');
-          if (existingDot) existingDot.remove();
-
-          var colorDot = document.createElement('div');
-          colorDot.className = 'color-dot';
-          colorDot.style.backgroundColor = selectedSuggestion.hex;
-          trigger.insertBefore(colorDot, label);
-        }
-      } else {
-        label.textContent = 'Choisir une variable...';
-        if (liveIndicator) {
-          liveIndicator.style.display = 'none';
-        }
-        var existingDot = trigger.querySelector('.color-dot');
-        if (existingDot) existingDot.remove();
-      }
-    }
-
-    function initCustomDropdowns() {
-      document.addEventListener('click', function(e) {
-
-        var trigger = e.target.closest('.select-trigger');
-        if (trigger) {
-          var container = trigger.closest('.custom-select-container');
-          toggleCustomDropdown(container);
-          e.stopPropagation();
-          return;
-        }
-
-        var option = e.target.closest('.option-item');
-        if (option) {
-          var container = option.closest('.custom-select-container');
-          var variableId = option.getAttribute('data-variable-id');
-          var variableName = option.getAttribute('data-variable-name');
-          var indices = JSON.parse(container.getAttribute('data-indices') || '[]');
-
-
-          // Trouver la suggestion sélectionnée directement depuis les attributs
-          var selectedSuggestion = {
-            id: variableId,
-            name: variableName,
-            hex: option.getAttribute('data-variable-value').startsWith('#') ? option.getAttribute('data-variable-value') : null,
-            value: option.getAttribute('data-variable-value')
-          };
-
-          // Mettre à jour l'affichage
-          updateCustomDropdownTrigger(container, selectedSuggestion);
-
-          // Fermer le dropdown
-          container.classList.remove('open');
-
-          // Stocker la sélection
-          container._selectedVariableId = variableId;
-
-          // Activer le bouton de validation
-          var card = container.closest('.cleaning-result-card') || container.closest('.scan-result-card');
-          if (card) {
-            var applyBtn = card.querySelector('.manual-apply-btn') || card.querySelector('button[data-action="apply"]');
-            if (applyBtn) {
-              applyBtn.disabled = false;
-              card.classList.add('ready-to-apply');
-            }
-
-            // Trigger Live Preview
-
-            if (variableId && livePreviewReady) {
-              sendPreviewFix(indices, variableId);
-            } else {
-            }
-          } else {
-          }
-
-          e.stopPropagation();
-          return;
-        }
-
-        // Fermer tous les dropdowns ouverts quand on clique ailleurs
-        if (!e.target.closest('.custom-select-container')) {
-          document.querySelectorAll('.custom-select-container.open').forEach(function(cont) {
-            cont.classList.remove('open');
-          });
-        }
-      });
-    }
-
-    function toggleCustomDropdown(container) {
-      var isOpen = container.classList.contains('open');
-
-      // Fermer tous les autres dropdowns
-      document.querySelectorAll('.custom-select-container.open').forEach(function(other) {
-        if (other !== container) {
-          other.classList.remove('open');
-        }
-      });
-
-      // Basculer l'état de ce dropdown
-      if (isOpen) {
-        container.classList.remove('open');
-      } else {
-        container.classList.add('open');
-      }
-    }
-
     // Garder l'alias pour compatibilité si nécessaire, mais on l'appelle dans DOMContentLoaded
     var initManualSelectors = initVariableSelectors;
 
@@ -6644,6 +2591,7 @@
         applyBtn.disabled = true;
         applyBtn.textContent = '⚠️ Appliquer les sélections manuelles';
       }
+    }
     }
 
     // Application groupée des corrections manuelles
@@ -6765,6 +2713,7 @@
       var card = undoData.cardElement;
       var cardIndices = undoData.cardIndices;
 
+      console.log('[triggerUndo] Annulation en cours pour indices:', cardIndices);
 
       // Réafficher la carte avec animation
       card.style.transition = 'none';
@@ -7003,7 +2952,6 @@
     document.addEventListener('DOMContentLoaded', function () {
       initFilterSystem();
       initManualSelectors();
-      initCustomDropdowns();
     });
 
     // Fonction helper pour générer le sélecteur de variable
@@ -7126,113 +3074,48 @@
     }
 
     function attachActionHandlers() {
-      // Utiliser la délégation d'événements sur le container des résultats
-      var unifiedList = document.getElementById('unifiedCleaningList');
-      if (!unifiedList) {
-        console.error('unifiedCleaningList not found');
-        return;
-      }
+      // Gestionnaire pour les boutons d'action
+      var actionButtons = document.querySelectorAll('button[data-action]');
+      actionButtons.forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+          e.preventDefault();
+          var action = this.getAttribute('data-action');
+          var index = parseInt(this.getAttribute('data-index'));
 
-      // Supprimer les anciens écouteurs pour éviter les doublons
-      var newUnifiedList = unifiedList.cloneNode(true);
-      unifiedList.parentNode.replaceChild(newUnifiedList, unifiedList);
-
-      // Attacher le nouvel écouteur sur le container
-      newUnifiedList.addEventListener('click', function(e) {
-        var button = e.target.closest('button[data-action]');
-        if (!button) return;
-
-        e.preventDefault();
-        e.stopPropagation();
-
-        var action = button.getAttribute('data-action');
-
-          if (action === 'view') {
-            // Action "Voir dans Figma" - sélectionner les nœuds
-            var card = button.closest('.cleaning-result-card');
+          if (action === 'apply') {
+            // Récupérer la variable sélectionnée depuis le dropdown si elle existe
+            var selectedVariableId = null;
+            var card = this.closest('.scan-result-card');
             if (card) {
-              var indicesStr = card.getAttribute('data-indices');
-              if (indicesStr) {
-                try {
-                  var indices = JSON.parse(indicesStr);
-                  selectNodesInFigma(indices);
-                } catch (err) {
-                  console.error("Erreur parsing indices pour view:", err);
-                }
+              var selector = card.querySelector('.variable-selector');
+              if (selector) {
+                selectedVariableId = selector.value;
               }
             }
-          } else if (action === 'apply') {
-            // Vérifier si le bouton est désactivé
-            if (button.disabled) return;
 
-            // Action "Appliquer" - appliquer la correction
-            var card = button.closest('.cleaning-result-card');
-            if (card) {
-              var indicesStr = card.getAttribute('data-indices');
-              if (indicesStr) {
-                try {
-                  var indices = JSON.parse(indicesStr);
-
-                  // Récupérer la variable sélectionnée
-                  var selectedVariableId = card._selectedVariableId;
-
-                  if (!selectedVariableId) {
-                    // Logique de fallback : récupérer depuis les attributs data de la carte
-                    selectedVariableId = card.getAttribute('data-suggested-variable');
-                  }
-
-                  if (!selectedVariableId) {
-                    alert('Erreur: Aucune variable sélectionnée. Veuillez choisir une variable avant d\'appliquer.');
-                    return;
-                  }
-
-                  // Pour les corrections groupées, envoyer chaque index individuellement
-                  console.log('Sending individual fixes for indices:', indices);
-                  indices.forEach(function(index) {
-                    console.log('Sending fix for index:', index);
-                    parent.postMessage({
-                      pluginMessage: {
-                        type: "apply-single-fix",
-                        index: index,
-                        selectedVariableId: selectedVariableId
-                      }
-                    }, "*");
-                  });
-
-                  // Animation de succès et masquage de la carte
-                  card.style.transition = 'all 0.3s ease';
-                  card.style.backgroundColor = 'var(--poly-success-light)';
-                  card.style.borderColor = 'var(--poly-success)';
-
-                  // Masquer la carte après un délai
-                  setTimeout(function() {
-                    card.style.opacity = '0';
-                    setTimeout(function() {
-                      card.style.display = 'none';
-                      if (typeof updateProblemCounter === 'function') {
-                        updateProblemCounter(-indices.length); // Décrémenter du nombre d'éléments traités
-                      }
-                    }, 300);
-                  }, 500);
-                } catch (err) {
-                  console.error("Erreur parsing indices pour apply:", err);
-                }
+            // Envoyer le message apply-single-fix avec la variable sélectionnée
+            parent.postMessage({
+              pluginMessage: {
+                type: "apply-single-fix",
+                index: index,
+                selectedVariableId: selectedVariableId
               }
+            }, "*");
+
+            // Masquer la carte immédiatement
+            if (card) {
+              card.style.display = 'none';
+              updateProblemCounter(-1);
             }
           } else if (action === 'ignore') {
-            // Action "Ignorer" - masquer la carte avec animation
-            var card = button.closest('.cleaning-result-card');
+            // Masquer la carte visuellement
+            var card = this.closest('.scan-result-card');
             if (card) {
-              card.style.transition = 'all 0.3s ease';
-              card.style.opacity = '0';
-              setTimeout(function() {
-                card.style.display = 'none';
-                if (typeof updateProblemCounter === 'function') {
-                  updateProblemCounter(-1);
-                }
-              }, 300);
+              card.style.display = 'none';
+              updateProblemCounter(-1);
             }
-        }
+          }
+        });
       });
     }
 
@@ -7360,6 +3243,12 @@
         progressRing.style.stroke = 'var(--poly-warning)';
       }
 
+      // Afficher/masquer la jauge selon qu'il y a des problèmes
+      var progressGauge = document.querySelector('.progress-gauge');
+      if (progressGauge) {
+        var hasProblems = initialProblemCount > 0;
+        progressGauge.style.display = hasProblems ? 'flex' : 'none';
+      }
     }
 
     function applyAllFixes() {
@@ -7454,23 +3343,17 @@
       // Utilise le même mécanisme que les autres verrouillages (ignoreSelectionChangeUntil)
       window.ignoreSelectionChangeUntil = Date.now() + 2000; // 2 secondes de protection
 
-
-      // Vérifier que le système est prêt
-      if (!livePreviewReady) {
-        return;
-      }
+      console.log('[sendPreviewFix] 🔒 Verrou de preview activé pour 2s');
 
       // 📤 ENVOYER LE MESSAGE DE PREVIEW
-      var message = {
+      console.log('[sendPreviewFix] 🔄 Envoi preview pour variable:', variableId, 'indices:', indices);
+      parent.postMessage({
         pluginMessage: {
           type: 'preview-fix',
           indices: indices,
           variableId: variableId
         }
-      };
-
-      parent.postMessage(message, '*');
-
+      }, '*');
     }
 
     // ============================================
@@ -7483,6 +3366,8 @@
 
         // --- GESTION SCAN-RESULTS (CRITIQUE) ---
         if (msg.type === "scan-results") {
+          console.log('[UI] Scan terminé reçu. Résultats:', msg.results ? msg.results.length : 0);
+          console.log('[UI] Détail des résultats:', msg.results);
 
           var elapsed = Date.now() - (window.scanStartTime || 0);
           var minDelay = 800;
@@ -7499,6 +3384,7 @@
               }
 
               // 3. Afficher les résultats
+              console.log('[UI] Appel displayScanResults avec:', msg.results);
               displayScanResults(msg.results);
 
               // 4. Vérifier sélection
@@ -7507,7 +3393,7 @@
             } catch (innerError) {
               console.error("🔥 ERREUR CRITIQUE dans setTimeout scan-results:", innerError);
               // Fallback d'urgence
-              // Fallback logic updated for inline loading approach
+              // Removed scanLoadingState related fallback as it's no longer used.
               var scanRes = document.getElementById("scanResults");
               if (scanRes) {
                 scanRes.classList.remove('hidden');
@@ -7531,6 +3417,7 @@
         }
 
         if (msg.type === "existing-tokens") {
+          console.log("Message existing-tokens reçu:", msg);
           if (msg.tokens && Object.keys(msg.tokens).length > 0) {
             hasExistingTokens = true;
             existingTokensData = msg.tokens;
@@ -7579,6 +3466,7 @@
 
           // 🛡️ PROGRAMMATIC LOCK: Ignorer si un verrou est actif
           if (window.ignoreSelectionChangeUntil && Date.now() < window.ignoreSelectionChangeUntil) {
+            console.log("[AutoScan] Changement de sélection ignoré (Verrou actif)");
             return;
           }
 
@@ -7592,14 +3480,17 @@
               // PROTECTION ULTIME : Si c'est la MEME sélection qu'avant, ON NE FAIT RIEN
               // Sauf si on force via un bouton (qui resetterait lastScannedSelectionId)
               if (window.lastScannedSelectionId === newSelectionId && !document.getElementById('scanResults').classList.contains('hidden')) {
+                console.log('[AutoScan] Même sélection déjà scannée (' + newSelectionId + '), ignoré.');
                 return;
               }
 
               // Si un scan est DÉJÀ en cours, on ignore
               if (isScanning) {
+                console.log('[AutoScan] Scan en cours, ignoré.');
                 return;
               }
 
+              console.log('[AutoScan] Nouvelle sélection détectée (' + newSelectionId + ') -> Lancement');
 
               // Update state
               window.lastScannedSelectionId = newSelectionId;
@@ -7627,6 +3518,7 @@
               }
 
             } else {
+              console.log('[AutoScan] Pas de sélection');
               // Reset state
               isScanning = false;
               window.lastScannedSelectionId = null; // Reset selection ID so next selection works
@@ -7665,6 +3557,7 @@
 
         if (msg.type === "preview-result" || msg.type === "preview-error" || msg.type === "sync-confirmation") {
           // Log only
+          console.log('[UI] Message reçu:', msg.type);
         }
 
       } catch (globalError) {
@@ -7675,10 +3568,89 @@
       }
     };
 
+    // ============================================
+    // DIAGNOSTIC FUNCTIONS
+    // ============================================
 
+    // Fonction de diagnostic pour déboguer les problèmes de Live Preview
+    function diagnoseLivePreviewState() {
+      console.log('🔍 === DIAGNOSTIC LIVE PREVIEW ===');
+
+      // 1. État des résultats de scan
+      console.log('📊 lastScanResults:', lastScanResults ? lastScanResults.length + ' éléments' : 'NON DÉFINI');
+      if (lastScanResults) {
+        console.log('📊 Premier élément:', lastScanResults[0]);
+      }
+
+      // 2. État des sélecteurs
+      var selectors = document.querySelectorAll('.variable-selector');
+      console.log('🎛️ Nombre de sélecteurs trouvés:', selectors.length);
+      selectors.forEach(function (sel, index) {
+        console.log('🎛️ Sélecteur', index + 1, ':', {
+          disabled: sel.disabled,
+          value: sel.value,
+          options: sel.querySelectorAll('option').length,
+          visible: sel.offsetParent !== null
+        });
+      });
+
+      // 3. État du workflow
+      console.log('🔄 Current step:', currentStep);
+
+      // 4. État du scan button
+      var scanBtn = document.getElementById('scanBtn');
+      if (scanBtn) {
+        console.log('🔘 Scan button:', {
+          disabled: scanBtn.disabled,
+          text: scanBtn.textContent,
+          visible: scanBtn.offsetParent !== null
+        });
+      }
+
+      // 5. État des cartes de résultats
+      var resultCards = document.querySelectorAll('.cleaning-result-card');
+      console.log('📋 Cartes de résultats:', resultCards.length);
+
+      console.log('🔍 === FIN DIAGNOSTIC ===');
+    }
+
+    // Fonction de secours pour forcer l'activation du Live Preview (pour débogage)
+    function forceEnableLivePreview() {
+      console.log('🚨 FORCING LIVE PREVIEW ENABLE...');
+
+      // Forcer les états
+      livePreviewReady = true;
+      if (!lastScanResults || lastScanResults.length === 0) {
+        // Créer des données de test factices
+        lastScanResults = [{
+          nodeId: 'test-node-1',
+          property: 'Fill',
+          layerName: 'Test Layer',
+          suggestions: [{
+            id: 'test-var-1',
+            name: 'Test Variable',
+            hex: '#FF0000',
+            value: '#FF0000'
+          }]
+        }];
+        console.log('🚨 Données de test créées:', lastScanResults);
+      }
+
+      // Activer les sélecteurs
+      enableVariableSelectors();
+
+      // Notification
+      if (typeof figma !== 'undefined' && figma.notify) {
+        figma.notify('🚨 Live Preview forcé pour tests', { timeout: 3000 });
+      }
+
+      console.log('🚨 LIVE PREVIEW FORCE ENABLED');
+    }
 
     // Fonction pour synchroniser manuellement les résultats de scan
     function syncScanResults() {
+      console.log('🔄 SYNC: Tentative de synchronisation des résultats de scan...');
+      console.log('🔄 SYNC: lastScanResults disponible:', lastScanResults ? lastScanResults.length + ' éléments' : 'NON');
 
       if (lastScanResults && lastScanResults.length > 0) {
         parent.postMessage({
@@ -7687,6 +3659,7 @@
             results: lastScanResults
           }
         }, '*');
+        console.log('🔄 SYNC: Message de synchronisation envoyé');
       } else {
         console.error('🔄 SYNC: Aucun résultat disponible pour synchronisation');
         if (typeof figma !== 'undefined' && figma.notify) {
@@ -8432,21 +4405,4 @@
       document.querySelector('.header-logo-section').innerHTML = ICONS.logo;
     }
 
-  </script>
-
-  <!-- ✨ UNDO TOAST : Toast d'annulation premium -->
-  <div id="undoToast" class="toast-container">
-    <div class="toast-content">
-      <span class="toast-title">Correction appliquée</span>
-      <span class="toast-detail">
-        <span id="toastOldValue">--</span>
-        <span class="arrow">→</span>
-        <span class="variable-name" id="toastNewVariable">--</span>
-      </span>
-    </div>
-    <button class="toast-btn" onclick="triggerUndo()">Annuler</button>
-    <button class="toast-close" onclick="hideToast()">✕</button>
-  </div>
-</body>
-
-</html>
+  
