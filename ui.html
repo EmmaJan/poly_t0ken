@@ -792,6 +792,34 @@
       box-shadow: 0 0 0 2px rgba(138, 213, 63, 0.2);
     }
 
+    /* Tab badges */
+    .tab-badge {
+      display: none; /* Hidden by default, shown when > 0 */
+      align-items: center;
+      justify-content: center;
+      min-width: 18px;
+      height: 18px;
+      padding: 0 6px;
+      border-radius: 9px;
+      background: var(--poly-bg);
+      color: var(--poly-text);
+      font-size: 11px;
+      font-weight: 600;
+      margin-left: 6px;
+      position: relative;
+      top: -1px;
+    }
+
+    .tabs .tab.active .tab-badge {
+      background: rgba(255, 255, 255, 0.2);
+      color: var(--poly-bg);
+    }
+
+    /* Hide problem counter */
+    #problemCounter {
+      display: none !important;
+    }
+
     /* Locked Banner */
     .locked-banner {
       margin-top: 16px;
@@ -3374,6 +3402,102 @@
       background: var(--poly-accent-hover);
       transform: translateY(-1px);
     }
+
+    /* ============================================
+       SMART CONTEXTUAL PILLS
+       ============================================ */
+
+    /* Conteneur horizontal - ajusté pour hug content */
+    .smart-suggestions-row {
+      display: flex;
+      gap: 6px; /* Gap réduit pour optimiser l'espace */
+      align-items: center;
+      flex-wrap: wrap; /* Permettre le wrap si nécessaire */
+      width: fit-content; /* Hug content au lieu de 100% width */
+    }
+
+    /* Style de base de la pilule */
+    .smart-pill {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px 8px 8px; /* Padding augmenté pour plus de largeur */
+      background: var(--poly-surface);
+      border: 1px solid var(--poly-border-subtle);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+      height: 44px; /* Hauteur augmentée de 32px à 44px */
+      flex: none; /* Changé de flex: 1 à none pour hug content */
+      width: fit-content; /* Hug content au lieu de largeur distribuée */
+      max-width: 280px; /* Largeur maximale augmentée pour voir le nom complet */
+    }
+
+    .smart-pill:hover {
+      background: var(--poly-surface-soft);
+      border-color: var(--poly-accent);
+      transform: translateY(-1px);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    }
+
+    .smart-pill.selected {
+      background: rgba(138, 213, 63, 0.1);
+      border-color: var(--poly-accent);
+      box-shadow: 0 0 0 2px rgba(138, 213, 63, 0.2);
+    }
+
+    /* Contenu Info (Nom + Valeur) */
+    .pill-info {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      overflow: hidden;
+      line-height: 1.2;
+    }
+
+    .pill-name {
+      font-size: 12px; /* Augmenté de 11px à 12px */
+      font-weight: 600;
+      color: var(--poly-text);
+      white-space: nowrap;
+      overflow: visible; /* Changé de hidden à visible pour voir le texte complet */
+      text-overflow: clip; /* Changé d'ellipsis à clip */
+      max-width: none; /* Retiré pour permettre au texte de s'afficher complètement */
+    }
+
+    .pill-value {
+      font-size: 10px; /* Augmenté de 9px à 10px */
+      color: var(--poly-text-muted);
+      font-family: monospace;
+    }
+
+    /* Styles Spécifiques */
+    .pill-swatch {
+      width: 24px; /* Augmenté de 20px à 24px */
+      height: 24px; /* Augmenté de 20px à 24px */
+      border-radius: 6px; /* Augmenté pour correspondre */
+      border: 1px solid rgba(255,255,255,0.1);
+      flex-shrink: 0;
+    }
+
+    .pill-preview-text {
+      color: var(--poly-text);
+      line-height: 1;
+      display: flex;
+      align-items: center;
+      height: 24px; /* Augmenté de 20px à 24px */
+      min-width: 24px; /* Augmenté de 20px à 24px */
+      justify-content: center;
+      font-weight: 600;
+    }
+
+    .pill-more {
+      flex: none; /* Changé pour hug content */
+      width: fit-content; /* Hug content */
+      color: var(--poly-text-muted);
+      font-size: 12px;
+      min-width: 32px; /* Largeur minimale pour le bouton */
+    }
   </style>
 </head>
 
@@ -3774,8 +3898,8 @@
                 <!-- Filter Tabs moved to top -->
                   <div id="filterTabsScan" class="tabs"
                     style="margin: 0; width: 100%; border: none; background: var(--poly-surface-soft); padding: 4px;">
-                    <button class="tab active" data-filter="auto" style="flex: 1; justify-content: center;">Auto</button>
-                    <button class="tab" data-filter="manual" style="flex: 1; justify-content: center;">Manuel</button>
+                    <button class="tab active" data-filter="auto" style="flex: 1; justify-content: center;">Auto <span id="autoCount" class="tab-badge">0</span></button>
+                    <button class="tab" data-filter="manual" style="flex: 1; justify-content: center;">Manuel <span id="manualCount" class="tab-badge">0</span></button>
                   </div>
 
                 <!-- Info Row: Title + Description + Gauge -->
@@ -3801,7 +3925,7 @@
                 <!-- Bottom Row: Magic Button (Moved inside header) -->
                 <button onclick="applyAllAutoFixes()" class="btn-soft-primary" id="applyAllAutoBtn"
                   style="width: 100%; margin: 0;">
-                  <span style="font-size: 16px;">✨</span> Appliquer <span id="autoCountMagic">X</span> corrections
+                  <span style="font-size: 16px;">✨</span> Appliquer les corrections
                 </button>
               </div>
 
@@ -4684,7 +4808,7 @@
             applyBtn.disabled = false;
             applyBtn.style.opacity = '1';
             applyBtn.style.cursor = 'pointer';
-            applyBtn.textContent = '✨ Appliquer ' + stats.autoFixable + ' corrections';
+            applyBtn.textContent = '✨ Appliquer les corrections';
           }
 
           // Animation ultra-fluide : les vraies cartes apparaissent en cascade élégante
@@ -4786,13 +4910,19 @@
       if (!stats) return;
 
       var autoCount = document.getElementById('autoCount');
-      if (autoCount) autoCount.textContent = stats.autoFixable || 0;
+      if (autoCount) {
+        var autoValue = stats.autoFixable || 0;
+        autoCount.textContent = autoValue;
+        autoCount.style.display = autoValue > 0 ? 'inline-flex' : 'none';
+      }
 
       var manualCount = document.getElementById('manualCount');
-      if (manualCount) manualCount.textContent = stats.manualFixes || 0;
+      if (manualCount) {
+        var manualValue = stats.manualFixes || 0;
+        manualCount.textContent = manualValue;
+        manualCount.style.display = manualValue > 0 ? 'inline-flex' : 'none';
+      }
 
-      var magicCount = document.getElementById('autoCountMagic');
-      if (magicCount) magicCount.textContent = stats.autoFixable || 'X';
     }
 
     // Générer le contenu unifié avec tolérance aux erreurs
@@ -4869,11 +4999,11 @@
           html += '</div>'; // Fin Actions
           html += '</div>'; // Fin Header
 
-          // BODY (Comparaison Valeurs)
-          html += '<div class="card-body" style="display: flex; align-items: center; gap: 12px;">';
+          // BODY (Comparaison Valeurs) - Layout optimisé avec space-between
+          html += '<div class="card-body" style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">';
 
-          // 1. Valeur Actuelle
-          html += '<div style="flex: 1; min-width: 0;">';
+          // 1. Valeur Actuelle (côté gauche)
+          html += '<div style="flex-shrink: 0; min-width: 0;">';
           var displayValue = group.value;
           if (typeof displayValue === 'object') displayValue = 'Mixte';
 
@@ -4887,27 +5017,43 @@
           html += '</div>'; // Fin Valeur Actuelle wrapper
           html += '</div>'; // Fin Valeur Actuelle Container
 
+          // 2. Flèche + Nouvelle Valeur (côté droite, regroupés)
+          html += '<div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">';
+
           // Flèche
           html += '<div style="color: var(--poly-text-muted); flex-shrink: 0;">⟶</div>';
 
-          // 2. Nouvelle Valeur (Fix)
-          html += '<div style="flex: 1.2; min-width: 0;">';
+          // Nouvelle Valeur (Fix) - maintenant dans le même container que la flèche
+          html += '<div style="display: flex; align-items: center;">';
 
           if (isOrphan) {
             html += '<span style="color: var(--poly-warning); font-size: 11px; font-style: italic;">Aucune variable compatible</span>';
           } else if (hasConflicts) {
-            // CUSTOM DROPDOWN POUR LES CONFLITS MANUELS
-            html += generateCustomVariableSelector(group.suggestions, group.originalIndices);
-          } else if (isAutoFixable && bestSuggestion) {
-            // Auto-fixable display
-            html += '<div style="display: flex; align-items: center; gap: 6px; padding: 6px; background: rgba(138, 213, 63, 0.1); border-radius: 6px; border: 1px solid rgba(138, 213, 63, 0.3);">';
-            if (bestSuggestion.resolvedValue && bestSuggestion.resolvedValue.startsWith('#')) {
-              html += '<div style="width: 14px; height: 14px; border-radius: 3px; background-color: ' + bestSuggestion.resolvedValue + ';"></div>';
+            // Utiliser le nouveau système de boutons intelligents
+            html += renderSmartSuggestions(group.suggestions, group.property, group.originalIndices);
+
+            // Garder le dropdown en "backup" caché si besoin pour le bouton "+X"
+            if (group.suggestions.length > 3) {
+              html += '<div style="display: none;">';
+              html += generateCustomVariableSelector(group.suggestions, group.originalIndices);
+              html += '</div>';
             }
-            html += '<span style="font-size: 11px; color: var(--poly-text); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">' + bestSuggestion.name + '</span>';
-            html += '</div>';
+          } else if (isAutoFixable && bestSuggestion) {
+            // Auto-fixable display - nom de la variable en exergue, alignement horizontal
+            var resolvedValue = bestSuggestion.resolvedValue || bestSuggestion.value;
+            var autoFixIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M1 0.5C1 0.367392 0.947321 0.240215 0.853553 0.146447C0.759785 0.0526785 0.632608 0 0.5 0C0.367392 0 0.240215 0.0526785 0.146447 0.146447C0.0526785 0.240215 0 0.367392 0 0.5V9.5C0 9.63261 0.0526785 9.75979 0.146447 9.85355C0.240215 9.94732 0.367392 10 0.5 10C0.632608 10 0.759785 9.94732 0.853553 9.85355C0.947321 9.75979 1 9.63261 1 9.5V0.5ZM9.5 0C9.63261 0 9.75979 0.0526785 9.85355 0.146447C9.94732 0.240215 10 0.367392 10 0.5V9.5C10 9.63261 9.94732 9.75979 9.85355 9.85355C9.75979 9.94732 9.63261 10 9.5 10C9.36739 10 9.24021 9.94732 9.14645 9.85355C9.05268 9.75979 9 9.63261 9 9.5V0.5C9 0.367392 9.05268 0.240215 9.14645 0.146447C9.24021 0.0526785 9.36739 0 9.5 0ZM6 6V4H4V6H6ZM7 4C7 3.73478 6.89464 3.48043 6.70711 3.29289C6.51957 3.10536 6.26522 3 6 3H4C3.73478 3 3.48043 3.10536 3.29289 3.29289C3.10536 3.48043 3 3.73478 3 4V6C3 6.26522 3.10536 6.51957 3.29289 6.70711C3.48043 6.89464 3.73478 7 4 7H6C6.26522 7 6.51957 6.89464 6.70711 6.70711C6.89464 6.51957 7 6.26522 7 6V4Z" fill="#1B1F24"/></svg>';
+
+            if (bestSuggestion.resolvedValue && bestSuggestion.resolvedValue.startsWith('#')) {
+              html += '<div style="display: flex; align-items: center; gap: 4px;">';
+              html += '<div style="width: 20px; height: 20px; border-radius: 4px; background-color: ' + bestSuggestion.resolvedValue + '; border: 1px solid var(--poly-border-subtle);"></div>';
+              html += '<div style="display: flex; align-items: baseline; gap: 4px;">' + autoFixIcon + '<span style="font-size: 12px; color: var(--poly-text); font-weight: 600;">' + bestSuggestion.name + '</span><span style="font-size: 10px; color: var(--poly-text-muted); font-family: monospace;">' + resolvedValue + '</span></div>';
+              html += '</div>';
+            } else {
+              html += '<div style="display: flex; align-items: baseline; gap: 4px;">' + autoFixIcon + '<span style="font-size: 12px; color: var(--poly-text); font-weight: 600;">' + bestSuggestion.name + '</span><span style="font-size: 10px; color: var(--poly-text-muted); font-family: monospace;">' + resolvedValue + '</span></div>';
+            }
           }
           html += '</div>'; // Fin Nouvelle Valeur
+          html += '</div>'; // Fin Flèche + Nouvelle Valeur container
 
           html += '</div>'; // Fin Body
           html += '</div>'; // Fin Carte
@@ -5692,15 +5838,15 @@
 
             // Attendre 700ms que le cerveau enregistre le succès
             setTimeout(function () {
-              // Animation de glissement vers la droite
+              // Animation de succès sans faire disparaître la carte
               targetCard.style.transition = 'all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
-              targetCard.style.transform = 'translateX(50px)';
-              targetCard.style.opacity = '0';
+              targetCard.style.transform = 'scale(1.02)';
+              targetCard.style.boxShadow = '0 8px 25px rgba(138, 213, 63, 0.15)';
 
               setTimeout(function () {
-                // CACHER la carte (ne pas supprimer) pour permettre l'annulation
-                targetCard.style.display = 'none';
+                // Remettre la carte à son état normal sans la cacher
                 targetCard.style.transform = '';
+                targetCard.style.boxShadow = '';
 
                 // UNDO TOAST : Afficher le toast d'annulation avec les détails
                 showUndoToast(undoData);
@@ -5768,7 +5914,8 @@
     }
 
     function updateCleaningDashboard(stats) {
-      document.getElementById('totalIssues').textContent = stats.total;
+      // Supprimé l'affichage du nombre total d'erreurs
+      // document.getElementById('totalIssues').textContent = stats.total;
       document.getElementById('autoFixable').textContent = stats.autoFixable;
       document.getElementById('manualFixes').textContent = stats.manualFixes;
     }
@@ -5918,7 +6065,7 @@
       // Résumé global
       html += '<div style="background: var(--poly-surface-soft); padding: 16px; border-radius: 8px; border: 1px solid var(--poly-border-subtle);">';
       html += '<h6 style="margin: 0 0 12px 0; color: var(--poly-text); font-size: 14px;">📊 Résumé du nettoyage</h6>';
-      html += '<div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">';
+      html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">';
 
       // Auto-corrigeable
       html += '<div style="text-align: center; padding: 12px; background: ' + (stats.autoFixable > 0 ? 'rgba(22, 163, 74, 0.1)' : 'var(--poly-surface)') + '; border-radius: 6px;">';
@@ -5930,12 +6077,6 @@
       html += '<div style="text-align: center; padding: 12px; background: ' + (stats.manualFixes > 0 ? 'rgba(245, 158, 11, 0.1)' : 'var(--poly-surface)') + '; border-radius: 6px;">';
       html += '<div style="font-size: 18px; font-weight: 700; color: ' + (stats.manualFixes > 0 ? 'var(--poly-warning)' : 'var(--poly-text-muted)') + ';">' + stats.manualFixes + '</div>';
       html += '<div style="font-size: 11px; color: var(--poly-text-muted);">À corriger manuellement</div>';
-      html += '</div>';
-
-      // Total
-      html += '<div style="text-align: center; padding: 12px; background: var(--poly-surface); border-radius: 6px;">';
-      html += '<div style="font-size: 18px; font-weight: 700; color: var(--poly-accent);">' + stats.total + '</div>';
-      html += '<div style="font-size: 11px; color: var(--poly-text-muted);">Total problèmes</div>';
       html += '</div>';
 
       html += '</div>';
@@ -6459,6 +6600,94 @@
     // CUSTOM DROPDOWN SYSTEM FOR VARIABLE SELECTORS
     // ============================================
 
+    // Gestionnaire de clic pour les Smart Pills (preview + sélection)
+    function handleSmartPillClick(buttonElement, indices, variableId, variableName, variableValue) {
+      var card = buttonElement.closest('.cleaning-result-card');
+
+      // 1. Faire la preview
+      sendPreviewFix(indices, variableId);
+
+      // 2. Stocker la sélection sur la carte (comme dans handleDropdownOptionClick)
+      card.setAttribute('data-selected-variable', variableId);
+      card._selectedVariableId = variableId;
+
+      // 3. Activer le bouton Appliquer
+      var applyBtn = card.querySelector('button[data-action="apply"]');
+      if (applyBtn) {
+        applyBtn.disabled = false;
+        applyBtn.classList.remove('btn-outline');
+        applyBtn.classList.add('btn-primary');
+        applyBtn.title = 'Appliquer ' + variableName;
+      }
+
+      // 4. Marquer visuellement la pill sélectionnée
+      var pillRow = buttonElement.closest('.smart-suggestions-row');
+      pillRow.querySelectorAll('.smart-pill').forEach(function(pill) {
+        pill.classList.remove('selected');
+      });
+      buttonElement.classList.add('selected');
+    }
+
+    // Nouvelle fonction pour les Smart Contextual Pills
+    function renderSmartSuggestions(suggestions, property, indices) {
+      let html = '<div class="smart-suggestions-row">';
+
+      // Limite à 3 suggestions pour garder l'alignement, sinon "+X"
+      const displayLimit = 3;
+      const visibleSuggestions = suggestions.slice(0, displayLimit);
+
+      visibleSuggestions.forEach(s => {
+        // Déterminer le contenu visuel selon le type de propriété
+        let visualContent = '';
+        let pillClass = 'smart-pill';
+
+        // CAS 1 : COULEURS
+        if (property === 'Fill' || property === 'Stroke') {
+          const color = s.hex || s.value;
+          visualContent = `<div class="pill-swatch" style="background-color: ${color}"></div>`;
+          pillClass += ' pill-color';
+        }
+        // CAS 2 : TYPOGRAPHIE
+        else if (property === 'Font Size') {
+          // On utilise la valeur brute (ex: 16) pour la taille de police de l'aperçu
+          const size = parseFloat(s.value);
+          visualContent = `<span class="pill-preview-text" style="font-size: ${Math.min(size, 20)}px">Ag</span>`;
+          pillClass += ' pill-typo';
+        }
+        // CAS 3 : ESPACEMENT / RAYON
+        else {
+          visualContent = `<span class="pill-icon">📏</span>`;
+          pillClass += ' pill-metric';
+        }
+
+        // Génération du bouton
+        html += `
+          <button class="${pillClass}"
+                  data-indices='${JSON.stringify(indices)}'
+                  onclick="handleSmartPillClick(this, ${JSON.stringify(indices)}, '${s.id}', '${s.name.replace(/'/g, "\\'")}', '${(s.resolvedValue || s.value).replace(/'/g, "\\'")}')"
+                  title="${s.name} (${s.value})">
+            ${visualContent}
+            <div class="pill-info">
+              <span class="pill-name">${s.name}</span>
+              <span class="pill-value">${s.resolvedValue || s.value}</span>
+            </div>
+          </button>
+        `;
+      });
+
+      // Bouton "Plus" si nécessaire (ouvre l'ancien dropdown pour les cas complexes)
+      if (suggestions.length > displayLimit) {
+        html += `
+          <button class="smart-pill pill-more" onclick="toggleCustomDropdown(event.target.closest('.cleaning-result-card').querySelector('.custom-select-container'))">
+            +${suggestions.length - displayLimit}
+          </button>
+        `;
+      }
+
+      html += '</div>';
+      return html;
+    }
+
     function generateCustomVariableSelector(suggestions, indices, selectedVariableId, disabled) {
       var indicesJson = JSON.stringify(indices);
       var suggestionsJson = JSON.stringify(suggestions);
@@ -6963,7 +7192,7 @@
     // Exporter un rapport de nettoyage
     function exportCleaningReport() {
       var stats = {
-        totalIssues: parseInt(document.getElementById('totalIssues').textContent) || 0,
+        // totalIssues supprimé
         autoFixable: parseInt(document.getElementById('autoFixable').textContent) || 0,
         manualFixes: parseInt(document.getElementById('manualFixes').textContent) || 0,
         timestamp: new Date().toISOString(),
@@ -6978,7 +7207,7 @@
           total_problems: stats.totalIssues,
           auto_correctable: stats.autoFixable,
           manual_required: stats.manualFixes,
-          completion_rate: stats.totalIssues > 0 ? Math.round((stats.autoFixable / stats.totalIssues) * 100) : 100
+          completion_rate: 0 // Supprimé car totalIssues n'est plus affiché
         }
       };
 
@@ -7059,9 +7288,8 @@
       var icon = result.property === "Fill" ? ICONS.fill : ICONS.stroke;
       var cardHtml = '<div class="scan-result-card" data-index="' + result.originalIndex + '" style="display: flex; align-items: center; padding: 12px 16px; margin-bottom: 8px; background: var(--poly-surface-soft); border: 1px solid var(--poly-border-subtle); border-radius: 8px; transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);">';
 
-      // Icône et nom de la propriété
+      // Nom de la propriété
       cardHtml += '<div style="display: flex; align-items: center; min-width: 80px; margin-right: 16px;">';
-      cardHtml += '<span style="color: var(--poly-accent); margin-right: 6px;">' + icon + '</span>';
       cardHtml += '<span style="font-size: 12px; color: var(--poly-text-muted); font-weight: 500;">' + result.property + '</span>';
       cardHtml += '</div>';
 
@@ -7074,8 +7302,6 @@
       cardHtml += '<div style="display: flex; align-items: center; margin-right: 16px;">';
       // Rond avec la couleur brute
       cardHtml += '<div style="width: 20px; height: 20px; border-radius: 50%; background-color: ' + result.value + '; border: 1px solid var(--poly-border-subtle); margin-right: 8px;"></div>';
-      // Flèche
-      cardHtml += '<span style="color: var(--poly-text-muted); margin-right: 8px;">→</span>';
       // Sélecteur de variable (badge ou dropdown)
       cardHtml += generateVariableSelector(result);
       cardHtml += '</div>';
@@ -7298,7 +7524,7 @@
       var autoFixableEl = document.getElementById('autoFixable');
       var manualFixes = document.getElementById('manualFixes');
 
-      if (totalIssues) totalIssues.textContent = total;
+      // if (totalIssues) totalIssues.textContent = total; // Supprimé
       if (autoFixableEl) autoFixableEl.textContent = autoFixable;
       if (manualFixes) manualFixes.textContent = manual;
 
