@@ -4850,10 +4850,17 @@
       var autoCount = 0;
       var manualCount = 0;
 
-      // Analyser toutes les cartes visibles (non appliquées)
-      var cards = document.querySelectorAll('.cleaning-result-card:not([style*="display: none"]):not([style*="opacity: 0"]), .compact-row:not([style*="display: none"]):not([style*="opacity: 0"])');
+      // Analyser TOUTES les cartes (pas seulement les visibles) car le filtre actif peut masquer certaines cartes
+      var cards = document.querySelectorAll('.cleaning-result-card, .compact-row');
 
-      cards.forEach(function(card) {
+      console.log('[DEBUG updateDynamicTabCounts] Cartes trouvées:', cards.length);
+
+      cards.forEach(function(card, index) {
+        // Ignorer les cartes complètement masquées (ignorées ou supprimées)
+        if (card.style.display === 'none' || card.style.opacity === '0') {
+          return;
+        }
+
         var cardIndices = JSON.parse(card.getAttribute('data-indices') || '[]');
         var appliedIndices = card._appliedIndices || [];
 
@@ -4865,21 +4872,32 @@
         if (remainingIndices.length > 0) {
           // Vérifier si c'est une correction auto ou manuelle
           var suggestions = card.getAttribute('data-suggestions');
-          if (suggestions) {
+          var isCompactRow = card.classList.contains('compact-row');
+
+          console.log('[DEBUG updateDynamicTabCounts] Carte', index, '- Classe:', card.className, '- Indices restants:', remainingIndices.length, '- Suggestions:', suggestions, '- CompactRow:', isCompactRow);
+
+          if (isCompactRow) {
+            // Les compact-row sont toujours auto-fixables
+            autoCount += remainingIndices.length;
+            console.log('[DEBUG updateDynamicTabCounts] Carte', index, '- Classée comme AUTO (compact-row)');
+          } else if (suggestions) {
             try {
               var suggestionsArray = JSON.parse(suggestions);
               if (suggestionsArray && suggestionsArray.length === 1) {
                 autoCount += remainingIndices.length;
+                console.log('[DEBUG updateDynamicTabCounts] Carte', index, '- Classée comme AUTO (1 suggestion)');
               } else {
                 manualCount += remainingIndices.length;
+                console.log('[DEBUG updateDynamicTabCounts] Carte', index, '- Classée comme MANUAL (' + (suggestionsArray ? suggestionsArray.length : 0) + ' suggestions)');
               }
             } catch (e) {
-              // En cas d'erreur de parsing, compter comme manuel par défaut
+              console.error('[DEBUG updateDynamicTabCounts] Erreur parsing suggestions pour carte', index, ':', e);
               manualCount += remainingIndices.length;
             }
           } else {
-            // Si pas de suggestions, compter comme manuel
+            // Si pas de suggestions et pas compact-row, compter comme manuel
             manualCount += remainingIndices.length;
+            console.log('[DEBUG updateDynamicTabCounts] Carte', index, '- Classée comme MANUAL (pas de suggestions)');
           }
         }
       });
