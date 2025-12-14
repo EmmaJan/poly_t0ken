@@ -96,47 +96,6 @@
       margin-right: 16px;
     }
 
-    .scan-info-row .progress-gauge-container {
-      flex-shrink: 0;
-    }
-
-    /* Progress Gauge Resized (via CSS scaling of SVG) */
-    .progress-gauge {
-      width: 44px !important;
-      height: 44px !important;
-      position: relative;
-      display: none;
-      /* JS will toggle flex */
-      align-items: center;
-      justify-content: center;
-    }
-
-    .progress-gauge svg {
-      width: 44px !important;
-      height: 44px !important;
-      transform: rotate(0deg);
-      /* JS handles rotation usually or we rotate the circle */
-    }
-
-    .progress-gauge .progress-text {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      font-size: 10px;
-      font-weight: 700;
-      color: var(--poly-text);
-    }
-
-    .progress-gauge .percent-symbol {
-      font-size: 8px;
-      opacity: 0.8;
-    }
-
-    .progress-gauge .progress-label {
-      display: none;
-      /* Hide label "Nettoyage" */
-    }
 
     /* Magic Button Bar */
     .scan-actions-bar {
@@ -2175,31 +2134,6 @@
       border-color: var(--poly-accent) !important;
     }
 
-    /* Jauge de progression circulaire */
-    .progress-gauge {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .progress-circle {
-      position: relative;
-      width: 80px;
-      height: 80px;
-    }
-
-    .progress-circle svg {
-      width: 100%;
-      height: 100%;
-    }
-
-    /* NOUVEAU: Animation fluide de la jauge */
-    .progress-circle svg circle {
-      stroke-dashoffset: 219.91px;
-      /* Valeur initiale pour le moteur de rendu */
-      transition: stroke-dashoffset 1s ease-out, stroke 0.3s ease;
-    }
 
     .progress-text {
       position: absolute;
@@ -2211,10 +2145,6 @@
       color: var(--poly-text);
     }
 
-    #progressPercentage {
-      font-size: 18px;
-      line-height: 1;
-    }
 
     .percent-symbol {
       font-size: 12px;
@@ -2235,27 +2165,6 @@
         gap: 16px !important;
       }
 
-      .progress-gauge {
-        align-self: center;
-      }
-
-      .progress-circle {
-        width: 70px;
-        height: 70px;
-      }
-
-      .progress-circle svg {
-        width: 100%;
-        height: 100%;
-      }
-
-      #progressPercentage {
-        font-size: 16px;
-      }
-
-      .percent-symbol {
-        font-size: 10px;
-      }
     }
 
     /* Mini-swatches pour les couleurs */
@@ -3498,6 +3407,21 @@
       font-size: 12px;
       min-width: 32px; /* Largeur minimale pour le bouton */
     }
+
+    /* Nouveau style pour les badges de contexte (Text vs Shape) */
+    .context-badge {
+      display: inline-block;
+      font-size: 9px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      margin-left: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--poly-text-muted);
+      border: 1px solid var(--poly-border-subtle);
+    }
   </style>
 </head>
 
@@ -3909,17 +3833,6 @@
                     <h5 id="scanInfoTitle">Corrections automatiques</h5>
                     <p id="scanInfoDescription">Ces problèmes peuvent être corrigés automatiquement par le système.</p>
                   </div>
-                  <!-- Right Column: Progress Gauge -->
-                  <div class="progress-gauge-container">
-                    <div class="progress-gauge">
-                      <svg width="44" height="44" viewBox="0 0 44 44">
-                        <circle cx="22" cy="22" r="19" stroke="var(--poly-border-subtle)" stroke-width="3" fill="none"/>
-                        <circle id="progressRing" cx="22" cy="22" r="19" stroke="var(--poly-accent)" stroke-width="3" fill="none" stroke-linecap="round" stroke-dasharray="119.38" stroke-dashoffset="119.38" transform="rotate(-90 22 22)"/>
-                        <text id="progressPercentage" x="22" y="22" text-anchor="middle" dominant-baseline="middle" font-size="11" font-weight="600" fill="var(--poly-text)">0</text>
-                        <text class="progress-label" x="22" y="28" text-anchor="middle" font-size="8" fill="var(--poly-text-muted)">%</text>
-                      </svg>
-                    </div>
-                  </div>
                 </div>
 
                 <!-- Bottom Row: Magic Button (Moved inside header) -->
@@ -4019,7 +3932,6 @@
     var currentStep = 0;
     var lastScanResults = null; // Stockage global des résultats du dernier scan
     var livePreviewReady = false; // Indicateur simple : système prêt pour Live Preview
-    var initialProblemCount = 0; // Stockage du nombre initial de problèmes pour la jauge
 
     // ============================================
     // ICONS
@@ -4114,6 +4026,8 @@
     var existingTokensData = null;
     var existingLibrary = null;
     var currentStartOption = null; // 'new', 'import', 'manage'
+    var ignoredCardSignatures = []; // Signatures des cartes ignorées (persistent entre onglets)
+    var ignoredResultIndices = []; // Indices des résultats ignorés (persistent définitivement)
 
     // ============================================
     // WIZARD NAVIGATION
@@ -4519,14 +4433,20 @@
       results.forEach(function (result, index) {
         result.originalIndex = index;
 
-        // Créer une clé unique basée sur propriété + valeur
-        var groupKey = result.property + '-' + result.value;
+        // Déterminer une catégorie simplifiée
+        var category = 'SHAPE'; // Par défaut
+        if (result.nodeType === 'TEXT') category = 'TEXT';
+        // Tu peux ajouter d'autres cas si nécessaire (ex: SECTION)
+
+        // Créer une clé unique basée sur propriété + valeur + catégorie
+        var groupKey = result.property + '-' + result.value + '-' + category;
 
         if (!groups[groupKey]) {
           var suggestions = result.colorSuggestions || result.numericSuggestions || [{ id: result.suggestedVariableId, name: result.suggestedVariableName, isExact: true }];
           groups[groupKey] = {
             property: result.property,
             value: result.value,
+            category: category,
             originalIndices: [],
             suggestions: enrichSuggestionsWithValues(suggestions, result.property, result.value),
             layerNames: [] // Pour debug si nécessaire
@@ -4606,7 +4526,7 @@
       if (hasConflicts) {
         // Multiple suggestions - select avec bordure orange
         html += '<select class="conflict-select" onchange="applyGroupFix([' + group.originalIndices.join(',') + '], this.value)">';
-        html += '<option value="">⚠️ Choisir parmi ' + group.suggestions.length + ' variables</option>';
+        html += '<option value="">Choisir parmi ' + group.suggestions.length + ' variables</option>';
         group.suggestions.forEach(function (suggestion, idx) {
           var distanceIndicator = suggestion.isExact ? '' : ' ≈';
           var valuePreview = suggestion.hex ? suggestion.hex : (suggestion.value !== undefined ? suggestion.value : "");
@@ -4769,7 +4689,6 @@
         // 5. Stockage Global
         lastScanResults = results;
         livePreviewReady = true;
-        initialProblemCount = results.length;
 
 
 
@@ -4786,13 +4705,14 @@
         }
 
         // 7. Initialisation des vrais résultats (même si masqués temporairement)
-        if (typeof updateProgressGauge === 'function') updateProgressGauge(results.length);
         if (typeof attachCardEventHandlers === 'function') attachCardEventHandlers();
         if (typeof attachActionHandlers === 'function') attachActionHandlers();
+        if (typeof attachGroupedActionHandlers === 'function') attachGroupedActionHandlers();
         if (typeof enableVariableSelectors === 'function') enableVariableSelectors();
 
         // 8. Application du Filtre par défaut
         if (!currentFilter) currentFilter = 'auto';
+        console.log('APPLYFILTER appelé depuis scan (défaut):', currentFilter);
         if (typeof applyFilter === 'function') applyFilter(currentFilter);
 
         // 9. TRANSITION FLUIDE SUR PLACE
@@ -4884,7 +4804,7 @@
 
         // Mettre à jour le label
         var label = container.querySelector('.selected-label');
-        if (label && label.textContent === '🔍 Analyse requise') {
+        if (label && label.textContent === 'Analyse requise') {
           label.textContent = 'Choisir une variable...';
         }
 
@@ -4925,6 +4845,62 @@
 
     }
 
+    // Recalculer dynamiquement les compteurs des onglets après corrections
+    function updateDynamicTabCounts() {
+      var autoCount = 0;
+      var manualCount = 0;
+
+      // Analyser toutes les cartes visibles (non appliquées)
+      var cards = document.querySelectorAll('.cleaning-result-card:not([style*="display: none"]):not([style*="opacity: 0"]), .compact-row:not([style*="display: none"]):not([style*="opacity: 0"])');
+
+      cards.forEach(function(card) {
+        var cardIndices = JSON.parse(card.getAttribute('data-indices') || '[]');
+        var appliedIndices = card._appliedIndices || [];
+
+        // Compter les indices non encore appliqués dans cette carte
+        var remainingIndices = cardIndices.filter(function(idx) {
+          return !appliedIndices.includes(idx);
+        });
+
+        if (remainingIndices.length > 0) {
+          // Vérifier si c'est une correction auto ou manuelle
+          var suggestions = card.getAttribute('data-suggestions');
+          if (suggestions) {
+            try {
+              var suggestionsArray = JSON.parse(suggestions);
+              if (suggestionsArray && suggestionsArray.length === 1) {
+                autoCount += remainingIndices.length;
+              } else {
+                manualCount += remainingIndices.length;
+              }
+            } catch (e) {
+              // En cas d'erreur de parsing, compter comme manuel par défaut
+              manualCount += remainingIndices.length;
+            }
+          } else {
+            // Si pas de suggestions, compter comme manuel
+            manualCount += remainingIndices.length;
+          }
+        }
+      });
+
+      // Mettre à jour les badges
+      var autoBadge = document.getElementById('autoCount');
+      var manualBadge = document.getElementById('manualCount');
+
+      if (autoBadge) {
+        autoBadge.textContent = autoCount;
+        autoBadge.style.display = autoCount > 0 ? 'inline-flex' : 'none';
+      }
+
+      if (manualBadge) {
+        manualBadge.textContent = manualCount;
+        manualBadge.style.display = manualCount > 0 ? 'inline-flex' : 'none';
+      }
+
+      console.log('[DEBUG updateDynamicTabCounts] Mise à jour badges - Auto:', autoCount, 'Manual:', manualCount);
+    }
+
     // Générer le contenu unifié avec tolérance aux erreurs
     function generateUnifiedCleaningContent(resultsOrGroups, stats) {
       if (!resultsOrGroups || resultsOrGroups.length === 0) {
@@ -4938,6 +4914,41 @@
           groups = groupResultsByValue(groups);
         } catch (e) { console.error("Grouping error inside generate:", e); return '<p class="error">Erreur de groupement</p>'; }
       }
+
+      // Filtrer les groupes qui contiennent uniquement des éléments ignorés
+      console.log('Filtrage groupes ignorés. Groupes avant:', groups.length, 'ignoredCardSignatures:', ignoredCardSignatures, 'ignoredResultIndices:', ignoredResultIndices);
+
+      // Premier filtrage : signatures de cartes ignorées
+      if (ignoredCardSignatures.length > 0) {
+        groups = groups.filter(function(group) {
+          if (!group.originalIndices) return true;
+          // Créer la signature de ce groupe
+          var groupSignature = 'card_' + group.originalIndices.sort().join('_');
+          var shouldKeep = ignoredCardSignatures.indexOf(groupSignature) === -1;
+          if (!shouldKeep) {
+            console.log('Groupe filtré (signature ignorée):', groupSignature);
+          }
+          return shouldKeep;
+        });
+      }
+
+      // Second filtrage : indices individuels ignorés définitivement
+      if (ignoredResultIndices.length > 0) {
+        groups = groups.filter(function(group) {
+          if (!group.originalIndices) return true;
+          // Vérifier si au moins un indice du groupe est dans les ignorés permanents
+          var hasIgnoredIndices = group.originalIndices.some(function(index) {
+            return ignoredResultIndices.indexOf(index) !== -1;
+          });
+          if (hasIgnoredIndices) {
+            console.log('Groupe filtré (contient indices ignorés):', group.originalIndices);
+            return false; // Ne pas garder ce groupe
+          }
+          return true; // Garder ce groupe
+        });
+      }
+
+      console.log('Groupes après filtrage:', groups.length);
 
       var html = '';
 
@@ -4974,6 +4985,14 @@
           // GAUCHE: Icône + Nom Propriété
           html += '<div style="display: flex; align-items: center; gap: 6px;">';
           html += '<span style="color: var(--poly-accent);">' + getPropertyIcon(group.property) + '</span>';
+
+          // Ajouter un badge de contexte (Text vs Shape) uniquement pour les couleurs
+          if ((group.property === 'Fill' || group.property === 'Stroke') && group.category === 'TEXT') {
+            html += '<span class="context-badge">Typo</span>';
+          } else if ((group.property === 'Fill' || group.property === 'Stroke') && group.category === 'SHAPE') {
+            html += '<span class="context-badge">Forme</span>';
+          }
+
           html += '</div>';
 
           // DROITE: Actions (Voir, Appliquer, Ignorer)
@@ -5041,15 +5060,14 @@
           } else if (isAutoFixable && bestSuggestion) {
             // Auto-fixable display - nom de la variable en exergue, alignement horizontal
             var resolvedValue = bestSuggestion.resolvedValue || bestSuggestion.value;
-            var autoFixIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 10 10" fill="none"><path fill-rule="evenodd" clip-rule="evenodd" d="M1 0.5C1 0.367392 0.947321 0.240215 0.853553 0.146447C0.759785 0.0526785 0.632608 0 0.5 0C0.367392 0 0.240215 0.0526785 0.146447 0.146447C0.0526785 0.240215 0 0.367392 0 0.5V9.5C0 9.63261 0.0526785 9.75979 0.146447 9.85355C0.240215 9.94732 0.367392 10 0.5 10C0.632608 10 0.759785 9.94732 0.853553 9.85355C0.947321 9.75979 1 9.63261 1 9.5V0.5ZM9.5 0C9.63261 0 9.75979 0.0526785 9.85355 0.146447C9.94732 0.240215 10 0.367392 10 0.5V9.5C10 9.63261 9.94732 9.75979 9.85355 9.85355C9.75979 9.94732 9.63261 10 9.5 10C9.36739 10 9.24021 9.94732 9.14645 9.85355C9.05268 9.75979 9 9.63261 9 9.5V0.5C9 0.367392 9.05268 0.240215 9.14645 0.146447C9.24021 0.0526785 9.36739 0 9.5 0ZM6 6V4H4V6H6ZM7 4C7 3.73478 6.89464 3.48043 6.70711 3.29289C6.51957 3.10536 6.26522 3 6 3H4C3.73478 3 3.48043 3.10536 3.29289 3.29289C3.10536 3.48043 3 3.73478 3 4V6C3 6.26522 3.10536 6.51957 3.29289 6.70711C3.48043 6.89464 3.73478 7 4 7H6C6.26522 7 6.51957 6.89464 6.70711 6.70711C6.89464 6.51957 7 6.26522 7 6V4Z" fill="#1B1F24"/></svg>';
 
             if (bestSuggestion.resolvedValue && bestSuggestion.resolvedValue.startsWith('#')) {
               html += '<div style="display: flex; align-items: center; gap: 4px;">';
               html += '<div style="width: 20px; height: 20px; border-radius: 4px; background-color: ' + bestSuggestion.resolvedValue + '; border: 1px solid var(--poly-border-subtle);"></div>';
-              html += '<div style="display: flex; align-items: baseline; gap: 4px;">' + autoFixIcon + '<span style="font-size: 12px; color: var(--poly-text); font-weight: 600;">' + bestSuggestion.name + '</span><span style="font-size: 10px; color: var(--poly-text-muted); font-family: monospace;">' + resolvedValue + '</span></div>';
+              html += '<div style="display: flex; align-items: baseline; gap: 4px;"><span style="font-size: 12px; color: var(--poly-text); font-weight: 600;">' + bestSuggestion.name + '</span><span style="font-size: 10px; color: var(--poly-text-muted); font-family: monospace;">' + resolvedValue + '</span></div>';
               html += '</div>';
             } else {
-              html += '<div style="display: flex; align-items: baseline; gap: 4px;">' + autoFixIcon + '<span style="font-size: 12px; color: var(--poly-text); font-weight: 600;">' + bestSuggestion.name + '</span><span style="font-size: 10px; color: var(--poly-text-muted); font-family: monospace;">' + resolvedValue + '</span></div>';
+              html += '<div style="display: flex; align-items: baseline; gap: 4px;"><span style="font-size: 12px; color: var(--poly-text); font-weight: 600;">' + bestSuggestion.name + '</span><span style="font-size: 10px; color: var(--poly-text-muted); font-family: monospace;">' + resolvedValue + '</span></div>';
             }
           }
           html += '</div>'; // Fin Nouvelle Valeur
@@ -5280,12 +5298,31 @@
         });
       });
 
-      // Boutons Ignorer groupés
+      // Boutons Ignorer (groupés et individuels)
       var ignoreButtons = document.querySelectorAll('button[data-action="ignore"]');
+      console.log('Attachement des événements ignore à', ignoreButtons.length, 'boutons');
       ignoreButtons.forEach(function (btn) {
         btn.addEventListener('click', function () {
-          var indices = JSON.parse(this.getAttribute('data-indices'));
-          ignoreGroupedItems(indices);
+          console.log('Bouton ignore cliqué:', this);
+          // Gérer les boutons individuels (data-index) et groupés (data-indices)
+          var indices;
+          var dataIndices = this.getAttribute('data-indices');
+          var dataIndex = this.getAttribute('data-index');
+
+          if (dataIndices) {
+            // Bouton groupé
+            indices = JSON.parse(dataIndices);
+            console.log('Bouton groupé avec indices:', indices);
+          } else if (dataIndex) {
+            // Bouton individuel - convertir en tableau
+            indices = [parseInt(dataIndex)];
+            console.log('Bouton individuel avec index:', dataIndex, '-> indices:', indices);
+          } else {
+            console.error('Bouton ignore sans data-indices ni data-index');
+            return;
+          }
+
+          ignoreGroupedItems(indices, this);
         });
       });
 
@@ -5350,45 +5387,39 @@
       });
     }
 
-    function ignoreGroupedItems(indices) {
+    function ignoreGroupedItems(indices, btnElement) {
+      console.log('ignoreGroupedItems appelé avec indices:', indices, 'btnElement:', btnElement);
 
-      // Trouver la card et animer avant suppression
-      var card = document.querySelector('.cleaning-result-card[data-indices*="' + indices[0] + '"]');
+      // Trouver la carte parente directement via le DOM
+      var card = btnElement ? btnElement.closest('.cleaning-result-card') : null;
+      console.log('Carte trouvée:', card);
+
       if (card) {
-        // Animation de rejet
-        card.style.transition = 'all 0.3s ease';
-        card.style.backgroundColor = 'var(--poly-error-light)';
-        card.style.borderColor = 'var(--poly-error)';
+        // MARQUAGE IMMÉDIAT : Ajouter la classe et masquer immédiatement
+        card.classList.add('is-ignored-permanently');
+        card.style.display = 'none';
 
-        // Désactiver temporairement les contrôles
-        var checkbox = card.querySelector('.item-checkbox');
-        var buttons = card.querySelectorAll('button[data-action]');
-        if (checkbox) checkbox.disabled = true;
-        buttons.forEach(function (btn) { btn.disabled = true; });
-
-        // Animation de disparition
-        setTimeout(function () {
-          card.style.opacity = '0';
-          card.style.transform = 'translateX(-20px)';
-          setTimeout(function () {
-            // Supprimer la card du DOM
-            if (card.parentNode) {
-              card.parentNode.removeChild(card);
-            }
-            // Mettre à jour les compteurs
-            updateProblemCounter(-indices.length, false);
-          }, 300);
-        }, 1000);
-      } else {
-        // Fallback si la card n'est pas trouvée
-        indices.forEach(function (index) {
-          var card = document.querySelector('.cleaning-result-card[data-indices*="' + index + '"]');
-          if (card && card.parentNode) {
-            card.parentNode.removeChild(card);
+        // Ajouter les indices au tableau global pour la persistance si on re-scanne
+        indices.forEach(function(index) {
+          if (ignoredResultIndices.indexOf(index) === -1) {
+            ignoredResultIndices.push(index);
+            console.log('Index ajouté aux ignorés permanents:', index);
           }
         });
+        console.log('Indices ignorés permanents actuels:', ignoredResultIndices);
+
+        // Créer une signature unique pour cette carte basée sur ses indices (pour compatibilité)
+        var cardSignature = 'card_' + indices.sort().join('_');
+        if (ignoredCardSignatures.indexOf(cardSignature) === -1) {
+          ignoredCardSignatures.push(cardSignature);
+          console.log('Signature ajoutée aux ignorés:', cardSignature);
+        }
         // Mettre à jour les compteurs
         updateProblemCounter(-indices.length, false);
+        console.log('Carte ignorée immédiatement:', card.getAttribute('data-indices'));
+      } else {
+        // Fallback si la card n'est pas trouvée (ne devrait plus arriver avec l'approche DOM direct)
+        console.log('ATTENTION: Carte non trouvée pour ignoreGroupedItems, indices:', indices);
       }
 
       // Feedback utilisateur
@@ -5641,6 +5672,9 @@
           }
           targetCard._appliedIndices.push(index);
 
+          // Mettre à jour les compteurs des onglets
+          updateDynamicTabCounts();
+
           // Vérifier si toutes les corrections du groupe sont appliquées
           var cardIndices = JSON.parse(targetCard.getAttribute('data-indices') || '[]');
           var allApplied = cardIndices.every(function (idx) {
@@ -5772,6 +5806,9 @@
               targetCard._appliedIndices.push(index);
             }
           });
+
+          // Mettre à jour les compteurs des onglets
+          updateDynamicTabCounts();
 
           // Animation de succès pour le groupe
           targetCard.style.transition = 'all 0.3s ease';
@@ -6170,6 +6207,7 @@
 
           // Application du filtre
           currentFilter = this.getAttribute('data-filter');
+          console.log('APPLYFILTER appelé depuis bouton filtre:', currentFilter);
           applyFilter(currentFilter);
         });
       });
@@ -6193,15 +6231,41 @@
 
     // ✅ FIX DES FILTRES (ONGLETS)
     function applyFilter(filterType) {
+      console.log('=== APPLYFILTER DÉBUT === filterType:', filterType, 'ignoredCardSignatures:', ignoredCardSignatures);
+
       currentFilter = filterType;
 
       // Mettre à jour le contenu du header
       updateFilterContent(filterType);
 
       var cards = document.querySelectorAll('.cleaning-result-card');
+      console.log('Cartes trouvées dans le DOM:', cards.length);
       var visibleCount = 0;
 
       cards.forEach(function (card) {
+        // Si la carte a été marquée ignorée manuellement, elle doit le rester peu importe le filtre
+        if (card.classList.contains('is-ignored-permanently')) {
+          console.log('Carte ignorée définitivement détectée et masquée:', card.getAttribute('data-indices'));
+          card.style.display = 'none';
+          return; // Stop, on ne traite pas cette carte
+        }
+
+        // 2. VÉRIFICATION INDICES (Ceinture et bretelles)
+        var cardIndices = card.getAttribute('data-indices');
+        if (cardIndices) {
+          try {
+            var indices = JSON.parse(cardIndices.replace(/&quot;/g, '"'));
+            // Vérifier si un des indices est dans la liste globale ignorée
+            var isIgnoredGlobally = indices.some(function(i) { return ignoredResultIndices.indexOf(i) !== -1; });
+            if (isIgnoredGlobally) {
+              card.classList.add('is-ignored-permanently'); // Synchroniser la classe
+              card.style.display = 'none';
+              return;
+            }
+          } catch(e) {}
+        }
+
+
         // Logique simplifiée basée sur les classes CSS (plus robuste)
         var isVisible = false;
 
@@ -6213,9 +6277,48 @@
           isVisible = true; // 'all'
         }
 
+        // Respecter les cartes ignorées en vérifiant la signature
+        var cardIndices = card.getAttribute('data-indices');
+        if (cardIndices) {
+          try {
+            var indices = JSON.parse(cardIndices.replace(/&quot;/g, '"'));
+            var cardSignature = 'card_' + indices.sort().join('_');
+            var isIgnored = ignoredCardSignatures.indexOf(cardSignature) !== -1;
+            if (isIgnored) {
+              isVisible = false;
+              console.log('Carte ignorée détectée par signature et gardée masquée:', cardSignature);
+            }
+          } catch (e) {
+            console.error('Erreur parsing indices de carte:', cardIndices, e);
+          }
+        }
+
         card.style.display = isVisible ? 'flex' : 'none';
+        console.log('Carte', card.getAttribute('data-indices'), '-> display:', card.style.display, 'isVisible:', isVisible);
         if (isVisible) visibleCount++;
       });
+
+      console.log('=== APPLYFILTER FIN === visibleCount:', visibleCount, 'sur', cards.length, 'cartes');
+
+      // Vérifier après un court délai si les cartes ignorées sont encore masquées
+      setTimeout(function() {
+        var stillHiddenCards = document.querySelectorAll('.cleaning-result-card[style*="display: none"]');
+        console.log('Cartes encore masquées après délai:', stillHiddenCards.length);
+        var ignoredStillHidden = 0;
+        stillHiddenCards.forEach(function(card) {
+          var cardIndices = card.getAttribute('data-indices');
+          if (cardIndices) {
+            try {
+              var indices = JSON.parse(cardIndices.replace(/&quot;/g, '"'));
+              var isIgnored = indices.some(function(index) {
+                return ignoredResultIndices.indexOf(index) !== -1;
+              });
+              if (isIgnored) ignoredStillHidden++;
+            } catch(e) {}
+          }
+        });
+        console.log('Cartes ignorées encore masquées:', ignoredStillHidden);
+      }, 100);
 
       // Gestion de l'état vide filtré
       var filteredEmptyState = document.getElementById('filteredEmptyState');
@@ -6698,10 +6801,10 @@
       var html = '<div class="custom-select-container variable-selector-dropdown' + disabledClass + '" id="' + containerId + '" data-indices="' + indicesJson + '" data-suggestions="' + suggestionsJson.replace(/"/g, '&quot;') + '" style="' + disabledStyle + '">';
 
       // Trigger (bouton principal)
-      var triggerLabel = disabled ? '🔍 Analyse requise' : 'Choisir une variable...';
+      var triggerLabel = disabled ? 'Analyse requise' : 'Choisir une variable...';
       html += '<div class="select-trigger">';
       html += '<div class="selected-label">' + triggerLabel + '</div>';
-      html += '<div class="live-preview-indicator" style="display: none; color: var(--poly-accent); font-size: 10px; margin-right: 6px;">👁️ Live</div>';
+      html += '<div class="live-preview-indicator" style="display: none; color: var(--poly-accent); font-size: 10px; margin-right: 6px;">Live</div>';
       html += '<div class="chevron">▼</div>';
       html += '</div>';
 
@@ -7528,8 +7631,6 @@
       if (autoFixableEl) autoFixableEl.textContent = autoFixable;
       if (manualFixes) manualFixes.textContent = manual;
 
-      // Mettre à jour la jauge de progression
-      updateProgressGauge(total);
 
       // --- FIX USER REQUEST 4: Dynamic "Fix All" Button ---
       // Met à jour le bouton "Tout corriger (Auto)" avec le compte réel
@@ -7546,47 +7647,6 @@
       }
     }
 
-    function updateProgressGauge(remainingProblems) {
-
-      var progressPercentage = document.getElementById('progressPercentage');
-      var progressRing = document.getElementById('progressRing');
-
-      if (!progressPercentage || !progressRing) return;
-
-      // Calculer le pourcentage de progression
-      // On considère que le nettoyage initial a 100% de problèmes
-      // Le pourcentage représente le nettoyage effectué (problèmes résolus)
-      var initialTotal = initialProblemCount || 0;
-
-      // Si on n'a pas de total initial ou qu'il n'y a plus de problèmes, considérer comme 100%
-      if (initialTotal === 0) {
-        var progressPercent = remainingProblems === 0 ? 100 : 0;
-      } else {
-        // FIX USER REQUEST 2: Logique de calcul précise
-        // Formule : 100 - (currentIssues / initialIssueCount * 100)
-        progressPercent = 100 - ((remainingProblems / initialTotal) * 100);
-        progressPercent = Math.round(progressPercent);
-        progressPercent = Math.max(0, Math.min(100, progressPercent)); // Bornes 0-100
-      }
-
-      // Mettre à jour le texte du pourcentage
-      progressPercentage.textContent = progressPercent;
-
-      // Mettre à jour l'animation du cercle
-      var circumference = 219.91; // 2 * π * 35 (rayon du cercle)
-      var offset = circumference - (progressPercent / 100) * circumference;
-      progressRing.style.strokeDashoffset = offset + 'px'; // CORRECTION: Ajout de l'unité 'px'
-
-      // Changer la couleur selon le progrès
-      if (progressPercent === 100) {
-        progressRing.style.stroke = 'var(--poly-success)';
-      } else if (progressPercent > 50) {
-        progressRing.style.stroke = 'var(--poly-accent)';
-      } else {
-        progressRing.style.stroke = 'var(--poly-warning)';
-      }
-
-    }
 
     function applyAllFixes() {
       parent.postMessage({
@@ -7612,8 +7672,10 @@
     // Scan buttons
     scanBtn.addEventListener("click", function () {
       if (isScanning) return; // Prevent re-scan if already scanning
-      // NOUVEAU: Réinitialiser le compteur pour que la jauge reparte de 0
-      initialProblemCount = 0;
+
+      // Vider la liste des éléments ignorés lors d'une nouvelle analyse
+      ignoredCardSignatures = [];
+      ignoredResultIndices = [];
 
       showScanLoading();
       parent.postMessage({
@@ -7845,6 +7907,9 @@
                 scanBtn.className = "btn-outline";
                 scanBtn.onclick = function () {
                   if (isScanning) return;
+                  // Vider la liste des éléments ignorés lors d'une nouvelle analyse
+                  ignoredCardSignatures = [];
+                  ignoredResultIndices = [];
                   // Force re-scan en effaçant l'ID mémorisé
                   window.lastScannedSelectionId = null;
                   showScanLoading();
