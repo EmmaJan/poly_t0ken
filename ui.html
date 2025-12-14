@@ -676,6 +676,7 @@
       transform: translateY(-1px);
     }
 
+
     .btn-icon {
       background: transparent;
       border: none;
@@ -2258,97 +2259,6 @@
       }
     }
 
-    /* ✨ UNDO TOAST : Toast d'annulation premium */
-    .toast-container {
-      position: fixed;
-      bottom: 32px;
-      left: 50%;
-      transform: translateX(-50%) translateY(100px);
-      background: #0F2918;
-      border: 1px solid #4ADE80;
-      padding: 12px 24px;
-      border-radius: 50px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(74, 222, 128, 0.15);
-      display: flex;
-      align-items: center;
-      gap: 16px;
-      z-index: 10000;
-      opacity: 0;
-      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-      pointer-events: none;
-    }
-
-    .toast-container.visible {
-      transform: translateX(-50%) translateY(0);
-      opacity: 1;
-      pointer-events: auto;
-    }
-
-    /* Contenu du toast - Structure verticale */
-    .toast-content {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-
-    .toast-title {
-      color: #4ADE80;
-      font-weight: 700;
-      text-transform: uppercase;
-      font-size: 10px;
-      letter-spacing: 0.5px;
-    }
-
-    .toast-detail {
-      color: white;
-      font-size: 13px;
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-
-    .toast-detail .variable-name {
-      color: #4ADE80;
-      font-weight: 600;
-    }
-
-    .toast-detail .arrow {
-      color: rgba(255, 255, 255, 0.5);
-      margin: 0 4px;
-    }
-
-    .toast-btn {
-      background: #582328;
-      border: none;
-      color: #FFCDD2;
-      font-weight: 600;
-      cursor: pointer;
-      padding: 8px 16px;
-      border-radius: 6px;
-      font-size: 12px;
-      transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-      white-space: nowrap;
-    }
-
-    .toast-btn:hover {
-      background: #6B2F33;
-      transform: scale(1.05);
-    }
-
-    .toast-close {
-      background: transparent;
-      border: none;
-      color: rgba(255, 255, 255, 0.5);
-      cursor: pointer;
-      padding: 4px;
-      font-size: 14px;
-      line-height: 1;
-      transition: all 0.2s ease;
-    }
-
-    .toast-close:hover {
-      color: white;
-    }
 
     /* ✨ KEYBOARD NAVIGATION : Styles pour la navigation au clavier */
     .cleaning-result-card.keyboard-selected {
@@ -2897,6 +2807,7 @@
         background-position: -200% 0;
       }
     }
+
 
     .skeleton-card {
       padding: 24px;
@@ -3826,20 +3737,20 @@
                     <button class="tab" data-filter="manual" style="flex: 1; justify-content: center;">Manuel <span id="manualCount" class="tab-badge">0</span></button>
                   </div>
 
-                <!-- Info Row: Title + Description + Gauge -->
+                <!-- Info Row: Title + Description + Auto Button -->
                 <div id="scanInfoRow" class="scan-info-row" style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 24px;">
                   <!-- Left Column: Title + Description -->
                   <div class="title-group">
                     <h5 id="scanInfoTitle">Corrections automatiques</h5>
                     <p id="scanInfoDescription">Ces problèmes peuvent être corrigés automatiquement par le système.</p>
                   </div>
+
+                  <!-- Right Column: Auto Fix Button -->
+                  <button onclick="applyAllAutoFixes()" class="btn-soft-primary" id="applyAllAutoBtn" style="display: none; width: fit-content; border-radius: 50px;">
+                    Appliquer les corrections
+                  </button>
                 </div>
 
-                <!-- Bottom Row: Magic Button (Moved inside header) -->
-                <button onclick="applyAllAutoFixes()" class="btn-soft-primary" id="applyAllAutoBtn"
-                  style="width: 100%; margin: 0;">
-                  <span style="font-size: 16px;">✨</span> Appliquer les corrections
-                </button>
               </div>
 
               <!-- 4. Content List -->
@@ -4877,12 +4788,56 @@
         return 'manual';
       }
 
-      // Analyser TOUTES les cartes (pas seulement les visibles)
+      // Fonction helper pour vérifier si une carte doit être exclue du comptage
+      function shouldExcludeCard(card) {
+        var cardIndices = JSON.parse(card.getAttribute('data-indices') || '[]');
+        var cardSignature = card.getAttribute('data-card-signature');
+        var cardClasses = card.className;
+
+        console.log('[DEBUG shouldExcludeCard] Carte:', cardClasses, 'Indices:', cardIndices, 'Signature:', cardSignature);
+
+        // IMPORTANT: Ne pas exclure les cartes masquées par le filtre actuel,
+        // car updateDynamicTabCounts doit compter TOUTES les cartes valides indépendamment du filtre
+
+        // 1. Exclure les cartes marquées comme ignorées
+        if (card.classList.contains('is-ignored-permanently')) {
+          console.log('[DEBUG shouldExcludeCard] Exclue - classe is-ignored-permanently');
+          return true;
+        }
+
+        // 2. Vérifier les indices ignorés globalement
+        var hasIgnoredIndices = cardIndices.some(function(idx) {
+          var isIgnored = ignoredResultIndices.indexOf(idx) !== -1;
+          if (isIgnored) console.log('[DEBUG shouldExcludeCard] Index ignoré trouvé:', idx);
+          return isIgnored;
+        });
+        if (hasIgnoredIndices) {
+          console.log('[DEBUG shouldExcludeCard] Exclue - indices ignorés');
+          return true;
+        }
+
+        // 3. Vérifier la signature de carte ignorée
+        if (cardSignature && ignoredCardSignatures.indexOf(cardSignature) !== -1) {
+          console.log('[DEBUG shouldExcludeCard] Exclue - signature ignorée:', cardSignature);
+          return true;
+        }
+
+        console.log('[DEBUG shouldExcludeCard] Garde - carte valide');
+        return false;
+      }
+
+      // Analyser TOUTES les cartes
       var cards = document.querySelectorAll('.cleaning-result-card, .compact-row');
 
+      console.log('[DEBUG updateDynamicTabCounts] === DÉBUT COMPTAGE ===');
+      console.log('Variables globales AU MOMENT DU COMPTAGE:');
+      console.log('  ignoredResultIndices:', ignoredResultIndices);
+      console.log('  ignoredCardSignatures:', ignoredCardSignatures);
+      console.log('  Nombre de cartes trouvées:', cards.length);
+
       cards.forEach(function(card) {
-        // Ignorer les cartes complètement masquées (ignorées ou supprimées)
-        if (card.style.display === 'none' || card.style.opacity === '0') {
+        // Exclure les cartes qui ne doivent pas être comptées
+        if (shouldExcludeCard(card)) {
           return;
         }
 
@@ -4890,8 +4845,13 @@
         var cardIndices = JSON.parse(card.getAttribute('data-indices') || '[]');
         var appliedIndices = card._appliedIndices || [];
 
-        // Compter les indices non encore appliqués
-        var remainingIndices = cardIndices.filter(function(idx) {
+        // Filtrer les indices qui ne sont pas ignorés
+        var validIndices = cardIndices.filter(function(idx) {
+          return ignoredResultIndices.indexOf(idx) === -1;
+        });
+
+        // Compter les indices valides non encore appliqués
+        var remainingIndices = validIndices.filter(function(idx) {
           return !appliedIndices.includes(idx);
         });
 
@@ -5430,8 +5390,8 @@
           ignoredCardSignatures.push(cardSignature);
           console.log('Signature ajoutée aux ignorés:', cardSignature);
         }
-        // Mettre à jour les compteurs
-        updateProblemCounter(-indices.length, false);
+        // ❌ SUPPRIMÉ : updateProblemCounter() - Cause des animations parasites sur le compteur
+        // ❌ SUPPRIMÉ : updateDynamicTabCounts() - Cause des animations parasites
         console.log('Carte ignorée immédiatement:', card.getAttribute('data-indices'));
       } else {
         // Fallback si la card n'est pas trouvée (ne devrait plus arriver avec l'approche DOM direct)
@@ -5650,9 +5610,8 @@
     }
 
     function handleSingleFixApplied(appliedCount, error, index) {
-
       if (error) {
-        console.error('[DEBUG handleSingleFixApplied] Erreur lors de l\'application:', error);
+        console.error('Erreur lors de l\'application de la correction:', error);
         showNotification('Erreur lors de l\'application de la correction', 'error');
         return;
       }
@@ -5670,12 +5629,52 @@
         });
 
         if (targetCard) {
+          console.log('[DEBUG] Carte cible trouvée, vérification des conditions d\'animation');
+          console.log('[DEBUG] opacity:', targetCard.style.opacity, 'display:', targetCard.style.display);
+
           // Ne faire l'animation que si la carte n'est pas déjà en cours d'animation depuis l'UI
           if (targetCard.style.opacity !== '0' && targetCard.style.display !== 'none') {
-            // Animation de succès
-            targetCard.style.transition = 'all 0.3s ease';
+            console.log('[DEBUG] Conditions remplies, lancement de l\'animation');
+
+            // Trouver le container parent pour gérer temporairement l'overflow
+            var parentContainer = targetCard.closest('#scanResults') || targetCard.closest('.cleaning-cards-grid') || targetCard.parentElement;
+            var originalOverflow = parentContainer ? parentContainer.style.overflow : '';
+
+            // Animation de succès temporaire (150ms) - plus rapide et dynamique
+            targetCard.style.transition = 'all 0.15s ease';
             targetCard.style.backgroundColor = 'var(--poly-success-light)';
             targetCard.style.borderColor = 'var(--poly-success)';
+
+            // Après 150ms d'état de succès, faire disparaître la carte
+            setTimeout(function() {
+              // ✅ TEST ULTRA-SIMPLE : Juste opacity pour identifier la source du bloc
+              targetCard.style.setProperty('transition', 'opacity 0.4s ease', 'important');
+              targetCard.style.setProperty('opacity', '0', 'important');
+              // Suppression de TOUTES les autres propriétés CSS pour isoler le problème
+
+              setTimeout(function () {
+
+                // 🔴 IMPORTANT : Marquer les indices comme corrigés AVANT de cacher
+                cardIndices.forEach(function(index) {
+                  if (ignoredResultIndices.indexOf(index) === -1) {
+                    ignoredResultIndices.push(index);
+                  }
+                });
+
+                // ✨ CACHER la carte après l'animation
+                targetCard.style.display = 'none';
+                targetCard.style.opacity = '1';
+                targetCard.style.transition = ''; // Reset transition
+
+                // ❌ SUPPRIMÉ : updateProblemCounter() - Cause des animations parasites sur le compteur
+                // ❌ SUPPRIMÉ : updateDynamicTabCounts() - Cause des animations parasites
+                // ❌ SUPPRIMÉ : applyFilter() - Cause des animations parasites
+
+                // Plus de mise à jour d'interface pendant l'animation
+              }, 400);
+            }, 150);
+          } else {
+            console.log('[DEBUG] Conditions d\'animation non remplies, skip');
           }
 
           // Désactiver les contrôles
@@ -5688,8 +5687,7 @@
           }
           targetCard._appliedIndices.push(index);
 
-          // Mettre à jour les compteurs des onglets
-          updateDynamicTabCounts();
+          // ❌ SUPPRIMÉ : Mise à jour des compteurs pendant l'animation - Cause des animations parasites
 
           // Vérifier si toutes les corrections du groupe sont appliquées
           var cardIndices = JSON.parse(targetCard.getAttribute('data-indices') || '[]');
@@ -5697,76 +5695,7 @@
             return targetCard._appliedIndices && targetCard._appliedIndices.includes(idx);
           });
 
-          if (allApplied) {
-            // CORRECTION: Récupérer les informations depuis les data-attributes (fiable)
-            var oldValue = targetCard.getAttribute('data-current-value') || '--';
-            var newVariable = targetCard.getAttribute('data-variable-name') || '--';
-
-            var variablePill = targetCard.querySelector('.variable-pill');
-
-            // Stocker le HTML original du bouton pour la restauration
-            var originalButtonHTML = variablePill ? variablePill.innerHTML : '';
-            var originalButtonStyles = variablePill ? {
-              background: variablePill.style.background,
-              color: variablePill.style.color,
-              transform: variablePill.style.transform,
-              boxShadow: variablePill.style.boxShadow
-            } : {};
-
-            // ✨ MORPHING BUTTON : Transformer le bouton en checkmark
-            if (variablePill) {
-              // Stocker le HTML original sur l'élément pour la restauration
-              variablePill._originalHTML = originalButtonHTML;
-              variablePill._originalStyles = originalButtonStyles;
-
-              // Animation de morphing du bouton vers checkmark avec transition fluide
-              variablePill.style.transition = 'all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
-              variablePill.innerHTML = '<span style="font-size: 18px; font-weight: bold;">✓</span>';
-              variablePill.style.background = 'var(--poly-success)';
-              variablePill.style.color = 'white';
-              variablePill.style.transform = 'scale(1.08)';
-              variablePill.style.boxShadow = '0 4px 12px rgba(138, 213, 63, 0.3)';
-              variablePill.disabled = true;
-            }
-
-            // Stocker les données de la carte pour l'annulation
-            var undoData = {
-              cardElement: targetCard,
-              cardIndices: cardIndices,
-              oldValue: oldValue,
-              newVariable: newVariable,
-              originalButtonHTML: originalButtonHTML,
-              originalButtonStyles: originalButtonStyles,
-              originalStyles: {
-                display: targetCard.style.display || 'flex',
-                transform: '',
-                opacity: '1',
-                backgroundColor: '',
-                borderColor: '',
-                filter: ''
-              }
-            };
-
-            // Attendre 700ms que le cerveau enregistre le succès
-            setTimeout(function () {
-              // Animation de glissement vers la droite
-              targetCard.style.transition = 'all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
-              targetCard.style.transform = 'translateX(50px)';
-              targetCard.style.opacity = '0';
-
-              setTimeout(function () {
-                // ✨ CACHER la carte (ne pas supprimer) pour permettre l'annulation
-                targetCard.style.display = 'none';
-                targetCard.style.transform = '';
-
-                // ✨ UNDO TOAST : Afficher le toast d'annulation avec les détails
-                showUndoToast(undoData);
-
-                // Mettre à jour les compteurs
-                updateProblemCounter(-cardIndices.length, false);
-              }, 500);
-            }, 700);
-          }
+          // Plus d'animation de morphing - uniquement le slide-out propre
         }
       } else {
         showNotification('La correction n\'a pas pu être appliquée', 'warning');
@@ -5812,36 +5741,50 @@
         });
 
         if (targetCard) {
+          // Vérifier si la carte n'a pas déjà été masquée par l'animation optimiste
+          var alreadyHidden = targetCard.style.display === 'none';
 
-          // Marquer tous les indices comme appliqués
-          if (!targetCard._appliedIndices) {
-            targetCard._appliedIndices = [];
-          }
-          indices.forEach(function (index) {
-            if (!targetCard._appliedIndices.includes(index)) {
-              targetCard._appliedIndices.push(index);
+          if (!alreadyHidden) {
+            // Marquer tous les indices comme appliqués
+            if (!targetCard._appliedIndices) {
+              targetCard._appliedIndices = [];
             }
-          });
+            indices.forEach(function (index) {
+              if (!targetCard._appliedIndices.includes(index)) {
+                targetCard._appliedIndices.push(index);
+              }
+            });
 
-          // Mettre à jour les compteurs des onglets
-          updateDynamicTabCounts();
+            // ❌ SUPPRIMÉ : Mise à jour des compteurs pendant l'animation - Cause des animations parasites
 
-          // Animation de succès pour le groupe
-          targetCard.style.transition = 'all 0.3s ease';
-          targetCard.style.backgroundColor = 'var(--poly-success-light)';
-          targetCard.style.borderColor = 'var(--poly-success)';
+            // Animation de succès pour le groupe (accélérée)
+            targetCard.style.transition = 'all 0.15s ease';
+            targetCard.style.backgroundColor = 'var(--poly-success-light)';
+            targetCard.style.borderColor = 'var(--poly-success)';
+          } else {
+            // La carte a déjà été masquée par l'animation optimiste, juste mettre à jour les indices
+            if (!targetCard._appliedIndices) {
+              targetCard._appliedIndices = [];
+            }
+            indices.forEach(function (index) {
+              if (!targetCard._appliedIndices.includes(index)) {
+                targetCard._appliedIndices.push(index);
+              }
+            });
+          }
 
-          // Désactiver les contrôles
-          var buttons = targetCard.querySelectorAll('button[data-action]');
-          buttons.forEach(function (btn) { btn.disabled = true; });
+          if (!alreadyHidden) {
+            // Désactiver les contrôles
+            var buttons = targetCard.querySelectorAll('button[data-action]');
+            buttons.forEach(function (btn) { btn.disabled = true; });
 
-          // Vérifier si toutes les corrections du groupe sont appliquées
-          var cardIndices = JSON.parse(targetCard.getAttribute('data-indices') || '[]');
-          var allApplied = cardIndices.every(function (idx) {
-            return targetCard._appliedIndices && targetCard._appliedIndices.includes(idx);
-          });
+            // Vérifier si toutes les corrections du groupe sont appliquées
+            var cardIndices = JSON.parse(targetCard.getAttribute('data-indices') || '[]');
+            var allApplied = cardIndices.every(function (idx) {
+              return targetCard._appliedIndices && targetCard._appliedIndices.includes(idx);
+            });
 
-          if (allApplied) {
+            if (allApplied) {
             // Récupérer les informations depuis les data-attributes
             var oldValue = targetCard.getAttribute('data-current-value') || '--';
             var newVariable = targetCard.getAttribute('data-variable-name') || '--';
@@ -5871,28 +5814,11 @@
               variablePill.disabled = true;
             }
 
-            // Stocker les données de la carte pour l'annulation
-            var undoData = {
-              cardElement: targetCard,
-              cardIndices: cardIndices,
-              oldValue: oldValue,
-              newVariable: newVariable,
-              originalButtonHTML: originalButtonHTML,
-              originalButtonStyles: originalButtonStyles,
-              originalStyles: {
-                display: targetCard.style.display || 'flex',
-                transform: '',
-                opacity: '1',
-                backgroundColor: '',
-                borderColor: '',
-                filter: ''
-              }
-            };
 
-            // Attendre 700ms que le cerveau enregistre le succès
+            // Attendre 300ms que le cerveau enregistre le succès
             setTimeout(function () {
-              // Animation de succès sans faire disparaître la carte
-              targetCard.style.transition = 'all 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+              // Animation de succès sans faire disparaître la carte (accélérée)
+              targetCard.style.transition = 'all 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
               targetCard.style.transform = 'scale(1.02)';
               targetCard.style.boxShadow = '0 8px 25px rgba(138, 213, 63, 0.15)';
 
@@ -5901,13 +5827,15 @@
                 targetCard.style.transform = '';
                 targetCard.style.boxShadow = '';
 
-                // UNDO TOAST : Afficher le toast d'annulation avec les détails
-                showUndoToast(undoData);
 
-                // Mettre à jour les compteurs
-                updateProblemCounter(-cardIndices.length, false);
-              }, 500);
-            }, 700);
+                // ❌ SUPPRIMÉ : updateProblemCounter() - Cause des animations parasites sur le compteur
+                // ❌ SUPPRIMÉ : updateDynamicTabCounts() - Cause des animations parasites
+                // ❌ SUPPRIMÉ : applyFilter() - Cause des animations parasites
+
+                // Plus de mise à jour d'interface pendant l'animation
+              }, 200);
+            }, 150);
+            }
           }
         } else {
           console.warn('[DEBUG handleGroupFixApplied] Aucune carte trouvée pour les indices:', indices);
@@ -6225,6 +6153,9 @@
           currentFilter = this.getAttribute('data-filter');
           console.log('APPLYFILTER appelé depuis bouton filtre:', currentFilter);
           applyFilter(currentFilter);
+
+          // Mettre à jour les pastilles des onglets après changement de filtre
+          updateDynamicTabCounts();
         });
       });
     }
@@ -6349,13 +6280,13 @@
       }
 
 
-      // Gestion de la visibilité du bouton d'action selon l'onglet
+      // Gestion de la visibilité du bouton selon l'onglet et présence d'éléments
       var applyAllAutoBtn = document.getElementById('applyAllAutoBtn');
       if (applyAllAutoBtn) {
-        if (filterType === 'manual') {
-          applyAllAutoBtn.style.display = 'none';
-        } else if (filterType === 'auto') {
+        if (filterType === 'auto' && visibleCount > 0) {
           applyAllAutoBtn.style.display = 'flex';
+        } else {
+          applyAllAutoBtn.style.display = 'none';
         }
       }
     }
@@ -7049,135 +6980,7 @@
       showToast(message, type);
     }
 
-    // ✨ UNDO TOAST : Fonctions du toast d'annulation premium
-    // Variable globale pour stocker les données d'annulation en attente
-    window.pendingUndoData = null;
-    window.toastTimeout = null;
-    window.toastDeleteTimeout = null;
 
-    function showUndoToast(undoData) {
-      var toast = document.getElementById('undoToast');
-      var oldValueEl = document.getElementById('toastOldValue');
-      var newVarEl = document.getElementById('toastNewVariable');
-
-      // Stocker les données pour l'annulation
-      window.pendingUndoData = undoData;
-
-      // Mettre à jour le contenu du toast
-      oldValueEl.textContent = undoData.oldValue || '--';
-      newVarEl.textContent = undoData.newVariable || '--';
-
-      // Afficher le toast
-      toast.classList.add('visible');
-
-      // Annuler les timeouts précédents
-      if (window.toastTimeout) clearTimeout(window.toastTimeout);
-      if (window.toastDeleteTimeout) clearTimeout(window.toastDeleteTimeout);
-
-      // Masquer automatiquement après 4s
-      window.toastTimeout = setTimeout(function () {
-        hideToast();
-
-        // Supprimer définitivement la carte après que le toast soit masqué
-        window.toastDeleteTimeout = setTimeout(function () {
-          if (window.pendingUndoData && window.pendingUndoData.cardElement) {
-            var card = window.pendingUndoData.cardElement;
-            if (card.parentNode) {
-              card.parentNode.removeChild(card);
-            }
-            window.pendingUndoData = null;
-          }
-        }, 400); // Après l'animation de fermeture du toast
-      }, 4000);
-    }
-
-    function hideToast() {
-      var toast = document.getElementById('undoToast');
-      toast.classList.remove('visible');
-    }
-
-    function triggerUndo() {
-      // Annuler les timeouts
-      if (window.toastTimeout) clearTimeout(window.toastTimeout);
-      if (window.toastDeleteTimeout) clearTimeout(window.toastDeleteTimeout);
-
-      // Masquer le toast immédiatement
-      hideToast();
-
-      if (!window.pendingUndoData || !window.pendingUndoData.cardElement) {
-        console.warn('[triggerUndo] Aucune donnée d\'annulation disponible');
-        return;
-      }
-
-      var undoData = window.pendingUndoData;
-      var card = undoData.cardElement;
-      var cardIndices = undoData.cardIndices;
-
-
-      // Réafficher la carte avec animation
-      card.style.transition = 'none';
-      card.style.transform = 'translateX(-50px)';
-      card.style.opacity = '0';
-      card.style.display = 'flex';
-
-      // Forcer le reflow pour que la transition s'applique
-      void card.offsetWidth;
-
-      // Animation de réapparition
-      card.style.transition = 'all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
-      card.style.transform = 'translateX(0)';
-      card.style.opacity = '1';
-
-      // Réinitialiser les styles de la carte
-      setTimeout(function () {
-        card.style.backgroundColor = '';
-        card.style.borderColor = '';
-        card.style.filter = '';
-
-        // Réactiver les boutons
-        var buttons = card.querySelectorAll('button[data-action]');
-        buttons.forEach(function (btn) { btn.disabled = false; });
-
-        // Réinitialiser le bouton variable pill s'il existe
-        var variablePill = card.querySelector('.variable-pill');
-        if (variablePill) {
-          // Restaurer le HTML original si disponible
-          if (undoData.originalButtonHTML) {
-            variablePill.innerHTML = undoData.originalButtonHTML;
-          }
-          // Restaurer les styles originaux
-          if (undoData.originalButtonStyles) {
-            variablePill.style.background = undoData.originalButtonStyles.background || '';
-            variablePill.style.color = undoData.originalButtonStyles.color || '';
-            variablePill.style.transform = undoData.originalButtonStyles.transform || '';
-            variablePill.style.boxShadow = undoData.originalButtonStyles.boxShadow || '';
-          } else {
-            variablePill.style.background = '';
-            variablePill.style.color = '';
-            variablePill.style.transform = '';
-            variablePill.style.boxShadow = '';
-          }
-          variablePill.disabled = false;
-        }
-
-        // Réinitialiser les indices appliqués
-        card._appliedIndices = [];
-      }, 400);
-
-      // Mettre à jour les compteurs (réajouter les éléments)
-      updateProblemCounter(cardIndices.length, false);
-
-      // Envoyer le message d'annulation à Figma
-      parent.postMessage({
-        pluginMessage: {
-          type: 'undo-fix',
-          indices: cardIndices
-        }
-      }, '*');
-
-      // Nettoyer les données d'annulation
-      window.pendingUndoData = null;
-    }
 
     // ✨ KEYBOARD NAVIGATION : Navigation au clavier premium
     var keyboardSelectedIndex = -1;
@@ -7277,34 +7080,125 @@
       observer.observe(scanResultsList, { childList: true, subtree: true });
     }
 
-    // Appliquer toutes les corrections automatiques
+    // Appliquer toutes les corrections automatiques avec animations séquentielles
     function applyAllAutoFixes() {
-      var autoCards = document.querySelectorAll('.cleaning-result-card.auto-fixable');
-      var fixesApplied = 0;
+      console.log('[DEBUG] applyAllAutoFixes called');
 
-      autoCards.forEach(function (card) {
-        var applyBtn = card.querySelector('button[onclick*="applyGroupFix"]');
-        if (applyBtn) {
-          // Extraire les paramètres de l'attribut onclick
-          var onclickStr = applyBtn.getAttribute('onclick');
-          var match = onclickStr.match(/applyGroupFix\(\[([^\]]+)\],\s*'([^']+)'\)/);
-          if (match) {
-            var indices = match[1].split(',').map(function (s) { return parseInt(s.trim()); });
-            var variableId = match[2];
-            applyGroupFix(indices, variableId);
-            fixesApplied++;
-          }
-        }
-      });
+      // Récupérer toutes les cartes auto-fixables visibles
+      var autoCards = Array.from(document.querySelectorAll('.cleaning-result-card.auto-fixable:not(.is-ignored-permanently)'))
+        .filter(card => card.style.display !== 'none');
 
-      if (fixesApplied > 0) {
-        // Désactiver le bouton pendant l'application
-        var applyBtn = document.getElementById('applyAllAutoBtn');
+      console.log('[DEBUG] Found cards:', autoCards.length);
+
+      if (autoCards.length === 0) return;
+
+      // Désactiver le bouton
+      var applyBtn = document.getElementById('applyAllAutoBtn');
+      if (applyBtn) {
         applyBtn.disabled = true;
-        applyBtn.textContent = 'Application en cours...';
+        applyBtn.textContent = 'Correction en cours...';
+      }
 
-        // Feedback utilisateur
-        showNotification(fixesApplied + ' correction' + (fixesApplied > 1 ? 's' : '') + ' automatique' + (fixesApplied > 1 ? 's' : '') + ' appliquée' + (fixesApplied > 1 ? 's' : '') + ' !', 'success');
+      var fixesApplied = 0;
+      var processedCards = 0;
+
+      // Plus de manipulation d'overflow - animation contenue
+
+      // Fonction pour traiter chaque carte séquentiellement
+      function processNextCard() {
+        if (processedCards >= autoCards.length) {
+          console.log('[DEBUG] All cards processed, finishing');
+          finishAnimation();
+          return;
+        }
+
+        var card = autoCards[processedCards];
+        console.log('[DEBUG] Processing card', processedCards, 'of', autoCards.length);
+
+        var applyBtn = card.querySelector('button[onclick*="applyGroupFix"]');
+
+        if (!applyBtn) {
+          console.log('[DEBUG] No apply button found for card', processedCards);
+          processedCards++;
+          processNextCard();
+          return;
+        }
+
+        // VERSION SIMPLIFIÉE EXTRÊME - Test minimal
+        console.log('[DEBUG] Starting ultra-simple animation for card', processedCards);
+
+        // Juste changer la couleur d'abord
+        card.style.backgroundColor = 'lightgreen';
+        console.log('[DEBUG] Background color set to lightgreen');
+
+        // Puis essayer le transform après un délai
+        setTimeout(function() {
+          console.log('[DEBUG] Applying transform to card', processedCards);
+          card.style.transition = 'transform 1s ease';
+          card.style.transform = 'translateX(300px)';
+          console.log('[DEBUG] Transform applied: translateX(300px)');
+
+          // Vérifier immédiatement
+          setTimeout(() => {
+            const computedTransform = window.getComputedStyle(card).transform;
+            console.log('[DEBUG] Computed transform after application:', computedTransform);
+
+            if (computedTransform.includes('300px')) {
+              console.log('[SUCCESS] Transform is working!');
+            } else {
+              console.log('[FAILURE] Transform is NOT working. Computed:', computedTransform);
+            }
+          }, 50);
+        }, 500);
+
+        // Masquer après animation
+        setTimeout(function() {
+          console.log('[DEBUG] Hiding card', processedCards);
+          card.style.display = 'none';
+
+          // Nettoyer
+          card.style.removeProperty('background-color');
+          card.style.removeProperty('transition');
+          card.style.removeProperty('transform');
+
+          // ❌ SUPPRIMÉ : updateProblemCounter() - Cause des animations parasites sur le compteur
+          // ❌ SUPPRIMÉ : updateDynamicTabCounts() - Cause des animations parasites
+
+          // Passer à la carte suivante
+          processedCards++;
+          setTimeout(processNextCard, 200);
+        }, 1500);
+
+        // Appliquer la correction
+        var onclickStr = applyBtn.getAttribute('onclick');
+        var match = onclickStr.match(/applyGroupFix\(\[([^\]]+)\],\s*'([^']+)'\)/);
+        if (match) {
+          var indices = match[1].split(',').map(function (s) { return parseInt(s.trim()); });
+          var variableId = match[2];
+          applyGroupFix(indices, variableId);
+          fixesApplied++;
+          console.log('[DEBUG] Correction applied for card', processedCards);
+        }
+      }
+
+      // Démarrer le traitement séquentiel
+      console.log('[DEBUG] Starting sequential processing');
+      processNextCard();
+
+      function finishAnimation() {
+        console.log('[DEBUG] Finishing animation');
+
+        // Réactiver le bouton
+        if (applyBtn) {
+          applyBtn.disabled = false;
+          applyBtn.textContent = 'Appliquer les corrections';
+        }
+
+        // Notification de succès
+        if (fixesApplied > 0) {
+          showNotification(fixesApplied + ' correction' + (fixesApplied > 1 ? 's' : '') + ' appliquée' + (fixesApplied > 1 ? 's' : '') + ' !', 'success');
+          applyFilter(currentFilter || 'auto');
+        }
       }
     }
 
@@ -7648,19 +7542,6 @@
       if (manualFixes) manualFixes.textContent = manual;
 
 
-      // --- FIX USER REQUEST 4: Dynamic "Fix All" Button ---
-      // Met à jour le bouton "Tout corriger (Auto)" avec le compte réel
-      var applyAllAutoBtn = document.getElementById("applyAllAutoBtn");
-      if (applyAllAutoBtn) {
-        if (autoFixable > 0) {
-          applyAllAutoBtn.style.display = 'flex'; // S'assurer qu'il est visible, flex pour l'alignement
-          applyAllAutoBtn.disabled = false;
-          applyAllAutoBtn.innerHTML = '✨ Corriger ' + autoFixable + ' éléments auto';
-        } else {
-          // Si 0 items auto, on cache ou désactive le bouton
-          applyAllAutoBtn.style.display = 'none';
-        }
-      }
     }
 
 
@@ -8741,19 +8622,6 @@
 
   </script>
 
-  <!-- ✨ UNDO TOAST : Toast d'annulation premium -->
-  <div id="undoToast" class="toast-container">
-    <div class="toast-content">
-      <span class="toast-title">Correction appliquée</span>
-      <span class="toast-detail">
-        <span id="toastOldValue">--</span>
-        <span class="arrow">→</span>
-        <span class="variable-name" id="toastNewVariable">--</span>
-      </span>
-    </div>
-    <button class="toast-btn" onclick="triggerUndo()">Annuler</button>
-    <button class="toast-close" onclick="hideToast()">✕</button>
-  </div>
 </body>
 
 </html>

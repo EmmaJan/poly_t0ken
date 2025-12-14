@@ -9,3 +9,4 @@ if (scriptMatch) {
 } else {
   console.log('Aucun script trouvé');
 }
+

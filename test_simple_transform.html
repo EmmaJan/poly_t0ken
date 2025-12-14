@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Simple Transform CSS</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .card {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 8px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: transform 1s ease, opacity 1s ease;
+        }
+
+        .card.sliding {
+            transform: translateX(800px) !important;
+            opacity: 0 !important;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 20px 0;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Simple Transform CSS</h1>
+    <button onclick="testTransform()">Tester transform simple</button>
+    <button onclick="testClass()">Tester avec classe CSS</button>
+
+    <div class="container">
+        <div class="card" id="card1">Carte 1 - Test transform</div>
+        <div class="card" id="card2">Carte 2 - Test transform</div>
+    </div>
+
+    <script>
+        function testTransform() {
+            const card = document.getElementById('card1');
+            console.log('Avant transform:', window.getComputedStyle(card).transform);
+
+            // Test direct avec style.setProperty
+            card.style.setProperty('transform', 'translateX(800px)', 'important');
+            card.style.setProperty('opacity', '0', 'important');
+
+            console.log('Après transform:', window.getComputedStyle(card).transform);
+
+            setTimeout(() => {
+                card.style.display = 'none';
+                console.log('Carte cachée');
+            }, 1000);
+        }
+
+        function testClass() {
+            const card = document.getElementById('card2');
+            console.log('Avant classe:', window.getComputedStyle(card).transform);
+
+            card.classList.add('sliding');
+
+            console.log('Après classe:', window.getComputedStyle(card).transform);
+
+            setTimeout(() => {
+                card.style.display = 'none';
+                console.log('Carte cachée');
+            }, 1000);
+        }
+    </script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 
 
 
-var CONFIG = {
+const CONFIG = {
   
   DEBUG_MODE: true,
 
@@ -102,7 +102,7 @@ var CONFIG = {
 
 
 
-var Utils = {
+const Utils = {
 
   
   safeGet: function (node, prop, defaultValue) {
@@ -127,14 +127,10 @@ var Utils = {
 };
 
 
-function log(msg, data) {
-  
-}
 
 
 
-
-var ColorService = {
+const ColorService = {
   
   hexToRgb: function (hex) {
     hex = hex.replace("#", "");
@@ -235,25 +231,13 @@ var ColorService = {
       s: hsl.s,
       l: Math.max(0, Math.min(1, hsl.l + amount))
     };
-  },
-
-  
-  mixColors: function (c1, c2, w) {
-    var rgb1 = ColorService.hexToRgb(c1);
-    var rgb2 = ColorService.hexToRgb(c2);
-
-    return ColorService.rgbToHex({
-      r: rgb1.r * (1 - w) + rgb2.r * w,
-      g: rgb1.g * (1 - w) + rgb2.g * w,
-      b: rgb1.b * (1 - w) + rgb2.b * w
-    });
   }
 };
 
 
 
 
-var TokenService = {
+const TokenService = {
   
   generateBrand: function (hex, naming) {
     var tokens = {};
@@ -438,7 +422,7 @@ var TokenService = {
 
 
 
-var FigmaService = {
+const FigmaService = {
   
   getCollections: function () {
     return figma.variables.getLocalVariableCollections();
@@ -636,7 +620,7 @@ var FigmaService = {
 
 
 
-var Scanner = {
+const Scanner = {
   
   valueMap: null,
   lastScanResults: null,
@@ -684,12 +668,6 @@ var Scanner = {
           }
 
           Scanner.valueMap.get(key).push({
-            id: variable.id,
-            name: variable.name,
-            resolvedValue: formattedValue,
-            scopes: variable.scopes || []
-          });
-
         }
       }
     }
@@ -787,10 +765,6 @@ var Scanner = {
       
       if (depth === 0 && results.length % 10 === 0) {
         figma.ui.postMessage({
-          type: "scan-progress",
-          current: results.length,
-          status: "Analyse en cours..."
-        });
       }
 
       
@@ -948,7 +922,7 @@ var Scanner = {
 
 
 
-var Fixer = {
+const Fixer = {
   
   applyAndVerify: function (result, variableId) {
 
@@ -1198,16 +1172,16 @@ figma.ui.onmessage = function (msg) {
 };
 
 
-var existingCollections = figma.variables.getLocalVariableCollections();
+const existingCollections = figma.variables.getLocalVariableCollections();
 if (existingCollections.length > 0) {
   figma.ui.postMessage({ type: "has-variables", value: true });
 
   
   try {
-    var existingTokens = extractExistingTokens();
+    const existingTokens = extractExistingTokens();
 
     
-    var hasTokens = false;
+    let hasTokens = false;
     for (let cat in existingTokens.tokens) {
       if (existingTokens.tokens.hasOwnProperty(cat) && Object.keys(existingTokens.tokens[cat]).length > 0) {
         hasTokens = true;
@@ -1217,16 +1191,10 @@ if (existingCollections.length > 0) {
 
     if (existingTokens && hasTokens) {
       figma.ui.postMessage({
-        type: "existing-tokens",
-        tokens: existingTokens.tokens,
-        library: existingTokens.library
-      });
     } else {
       figma.ui.postMessage({
         type: "existing-tokens",
         tokens: {},
-        library: "tailwind"
-      });
     }
   } catch (e) {
   }
@@ -1241,7 +1209,7 @@ if (existingCollections.length > 0) {
 function extractExistingTokens() {
   var collections = figma.variables.getLocalVariableCollections();
 
-  var tokens = {
+  const tokens = {
     brand: {},
     system: {},
     gray: {},
@@ -2011,13 +1979,6 @@ function createValueToVariableMap() {
                 map.set(hexValue, []);
               }
               map.get(hexValue).push({
-                id: variable.id,
-                name: variable.name,
-                collectionName: collection.name,
-                modeName: mode.name,
-                resolvedValue: resolvedValue,
-                originalValue: variable.valuesByMode[modeId] 
-              });
             }
           }
           
@@ -2027,13 +1988,6 @@ function createValueToVariableMap() {
               map.set(key, []);
             }
             map.get(key).push({
-              id: variable.id,
-              name: variable.name,
-              collectionName: collection.name,
-              modeName: mode.name,
-              resolvedValue: resolvedValue,
-              originalValue: variable.valuesByMode[modeId]
-            });
           }
         }
       });
@@ -2166,12 +2120,6 @@ function findColorSuggestions(hexValue, valueToVariableMap, propertyType) {
 
         if (passScope) {
           suggestions.push({
-            id: filteredVars[0].id,
-            name: filteredVars[0].name,
-            hex: varHex,
-            distance: distance,
-            isExact: false
-          });
         }
       }
     }
@@ -2186,14 +2134,6 @@ function findColorSuggestions(hexValue, valueToVariableMap, propertyType) {
         var distance = getColorDistance(hexValue, varHex);
         if (distance <= maxDistance) {
           suggestions.push({
-            id: vars[0].id,
-            name: vars[0].name,
-            hex: varHex,
-            distance: distance,
-            isExact: false,
-            scopeMismatch: true, 
-            warning: "Scope mismatch - Cette variable pourrait ne pas être appropriée pour ce type de propriété"
-          });
         }
       }
     });
@@ -2252,12 +2192,6 @@ function findNumericSuggestions(targetValue, valueToVariableMap, tolerance, prop
         var difference = Math.abs(targetValue - varValue);
         if (difference <= tolerance) {
           suggestions.push({
-            id: filteredVars[0].id,
-            name: filteredVars[0].name,
-            value: varValue,
-            difference: difference,
-            isExact: false
-          });
         }
       }
     }
@@ -2410,15 +2344,6 @@ function checkTypographyPropertiesSafely(node, valueToVariableMap, results) {
         if (suggestions.length > 0) {
           var bestSuggestion = suggestions[0];
           results.push({
-            nodeId: node.id,
-            layerName: node.name,
-            property: "Font Size",
-            value: node.fontSize + "px",
-            suggestedVariableId: bestSuggestion.id,
-            suggestedVariableName: bestSuggestion.name,
-            figmaProperty: 'fontSize',
-            numericSuggestions: suggestions
-          });
         }
       }
     }
@@ -2453,16 +2378,6 @@ function checkFillsSafely(node, valueToVariableMap, results) {
         
         if (suggestions.length > 0) {
           results.push({
-            nodeId: node.id,
-            layerName: node.name,
-            property: "Fill",
-            value: hexValue,
-            suggestedVariableId: suggestions[0].id,
-            suggestedVariableName: suggestions[0].name,
-            fillIndex: i,
-            colorSuggestions: suggestions,
-            isExact: suggestions[0].isExact || false
-          });
         }
       } catch (fillError) {
         
@@ -2495,16 +2410,6 @@ function checkStrokesSafely(node, valueToVariableMap, results) {
         
         if (suggestions.length > 0) {
           results.push({
-            nodeId: node.id,
-            layerName: node.name,
-            property: "Stroke",
-            value: hexValue,
-            suggestedVariableId: suggestions[0].id,
-            suggestedVariableName: suggestions[0].name,
-            strokeIndex: j,
-            colorSuggestions: suggestions,
-            isExact: suggestions[0].isExact || false
-          });
         }
       } catch (strokeError) {
         
@@ -2545,15 +2450,6 @@ function checkCornerRadiusSafely(node, valueToVariableMap, results) {
             if (suggestions.length > 0) {
               var bestSuggestion = suggestions[0];
               results.push({
-                nodeId: node.id,
-                layerName: node.name,
-                property: prop.displayName,
-                value: radiusValue + "px",
-                suggestedVariableId: bestSuggestion.id,
-                suggestedVariableName: bestSuggestion.name,
-                figmaProperty: prop.figmaProp,
-                numericSuggestions: suggestions
-              });
             }
           }
         } catch (radiusError) {
@@ -2575,15 +2471,6 @@ function checkCornerRadiusSafely(node, valueToVariableMap, results) {
         if (suggestions.length > 0) {
           var bestSuggestion = suggestions[0];
           results.push({
-            nodeId: node.id,
-            layerName: node.name,
-            property: "Corner Radius",
-            value: node.cornerRadius + "px",
-            suggestedVariableId: bestSuggestion.id,
-            suggestedVariableName: bestSuggestion.name,
-            figmaProperty: 'cornerRadius',
-            numericSuggestions: suggestions
-          });
         }
       }
     }
@@ -2603,15 +2490,6 @@ function checkNumericPropertiesSafely(node, valueToVariableMap, results) {
         if (suggestions.length > 0) {
           var bestSuggestion = suggestions[0];
           results.push({
-            nodeId: node.id,
-            layerName: node.name,
-            property: "Item Spacing",
-            value: node.itemSpacing + "px",
-            suggestedVariableId: bestSuggestion.id,
-            suggestedVariableName: bestSuggestion.name,
-            figmaProperty: 'itemSpacing',
-            numericSuggestions: suggestions
-          });
         }
       }
     }
@@ -2636,15 +2514,6 @@ function checkNumericPropertiesSafely(node, valueToVariableMap, results) {
             if (suggestions.length > 0) {
               var bestSuggestion = suggestions[0];
               results.push({
-                nodeId: node.id,
-                layerName: node.name,
-                property: paddingProp.displayName,
-                value: paddingValue + "px",
-                suggestedVariableId: bestSuggestion.id,
-                suggestedVariableName: bestSuggestion.name,
-                figmaProperty: paddingProp.figmaProp,
-                numericSuggestions: suggestions
-              });
             }
           }
         }
@@ -2685,7 +2554,7 @@ function isPropertyBoundToVariable(boundVariables, propertyPath, index) {
 function scanNodeRecursive(node, valueToVariableMap, results, depth, ignoreHiddenLayers) {
   
   depth = depth || 0;
-  var MAX_DEPTH = CONFIG.limits.MAX_DEPTH; 
+  const MAX_DEPTH = CONFIG.limits.MAX_DEPTH; 
   if (depth > MAX_DEPTH) {
     return;
   }
@@ -2862,13 +2731,6 @@ function startAsyncScan(nodes, valueToVariableMap, ignoreHiddenLayers) {
 
   
   figma.ui.postMessage({
-    type: "scan-progress",
-    progress: 0,
-    total: totalNodes,
-    status: "Démarrage de l'analyse..."
-  });
-
-
   function processChunk() {
     var chunkEnd = Math.min(currentIndex + CHUNK_SIZE, totalNodes);
     var processedInChunk = 0;
@@ -2896,14 +2758,6 @@ function startAsyncScan(nodes, valueToVariableMap, ignoreHiddenLayers) {
     
     var progress = (currentIndex / totalNodes) * 100;
     figma.ui.postMessage({
-      type: "scan-progress",
-      progress: progress,
-      current: currentIndex,
-      total: totalNodes,
-      status: "Analyse en cours... " + currentIndex + "/" + totalNodes
-    });
-
-    
     if (currentIndex < totalNodes) {
       
       setTimeout(processChunk, 10);
@@ -2939,15 +2793,7 @@ function finishScan(results) {
   setTimeout(function () {
     
     figma.ui.postMessage({
-      type: "scan-progress",
-      progress: 100,
-      status: "Analyse terminée"
-    });
-
     figma.ui.postMessage({
-      type: "scan-results",
-      results: results
-    });
   }, 100);
 }
 
@@ -3551,9 +3397,6 @@ function applyColorVariableToFill(node, variable, fillIndex) {
     }
 
     var fill = node.fills[fillIndex];
-
-    
-    
     if (node.fillStyleId) {
       try {
         node.fillStyleId = '';
@@ -3565,9 +3408,8 @@ function applyColorVariableToFill(node, variable, fillIndex) {
     try {
       node.setBoundVariable(fillPath, variable);
 
-
+      
       var updatedFill = node.fills[fillIndex];
-
       return true;
     } catch (setBoundError) {
     }
@@ -3590,9 +3432,8 @@ function applyColorVariableToFill(node, variable, fillIndex) {
 
       node.fills = clonedFills;
 
-
+      
       var finalFill = node.fills[fillIndex];
-
       return true;
     } catch (fallbackError) {
       return false;
@@ -3696,11 +3537,6 @@ function applyAllFixes() {
       var verificationResult = applyAndVerifyFix(result, result.suggestedVariableId);
 
       results.push({
-        index: i,
-        result: result,
-        verification: verificationResult
-      });
-
       if (verificationResult.success) {
         appliedCount++;
       } else {
@@ -3768,11 +3604,6 @@ function checkAndNotifySelection() {
   var selectionId = selection.map(function (n) { return n.id; }).sort().join('|');
 
   figma.ui.postMessage({
-    type: "selection-checked",
-    hasSelection: hasValidSelection,
-    selectedFrameName: selectedFrameName,
-    selectionId: selectionId
-  });
 }
 
 figma.on("selectionchange", function () {
@@ -3798,9 +3629,6 @@ figma.ui.onmessage = function (msg) {
     cachedTokens = tokens;
 
     figma.ui.postMessage({
-      type: "tokens-generated",
-      tokens: tokens
-    });
   }
 
   if (msg.type === "import") {
@@ -3852,12 +3680,6 @@ figma.ui.onmessage = function (msg) {
 
     try {
       figma.ui.postMessage({
-        type: "all-fixes-applied",
-        appliedCount: appliedCount,
-        error: applicationError ? applicationError.message : null
-      });
-
-      
     } catch (uiError) {
     }
   }
@@ -3877,14 +3699,6 @@ figma.ui.onmessage = function (msg) {
 
     try {
       figma.ui.postMessage({
-        type: "single-fix-applied",
-        appliedCount: appliedCount,
-        error: applicationError ? applicationError.message : null,
-        index: index
-      });
-
-      
-      
     } catch (uiError) {
     }
   }
@@ -3900,9 +3714,6 @@ figma.ui.onmessage = function (msg) {
 
     
     figma.ui.postMessage({
-      type: "undo-acknowledged",
-      indices: indices
-    });
   }
 
   if (msg.type === "check-selection") {
@@ -3962,10 +3773,6 @@ figma.ui.onmessage = function (msg) {
 
     if (!variableId || indices.length === 0 || !lastScanResults) {
       figma.ui.postMessage({
-        type: "group-fix-applied",
-        appliedCount: 0,
-        error: "Paramètres manquants ou résultats de scan indisponibles"
-      });
       return;
     }
 
@@ -3980,8 +3787,10 @@ figma.ui.onmessage = function (msg) {
         }
       });
 
-      // ❌ COMMENTÉ : Évite le rechargement brutal qui tue les animations UI
-      // scanSelection(true); 
+      
+
+      
+      scanSelection(true); 
 
     } catch (e) {
       applicationError = e;
@@ -3989,10 +3798,6 @@ figma.ui.onmessage = function (msg) {
 
     try {
       figma.ui.postMessage({
-        type: "group-fix-applied",
-        appliedCount: appliedCount,
-        error: applicationError ? applicationError.message : null
-      });
     } catch (uiError) {
     }
   }
@@ -4007,9 +3812,6 @@ figma.ui.onmessage = function (msg) {
 
     if (!scanResults || scanResults.length === 0) {
       figma.ui.postMessage({
-        type: "preview-error",
-        message: "Données de scan perdues. Veuillez relancer l'analyse."
-      });
       return;
     }
 
@@ -4062,105 +3864,6 @@ figma.ui.onmessage = function (msg) {
 
     
     figma.ui.postMessage({
-      type: "sync-confirmation",
-      success: !!Scanner.lastScanResults,
-      count: Scanner.lastScanResults ? Scanner.lastScanResults.length : 0
-    });
   }
 
-  
-  
-  
-
-  
-  function simpleScan() {
-
-    var results = [];
-    var pageChildren = figma.currentPage.children;
-
-
-    for (var i = 0; i < pageChildren.length; i++) {
-      var node = pageChildren[i];
-
-      
-      if (node.fills && Array.isArray(node.fills)) {
-        for (var j = 0; j < node.fills.length; j++) {
-          var fill = node.fills[j];
-
-          if (fill.type === CONFIG.types.SOLID && fill.color) {
-            
-            var isBound = node.boundVariables &&
-              node.boundVariables.fills &&
-              node.boundVariables.fills[j];
-
-            if (!isBound) {
-              var hex = rgbToHex(fill.color);
-
-              results.push({
-                nodeId: node.id,
-                nodeName: node.name,
-                property: CONFIG.properties.FILL,
-                fillIndex: j,
-                hexValue: hex,
-                type: 'color'
-              });
-            }
-          }
-        }
-      }
-    }
-
-    return results;
-  }
-
-  
-  function simpleApply(results) {
-
-    var successCount = 0;
-
-    
-    var colorVars = figma.variables.getLocalVariables().filter(function (v) {
-      return v.resolvedType === 'COLOR';
-    });
-
-
-    if (colorVars.length === 0) {
-      return 0;
-    }
-
-    
-    var defaultVar = colorVars[0];
-
-    for (var i = 0; i < results.length; i++) {
-      var result = results[i];
-
-      try {
-        var node = figma.getNodeById(result.nodeId);
-
-        if (!node) {
-          continue;
-        }
-
-        
-        node.setBoundVariable('fills[' + result.fillIndex + '].color', defaultVar);
-
-        
-        var updatedFill = node.fills[result.fillIndex];
-        var isApplied = updatedFill.boundVariables &&
-          updatedFill.boundVariables.color &&
-          updatedFill.boundVariables.color.id === defaultVar.id;
-
-        if (isApplied) {
-          successCount++;
-        } else {
-          
-          successCount++;
-        }
-
-      } catch (error) {
-      }
-    }
-
-    return successCount;
-  }
 };

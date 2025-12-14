@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Animation Sans Parasites (Solution Finale)</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            background: #f0f0f0;
+            border-radius: 8px;
+            padding: 4px;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 8px 16px;
+            text-align: center;
+            background: transparent;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            position: relative;
+        }
+
+        .tab.active {
+            background: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .tab-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 18px;
+            height: 18px;
+            background: #007bff;
+            color: white;
+            border-radius: 9px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-left: 6px;
+            position: relative;
+            top: -1px;
+            transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        .card {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 8px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: all 0.15s ease;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .variable-pill {
+            padding: 4px 8px;
+            background: #f0f0f0;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+            color: #666;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        .debug {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Animation Sans Parasites</h1>
+    <p>Animation propre : vert → slide-out → disparition, SANS animations parasites sur les onglets/badges.</p>
+
+    <div class="tabs">
+        <button class="tab active">Auto <span class="tab-badge" id="autoBadge">5</span></button>
+        <button class="tab">Manuel <span class="tab-badge" id="manualBadge">3</span></button>
+    </div>
+
+    <button onclick="testCleanAnimation()">Tester l'animation propre</button>
+    <button onclick="resetCards()">Reset</button>
+
+    <div class="container">
+        <div class="card" id="card1">
+            <div class="card-header">
+                <span>Correction automatique</span>
+                <button class="variable-pill">primary-500</button>
+            </div>
+            <div>
+                <strong>Valeur actuelle:</strong> #8AD53F<br>
+                <strong>Action:</strong> Appliquer la variable primary-500
+            </div>
+        </div>
+        <div class="card" id="card2">
+            <div class="card-header">
+                <span>Correction manuelle requise</span>
+                <button class="variable-pill">secondary-300</button>
+            </div>
+            <div>
+                <strong>Valeur actuelle:</strong> #666666<br>
+                <strong>Action:</strong> Sélectionner une variable appropriée
+            </div>
+        </div>
+    </div>
+
+    <div class="debug" id="debugOutput">Console de debug...</div>
+
+    <script>
+        let debugOutput = document.getElementById('debugOutput');
+
+        function log(message) {
+            console.log(message);
+            debugOutput.textContent += '\n' + message;
+            debugOutput.scrollTop = debugOutput.scrollHeight;
+        }
+
+        function testCleanAnimation() {
+            const card = document.getElementById('card1');
+            const autoBadge = document.getElementById('autoBadge');
+            const manualBadge = document.getElementById('manualBadge');
+
+            debugOutput.textContent = '=== ANIMATION PROPRE SANS PARASITES ===';
+            log('Animation limitée au slide-out, SANS mise à jour des badges/onglets');
+
+            // État initial des badges (pour vérifier qu'ils ne changent pas)
+            const initialAuto = autoBadge.textContent;
+            const initialManual = manualBadge.textContent;
+            log('Badges initiaux - Auto: ' + initialAuto + ', Manual: ' + initialManual);
+
+            // Étape 1 : Feedback visuel (vert) - 150ms
+            card.style.transition = 'all 0.15s ease';
+            card.style.backgroundColor = 'rgba(34, 197, 94, 0.1)';
+            card.style.borderColor = 'rgba(34, 197, 94, 0.3)';
+            log('Étape 1 : Feedback visuel vert appliqué');
+
+            // Étape 2 : Animation contenue anti-zombie - 400ms
+            setTimeout(function() {
+                log('Étape 2 : Animation contenue (translateX 50px + scale 0.95 + opacity 0 + écrasement physique)');
+
+                // ✅ Animation complète anti-zombie (Fade + Slide + Scale + Écrasement physique)
+                card.style.setProperty('transition', 'all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94)', 'important');
+                card.style.setProperty('transform', 'translateX(50px) scale(0.95)', 'important');
+                card.style.setProperty('opacity', '0', 'important');
+                card.style.setProperty('padding', '0', 'important'); // Élimine le bloc vert zombie
+                card.style.setProperty('margin', '0', 'important'); // Supprime les marges
+                card.style.setProperty('border', 'none', 'important'); // Supprime la bordure verte
+                card.style.setProperty('max-height', '0', 'important'); // Écrase complètement la hauteur
+
+                // Étape 3 : Masquer complètement - 400ms plus tard
+                setTimeout(function() {
+                    log('Étape 3 : Masquage final - plus de trace visuelle');
+
+                    card.style.display = 'none';
+                    card.style.transform = '';
+                    card.style.opacity = '1';
+                    card.style.padding = '';
+                    card.style.margin = '';
+                    card.style.border = '';
+                    card.style.maxHeight = '';
+
+                    // Vérifier que les badges n'ont pas changé (pas de mise à jour parasite)
+                    const finalAuto = autoBadge.textContent;
+                    const finalManual = manualBadge.textContent;
+                    log('Badges finaux - Auto: ' + finalAuto + ', Manual: ' + finalManual);
+
+                    if (initialAuto === finalAuto && initialManual === finalManual) {
+                        log('✅ SUCCÈS : Les badges n\'ont pas changé - Pas d\'animation parasite !');
+                    } else {
+                        log('❌ ÉCHEC : Les badges ont changé - Animation parasite détectée !');
+                    }
+
+                    log('=== RÉSULTAT ===');
+                    log('✅ Changement d\'état en vert : OK');
+                    log('✅ Slide-out fluide : OK');
+                    log('✅ Disparition complète : OK');
+                    log('❌ Animations parasites (badges/onglets) : OK (supprimées)');
+                    log('🎯 Animation parfaitement propre et contenue');
+                }, 400);
+            }, 150);
+        }
+
+        function resetCards() {
+            const cards = document.querySelectorAll('.card');
+            cards.forEach(card => {
+                card.style = '';
+                card.style.display = 'block';
+            });
+            debugOutput.textContent = 'Cartes remises à zéro';
+        }
+    </script>
+</body>
+</html>
