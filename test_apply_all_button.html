@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Bouton "Appliquer les corrections"</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .card {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 16px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: all 0.15s ease;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .variable-pill {
+            padding: 4px 8px;
+            background: #f0f0f0;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 500;
+            color: #666;
+        }
+
+        .apply-all-btn {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 50px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .apply-all-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+
+        .apply-all-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .apply-all-btn.processing {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        .debug {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            margin: 20px 0;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Bouton "Appliquer les corrections"</h1>
+    <p>Test du bouton avec emoji et gestion d'état correcte.</p>
+
+    <button class="apply-all-btn" id="applyAllBtn">✨ Appliquer les corrections</button>
+
+    <!-- Boutons de test pour simuler l'interface réelle -->
+    <button onclick="testApplyAllAutoBtn()">Test applyAllAutoBtn</button>
+    <button onclick="testStep4ApplyAll()">Test step4ApplyAll</button>
+
+    <button onclick="simulateApplyAll()">Simuler "Appliquer tout"</button>
+    <button onclick="resetButton()">Reset bouton</button>
+
+    <div class="container">
+        <div class="card" id="card1">
+            <div class="card-header">
+                <span>Correction automatique</span>
+                <button class="variable-pill">primary-500</button>
+            </div>
+            <div>
+                <strong>Valeur actuelle:</strong> #8AD53F<br>
+                <strong>Action:</strong> Appliquer la variable primary-500
+            </div>
+        </div>
+        <div class="card" id="card2">
+            <div class="card-header">
+                <span>Correction manuelle requise</span>
+                <button class="variable-pill">secondary-300</button>
+            </div>
+            <div>
+                <strong>Valeur actuelle:</strong> #666666<br>
+                <strong>Action:</strong> Sélectionner une variable appropriée
+            </div>
+        </div>
+    </div>
+
+    <div class="debug" id="debugOutput">Console de debug...</div>
+
+    <script>
+        let debugOutput = document.getElementById('debugOutput');
+        const applyBtn = document.getElementById('applyAllBtn');
+
+        function log(message) {
+            console.log(message);
+            debugOutput.textContent += '\n' + message;
+            debugOutput.scrollTop = debugOutput.scrollHeight;
+        }
+
+        function applyAllFixes() {
+            // Simuler l'envoi du message au plugin (comme dans ui.html)
+            log('=== applyAllFixes() appelée ===');
+
+            // Désactiver les boutons pendant l'application (comme dans ui.html)
+            var applyAllAutoBtn = document.getElementById("applyAllAutoBtn");
+            var step4ApplyAll = document.getElementById("step4ApplyAll");
+
+            if (applyAllAutoBtn) {
+                applyAllAutoBtn.disabled = true;
+                applyAllAutoBtn.textContent = "Application en cours...";
+                log('applyAllAutoBtn désactivé');
+            }
+            if (step4ApplyAll) {
+                step4ApplyAll.disabled = true;
+                step4ApplyAll.textContent = "⏳ Application...";
+                log('step4ApplyAll désactivé');
+            }
+
+            // Simuler l'application des corrections
+            simulateApplyAll();
+        }
+
+        function simulateApplyAll() {
+            debugOutput.textContent = '=== SIMULATION APPLIQUER TOUT ===';
+            log('Bouton cliqué - état initial: ' + applyBtn.textContent);
+
+            // Désactiver le bouton et changer le texte
+            applyBtn.disabled = true;
+            applyBtn.textContent = 'Correction en cours...';
+            applyBtn.classList.add('processing');
+            log('Bouton désactivé, texte changé à "Correction en cours..."');
+
+            const cards = document.querySelectorAll('.card');
+            let processed = 0;
+
+            function processNextCard() {
+                if (processed >= cards.length) {
+                    // Terminer l'animation
+                    finishAnimation(2); // 2 corrections appliquées
+                    return;
+                }
+
+                const card = cards[processed];
+                log('Traitement carte ' + (processed + 1) + '/' + cards.length);
+
+                // Feedback visuel vert
+                card.style.transition = 'all 0.15s ease';
+                card.style.backgroundColor = 'rgba(34, 197, 94, 0.1)';
+                card.style.borderColor = 'rgba(34, 197, 94, 0.3)';
+
+                // Masquage instantané après 150ms
+                setTimeout(function() {
+                    card.style.display = 'none';
+                    card.style.backgroundColor = '';
+                    card.style.borderColor = '';
+                    card.style.transition = '';
+
+                    processed++;
+                    setTimeout(processNextCard, 200);
+                }, 150);
+            }
+
+            setTimeout(processNextCard, 200);
+        }
+
+        function finishAnimation(fixesApplied) {
+            log('Fin de l\'animation - ' + fixesApplied + ' corrections appliquées');
+
+            // Simuler la réception du message "all-fixes-applied" (comme dans ui.html)
+            // Réactiver les boutons et restaurer leur texte original
+            var applyAllAutoBtn = document.getElementById("applyAllAutoBtn");
+            var step4ApplyAll = document.getElementById("step4ApplyAll");
+
+            if (applyAllAutoBtn) {
+                applyAllAutoBtn.disabled = false;
+                applyAllAutoBtn.textContent = '✨ Appliquer les corrections';
+                log('applyAllAutoBtn réactivé');
+            }
+            if (step4ApplyAll) {
+                step4ApplyAll.disabled = false;
+                step4ApplyAll.textContent = '✨ Appliquer tout';
+                log('step4ApplyAll réactivé');
+            }
+
+            // Réactiver le bouton avec son emoji original
+            applyBtn.disabled = false;
+            applyBtn.textContent = '✨ Appliquer les corrections';
+            applyBtn.classList.remove('processing');
+            log('Bouton réactivé avec emoji: ' + applyBtn.textContent);
+
+            // Notification de succès
+            log('Notification: ' + fixesApplied + ' corrections appliquées !');
+
+            log('=== SIMULATION TERMINÉE ===');
+        }
+
+        function resetButton() {
+            applyBtn.disabled = false;
+            applyBtn.textContent = '✨ Appliquer les corrections';
+            applyBtn.classList.remove('processing');
+
+            // Reset cards
+            const cards = document.querySelectorAll('.card');
+            cards.forEach(card => {
+                card.style = '';
+                card.style.display = 'block';
+            });
+
+            debugOutput.textContent = 'Bouton et cartes remis à zéro';
+        }
+
+        function testApplyAllAutoBtn() {
+            // Simuler ce qui se passe quand applyAllAutoBtn est cliqué
+            var testBtn = document.createElement('button');
+            testBtn.id = 'applyAllAutoBtn';
+            testBtn.textContent = '✨ Appliquer les corrections';
+            testBtn.disabled = false;
+            document.body.appendChild(testBtn);
+
+            log('Test applyAllAutoBtn créé');
+
+            // Simuler l'appel à applyAllFixes()
+            applyAllFixes();
+        }
+
+        function testStep4ApplyAll() {
+            // Simuler ce qui se passe quand step4ApplyAll est cliqué
+            var testBtn = document.createElement('button');
+            testBtn.id = 'step4ApplyAll';
+            testBtn.textContent = '✨ Appliquer tout';
+            testBtn.disabled = false;
+            document.body.appendChild(testBtn);
+
+            log('Test step4ApplyAll créé');
+
+            // Simuler l'appel à applyAllFixes()
+            applyAllFixes();
+        }
+    </script>
+</body>
+</html>
