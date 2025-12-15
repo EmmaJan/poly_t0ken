@@ -3,7 +3,7 @@
  * Gère l'affichage et l'interaction des pastilles de suggestion
  */
 
-const PillManager = {
+var PillManager = {
   // Configuration des pastilles
   config: {
     displayLimit: 3,  // Nombre maximum de pastilles affichées
@@ -42,7 +42,7 @@ const PillManager = {
    * @returns {string} Classe CSS de base pour la pastille
    */
   getPillClass: function(property) {
-    let pillClass = 'smart-pill';
+    var pillClass = 'smart-pill';
 
     if (property === 'Fill' || property === 'Stroke') {
       pillClass += ' pill-color';
@@ -95,7 +95,7 @@ const PillManager = {
   markPillAsSelected: function(pillElement) {
     const pillRow = pillElement.closest('.smart-suggestions-row');
     if (pillRow) {
-      pillRow.querySelectorAll('.smart-pill').forEach(pill => {
+      pillRow.querySelectorAll('.smart-pill').forEach(function(pill) {
         pill.classList.remove('selected');
       });
       pillElement.classList.add('selected');
@@ -114,11 +114,11 @@ const PillManager = {
       return '';
     }
 
-    let html = '<div class="smart-suggestions-row">';
+    var html = '<div class="smart-suggestions-row">';
 
     const visibleSuggestions = suggestions.slice(0, this.config.displayLimit);
 
-    visibleSuggestions.forEach(s => {
+    visibleSuggestions.forEach(function(s) {
       const visualContent = this.generateVisualContent(s, property);
       const pillClass = this.getPillClass(property);
 

@@ -4565,8 +4565,8 @@
     window.ignoreSelectionChangeUntil = 0;
 
     function highlightLayers(indices) {
-      // Activer le verrou pour 2 secondes
-      window.ignoreSelectionChangeUntil = Date.now() + 2000;
+      // Activer le verrou pour seulement 200ms (au lieu de 2 secondes) pour éviter les conflits
+      window.ignoreSelectionChangeUntil = Date.now() + 200;
 
       parent.postMessage({
         pluginMessage: {

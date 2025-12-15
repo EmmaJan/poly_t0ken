@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test - Chargement Plugin PolyToken</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 20px;
+            background-color: #f8f9fa;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin: 10px 0;
+            border-radius: 8px;
+            border: 1px solid #e1e5e9;
+        }
+        .success { color: #10b981; }
+        .error { color: #ef4444; }
+        .warning { color: #f59e0b; }
+        .info { color: #6b7280; }
+        button {
+            background: #4f46e5;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover { background: #4338ca; }
+        .log {
+            background: #f3f4f6;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            margin: 10px 0;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Test de Chargement - Plugin PolyToken</h1>
+
+    <div class="test-section">
+        <h2>Test 1: Chargement des Modules</h2>
+        <p class="info">Vérifie que tous les modules se chargent correctement</p>
+        <button onclick="testModuleLoading()">Tester le chargement</button>
+        <div id="moduleTestResult" class="log"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 2: Initialisation UI</h2>
+        <p class="info">Vérifie que l'interface utilisateur s'initialise correctement</p>
+        <button onclick="testUIInitialization()">Tester l'UI</button>
+        <div id="uiTestResult" class="log"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Test 3: Compatibilité JavaScript</h2>
+        <p class="info">Vérifie l'absence de syntaxes non supportées</p>
+        <button onclick="testJSSyntax()">Tester la syntaxe</button>
+        <div id="syntaxTestResult" class="log"></div>
+    </div>
+
+    <div class="test-section">
+        <h2>Résumé des Tests</h2>
+        <div id="testSummary" class="log"></div>
+    </div>
+
+    <!-- Charger les modules dans l'ordre -->
+    <script src="modules.js"></script>
+    <script src="animationManager.js"></script>
+    <script src="pillManager.js"></script>
+    <script src="uiManager.js"></script>
+
+    <script>
+        var testResults = {
+            moduleLoading: false,
+            uiInit: false,
+            jsSyntax: false
+        };
+
+        function log(message, type) {
+            var colorClass = type || 'info';
+            return '<div class="' + colorClass + '">' + new Date().toLocaleTimeString() + ' - ' + message + '</div>';
+        }
+
+        function testModuleLoading() {
+            var resultDiv = document.getElementById('moduleTestResult');
+            resultDiv.innerHTML = log('Début du test de chargement des modules...', 'info');
+
+            // Vérifier que les modules sont chargés
+            setTimeout(function() {
+                var results = [];
+
+                if (typeof AnimationManager !== 'undefined') {
+                    results.push(log('✅ AnimationManager chargé', 'success'));
+                } else {
+                    results.push(log('❌ AnimationManager non chargé', 'error'));
+                }
+
+                if (typeof PillManager !== 'undefined') {
+                    results.push(log('✅ PillManager chargé', 'success'));
+                } else {
+                    results.push(log('❌ PillManager non chargé', 'error'));
+                }
+
+                if (typeof UIManager !== 'undefined') {
+                    results.push(log('✅ UIManager chargé', 'success'));
+                } else {
+                    results.push(log('❌ UIManager non chargé', 'error'));
+                }
+
+                testResults.moduleLoading = results.every(function(r) { return r.indexOf('❌') === -1; });
+                resultDiv.innerHTML += results.join('');
+                updateSummary();
+            }, 1000);
+        }
+
+        function testUIInitialization() {
+            var resultDiv = document.getElementById('uiTestResult');
+            resultDiv.innerHTML = log('Début du test d\'initialisation UI...', 'info');
+
+            try {
+                if (typeof UIManager !== 'undefined' && UIManager.init) {
+                    UIManager.init({
+                        animationManager: AnimationManager,
+                        pillManager: PillManager
+                    });
+                    resultDiv.innerHTML += log('✅ UIManager initialisé avec succès', 'success');
+                    testResults.uiInit = true;
+                } else {
+                    resultDiv.innerHTML += log('❌ UIManager non disponible', 'error');
+                    testResults.uiInit = false;
+                }
+            } catch (error) {
+                resultDiv.innerHTML += log('❌ Erreur lors de l\'initialisation: ' + error.message, 'error');
+                testResults.uiInit = false;
+            }
+
+            updateSummary();
+        }
+
+        function testJSSyntax() {
+            var resultDiv = document.getElementById('syntaxTestResult');
+            resultDiv.innerHTML = log('Début du test de syntaxe JavaScript...', 'info');
+
+            // Tester quelques syntaxes problématiques
+            var syntaxTests = [
+                { name: 'Optional Chaining', code: 'var obj = {}; obj?.prop;', shouldFail: true },
+                { name: 'Nullish Coalescing', code: 'var x = null ?? "default";', shouldFail: true },
+                { name: 'Arrow Functions', code: 'var f = () => {};', shouldFail: true },
+                { name: 'Template Literals', code: 'var s = `test ${var}`;', shouldFail: true },
+                { name: 'let keyword', code: 'let x = 1;', shouldFail: true },
+                { name: 'const keyword', code: 'const y = 2;', shouldFail: true },
+                { name: 'var keyword', code: 'var z = 3;', shouldFail: false }
+            ];
+
+            var passed = 0;
+            var total = syntaxTests.length;
+
+            syntaxTests.forEach(function(test) {
+                try {
+                    eval(test.code);
+                    if (test.shouldFail) {
+                        resultDiv.innerHTML += log('⚠️ ' + test.name + ' : syntaxe moderne détectée mais évaluée', 'warning');
+                    } else {
+                        resultDiv.innerHTML += log('✅ ' + test.name + ' : OK', 'success');
+                        passed++;
+                    }
+                } catch (e) {
+                    if (test.shouldFail) {
+                        resultDiv.innerHTML += log('✅ ' + test.name + ' : correctement rejeté', 'success');
+                        passed++;
+                    } else {
+                        resultDiv.innerHTML += log('❌ ' + test.name + ' : erreur inattendue', 'error');
+                    }
+                }
+            });
+
+            testResults.jsSyntax = (passed === total);
+            resultDiv.innerHTML += log('Résultat: ' + passed + '/' + total + ' tests passés', passed === total ? 'success' : 'error');
+            updateSummary();
+        }
+
+        function updateSummary() {
+            var summaryDiv = document.getElementById('testSummary');
+            var summary = '<h3>Résumé des Tests de Chargement</h3>';
+
+            summary += '<div>📦 Chargement modules: ' + (testResults.moduleLoading ? '✅ PASS' : '❌ FAIL') + '</div>';
+            summary += '<div>🎨 Initialisation UI: ' + (testResults.uiInit ? '✅ PASS' : '❌ FAIL') + '</div>';
+            summary += '<div>💻 Syntaxe JS: ' + (testResults.jsSyntax ? '✅ PASS' : '❌ FAIL') + '</div>';
+
+            var allPassed = testResults.moduleLoading && testResults.uiInit && testResults.jsSyntax;
+            summary += '<div style="margin-top: 10px; font-weight: bold;">';
+            summary += 'Résultat global: ' + (allPassed ? '✅ TOUS LES TESTS RÉUSSIS' : '❌ ÉCHECS DÉTECTÉS');
+            summary += '</div>';
+
+            summaryDiv.innerHTML = summary;
+        }
+
+        // Test automatique au chargement
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                testModuleLoading();
+                setTimeout(function() {
+                    testUIInitialization();
+                    setTimeout(testJSSyntax, 500);
+                }, 1500);
+            }, 500);
+        });
+    </script>
+</body>
+</html>

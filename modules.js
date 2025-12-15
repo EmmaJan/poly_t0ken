@@ -8,15 +8,15 @@
   'use strict';
 
   // Liste des modules à charger
-  const modules = [
+  var modules = [
     'animationManager.js',
     'pillManager.js',
     'uiManager.js'
   ];
 
   // État du chargement
-  let loadedModules = 0;
-  const totalModules = modules.length;
+  var loadedModules = 0;
+  var totalModules = modules.length;
 
   /**
    * Charge un module JavaScript
@@ -24,16 +24,16 @@
    * @returns {Promise} Promise résolue quand le module est chargé
    */
   function loadModule(modulePath) {
-    return new Promise((resolve, reject) => {
-      const script = document.createElement('script');
+    return new Promise(function(resolve, reject) {
+      var script = document.createElement('script');
       script.src = modulePath;
-      script.onload = () => {
+      script.onload = function() {
         loadedModules++;
-        console.log(`Module chargé: ${modulePath} (${loadedModules}/${totalModules})`);
+        console.log('Module chargé: ' + modulePath + ' (' + loadedModules + '/' + totalModules + ')');
         resolve();
       };
-      script.onerror = () => {
-        reject(new Error(`Échec du chargement du module: ${modulePath}`));
+      script.onerror = function() {
+        reject(new Error('Échec du chargement du module: ' + modulePath));
       };
       document.head.appendChild(script);
     });
@@ -59,15 +59,26 @@
   /**
    * Charge tous les modules séquentiellement
    */
-  async function loadAllModules() {
-    try {
-      for (const modulePath of modules) {
-        await loadModule(modulePath);
+  function loadAllModules() {
+    var currentIndex = 0;
+
+    function loadNextModule() {
+      if (currentIndex >= modules.length) {
+        initModules();
+        return;
       }
-      initModules();
-    } catch (error) {
-      console.error('Erreur lors du chargement des modules:', error);
+
+      var modulePath = modules[currentIndex];
+      currentIndex++;
+
+      loadModule(modulePath).then(function() {
+        loadNextModule();
+      }).catch(function(error) {
+        console.error('Erreur lors du chargement des modules:', error);
+      });
     }
+
+    loadNextModule();
   }
 
   // Démarrer le chargement quand le DOM est prêt

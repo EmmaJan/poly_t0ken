@@ -3,7 +3,7 @@
  * Coordonne les animations et les pastilles de manière indépendante
  */
 
-const UIManager = {
+var UIManager = {
   // Références aux modules
   animationManager: null,
   pillManager: null,
@@ -68,7 +68,7 @@ const UIManager = {
       cards: cards,
       appliedCount: appliedCount,
       buttons: this.state.buttons,
-      onComplete: (count) => {
+      onComplete: function(count) {
         console.log('✅ Animation terminée avec succès pour', count, 'corrections');
         this.showSuccessMessage(count);
       }
