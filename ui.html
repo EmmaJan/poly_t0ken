@@ -4387,7 +4387,7 @@
         if (!enriched.resolvedValue) {
           // Fallback : si resolvedValue n'est pas défini (anciennes données)
           // Pour les couleurs, la valeur hex est déjà dans suggestion.hex
-          if (property === 'Fill' || property === 'Stroke') {
+          if (property === 'Fill' || property === 'Stroke' || property === 'Local Fill Style' || property === 'Local Stroke Style') {
             enriched.resolvedValue = suggestion.hex || currentValue;
           } else {
             // Pour les autres propriétés, on utilise la valeur actuelle comme approximation
@@ -4454,6 +4454,10 @@
             return '<span class="property-label">FILL</span>';
           case 'Stroke':
             return '<span class="property-label">Contour</span>';
+          case 'Local Fill Style':
+            return '<span class="property-label">Style Local</span>';
+          case 'Local Stroke Style':
+            return '<span class="property-label">Style Local</span>';
           case 'RADIUS':
             return '<span class="property-label">RADIUS</span>';
           case 'Spacing':
@@ -4478,8 +4482,10 @@
       html += getPropertyIcon(group.property);
 
       // Visuel (swatch ou valeur textuelle)
-      if (group.property === "Fill" || group.property === "Stroke") {
-        html += '<div class="mini-swatch" style="background-color: ' + group.value + ';"></div>';
+      if (group.property === "Fill" || group.property === "Stroke" || group.property === "Local Fill Style" || group.property === "Local Stroke Style") {
+        // Extraire la couleur hex du début de la valeur (avant le nom du style)
+        var colorValue = group.value.split(' ')[0];
+        html += '<div class="mini-swatch" style="background-color: ' + colorValue + ';"></div>';
       } else {
         html += '<span class="value-display">' + group.value + '</span>';
       }
@@ -5024,9 +5030,9 @@
           html += '<span style="color: var(--poly-accent);">' + getPropertyIcon(group.property) + '</span>';
 
           // Ajouter un badge de contexte (Text vs Shape) uniquement pour les couleurs
-          if ((group.property === 'Fill' || group.property === 'Stroke') && group.category === 'TEXT') {
+          if ((group.property === 'Fill' || group.property === 'Stroke' || group.property === 'Local Fill Style' || group.property === 'Local Stroke Style') && group.category === 'TEXT') {
             html += '<span class="context-badge">Typo</span>';
-          } else if ((group.property === 'Fill' || group.property === 'Stroke') && group.category === 'SHAPE') {
+          } else if ((group.property === 'Fill' || group.property === 'Stroke' || group.property === 'Local Fill Style' || group.property === 'Local Stroke Style') && group.category === 'SHAPE') {
             html += '<span class="context-badge">Forme</span>';
           }
 
@@ -5064,7 +5070,7 @@
           if (typeof displayValue === 'object') displayValue = 'Mixte';
 
           html += '<div style="display: flex; align-items: center; gap: 8px;">';
-          if ((group.property === 'Fill' || group.property === 'Stroke') && typeof displayValue === 'string' && displayValue.startsWith('#')) {
+          if ((group.property === 'Fill' || group.property === 'Stroke' || group.property === 'Local Fill Style' || group.property === 'Local Stroke Style') && typeof displayValue === 'string' && displayValue.startsWith('#')) {
             html += '<div style="width: 20px; height: 20px; border-radius: 4px; background-color: ' + displayValue + '; border: 1px solid var(--poly-border-subtle);"></div>';
             html += '<div style="display: flex; flex-direction: column;"><span style="font-family: monospace; font-size: 11px; color: var(--poly-text);">' + displayValue + '</span><span style="font-size: 10px; color: var(--poly-text-muted);">' + layerCount + ' calque(s)</span></div>';
           } else {
@@ -5929,7 +5935,7 @@
         }
 
         // Comptage par catégorie
-        var category = (group.property === "Fill" || group.property === "Stroke") ? "colors" : "geometry";
+        var category = (group.property === "Fill" || group.property === "Stroke" || group.property === "Local Fill Style" || group.property === "Local Stroke Style") ? "colors" : "geometry";
         if (!categories[category]) {
           categories[category] = { total: 0, auto: 0, manual: 0 };
         }
@@ -5983,7 +5989,7 @@
         // Ligne Transformation: "4px -> spacing-1 (4px)"
         html += '<div class="transformation-row">';
         // Valeur actuelle
-        if (group.property === "Fill" || group.property === "Stroke") {
+        if (group.property === "Fill" || group.property === "Stroke" || group.property === "Local Fill Style" || group.property === "Local Stroke Style") {
           html += '<div class="mini-swatch" style="background-color: ' + group.value + ';"></div>';
           html += '<span>' + group.value + '</span>';
         } else {
@@ -6048,7 +6054,7 @@
 
         // Valeur actuelle
         html += '<div class="value-row">';
-        if (group.property === "Fill" || group.property === "Stroke") {
+        if (group.property === "Fill" || group.property === "Stroke" || group.property === "Local Fill Style" || group.property === "Local Stroke Style") {
           html += '<div class="mini-swatch" style="background-color: ' + group.value + ';"></div>';
           html += '<span>' + group.value + '</span>';
         } else {
@@ -6167,6 +6173,10 @@
           return createHarmonizedSvg('<path d="M9 9H15V15H9V9Z" fill="#90EE90"/><path fill-rule="evenodd" clip-rule="evenodd" d="M8 7H16C16.2652 7 16.5196 7.10536 16.7071 7.29289C16.8946 7.48043 17 7.73478 17 8V16C17 16.2652 16.8946 16.5196 16.7071 16.7071C16.5196 16.8946 16.2652 17 16 17H8C7.73478 17 7.48043 16.8946 7.29289 16.7071C7.10536 16.5196 7 16.2652 7 16V8C7 7.73478 7.10536 7.48043 7.29289 7.29289C7.48043 7.10536 7.73478 7 8 7ZM6 8C6 7.46957 6.21071 6.96086 6.58579 6.58579C6.96086 6.21071 7.46957 6 8 6H16C16.5304 6 17.0391 6.21071 17.4142 6.58579C17.7893 6.96086 18 7.46957 18 8V16C18 16.5304 17.7893 17.0391 17.4142 17.4142C17.0391 17.7893 16.5304 18 16 18H8C7.46957 18 6.96086 17.7893 6.58579 17.4142C6.21071 17.0391 6 16.5304 6 16V8ZM9 15V9H15V15H9ZM8 8.5C8 8.36739 8.05268 8.24021 8.14645 8.14645C8.24021 8.05268 8.36739 8 8.5 8H15.5C15.6326 8 15.7598 8.05268 15.8536 8.14645C15.9473 8.24021 16 8.36739 16 8.5V15.5C16 15.6326 15.9473 15.7598 15.8536 15.8536C15.7598 15.9473 15.6326 16 15.5 16H8.5C8.36739 16 8.24021 15.9473 8.14645 15.8536C8.05268 15.7598 8 15.6326 8 15.5V8.5Z" fill="#90EE90"/>', 'FILL');
         case 'Stroke':
           return createHarmonizedSvg('<path d="M2.5 2.5H7.5V7.5H2.5V2.5Z" fill="none" stroke="#90EE90" stroke-width="1.5"/><path fill-rule="evenodd" clip-rule="evenodd" d="M2 1.5H8C8.13261 1.5 8.25979 1.55268 8.35355 1.64645C8.44732 1.74021 8.5 1.86739 8.5 2V8C8.5 8.13261 8.44732 8.25979 8.35355 8.35355C8.25979 8.44732 8.13261 8.5 8 8.5H2C1.86739 8.5 1.74021 8.44732 1.64645 8.35355C1.55268 8.44732 1.5 8.13261 1.5 8V2C1.5 1.86739 1.55268 1.74021 1.64645 1.64645C1.74021 1.55268 1.86739 1.5 2 1.5ZM0.5 2C0.5 1.46957 0.710714 0.960859 1.08579 0.585786C1.46086 0.210714 1.96957 0 2.5 0H7.5C8.03043 0 8.53914 0.210714 8.91421 0.585786C9.28929 0.960859 9.5 1.46957 9.5 2V8C9.5 8.53043 9.28929 9.03914 8.91421 9.41421C8.53914 9.78929 8.03043 10 7.5 10H2.5C1.96957 10 1.46086 9.78929 1.08579 9.41421C0.710714 9.03914 0.5 8.53043 0.5 8V2Z" fill="none" stroke="#90EE90" stroke-width="1.5"/>', 'STROKE');
+        case 'Local Fill Style':
+          return createHarmonizedSvg('<path d="M9 9H15V15H9V9Z" fill="#90EE90"/><path fill-rule="evenodd" clip-rule="evenodd" d="M8 7H16C16.2652 7 16.5196 7.10536 16.7071 7.29289C16.8946 7.48043 17 7.73478 17 8V16C17 16.2652 16.8946 16.5196 16.7071 16.7071C16.5196 16.8946 16.2652 17 16 17H8C7.73478 17 7.48043 16.8946 7.29289 16.7071C7.10536 16.5196 7 16.2652 7 16V8C7 7.73478 7.10536 7.48043 7.29289 7.29289C7.48043 7.10536 7.73478 7 8 7ZM6 8C6 7.46957 6.21071 6.96086 6.58579 6.58579C6.96086 6.21071 7.46957 6 8 6H16C16.5304 6 17.0391 6.21071 17.4142 6.58579C17.7893 6.96086 18 7.46957 18 8V16C18 16.5304 17.7893 17.0391 17.4142 17.4142C17.0391 17.7893 16.5304 18 16 18H8C7.46957 18 6.96086 17.7893 6.58579 17.4142C6.21071 17.0391 6 16.5304 6 16V8Z" fill="#FFD700"/><text x="12" y="13" text-anchor="middle" fill="#000" font-size="6" font-weight="bold">S</text>', 'STYLE LOCAL');
+        case 'Local Stroke Style':
+          return createHarmonizedSvg('<path d="M2.5 2.5H7.5V7.5H2.5V2.5Z" fill="none" stroke="#90EE90" stroke-width="1.5"/><path fill-rule="evenodd" clip-rule="evenodd" d="M2 1.5H8C8.13261 1.5 8.25979 1.55268 8.35355 1.64645C8.44732 1.74021 8.5 1.86739 8.5 2V8C8.5 8.13261 8.44732 8.25979 8.35355 8.35355C8.25979 8.44732 8.13261 8.5 8 8.5H2C1.86739 8.5 1.74021 8.44732 1.64645 8.35355C1.55268 8.44732 1.5 8.13261 1.5 8V2C1.5 1.86739 1.55268 1.74021 1.64645 1.64645C1.74021 1.55268 1.86739 1.5 2 1.5ZM0.5 2C0.5 1.46957 0.710714 0.960859 1.08579 0.585786C1.46086 0.210714 1.96957 0 2.5 0H7.5C8.03043 0 8.53914 0.210714 8.91421 0.585786C9.28929 0.960859 9.5 1.46957 9.5 2V8C9.5 8.53043 9.28929 9.03914 8.91421 9.41421C8.53914 9.78929 8.03043 10 7.5 10H2.5C1.96957 10 1.46086 9.78929 1.08579 9.41421C0.710714 9.03914 0.5 8.53043 0.5 8V2Z" fill="none" stroke="#FFD700" stroke-width="1.5"/><text x="5" y="5" text-anchor="middle" fill="#FFD700" font-size="4" font-weight="bold">S</text>', 'STYLE LOCAL');
         case 'Font Size':
           return createHarmonizedSvg('<path d="M12.6317 16H11.6161L10.8114 13.7344H7.57703L6.77234 16H5.75671L8.69421 8H9.69421L12.6317 16ZM18.3563 16H17.3719L16.9501 14.7451H15.036L14.6151 16H13.6307L15.4227 10.9092H16.5614L18.3563 16ZM15.285 14.0039H16.701L16.0116 11.9531H15.9725L15.285 14.0039ZM7.88171 12.875H10.5067L9.22546 9.26562H9.16296L7.88171 12.875Z" fill="#90EE90"/>', 'FONT SIZE');
         case 'RADIUS':
@@ -6844,7 +6854,7 @@
           let visualContent = '';
           let pillClass = 'smart-pill';
 
-          if (property === 'Fill' || property === 'Stroke') {
+          if (property === 'Fill' || property === 'Stroke' || property === 'Local Fill Style' || property === 'Local Stroke Style') {
             const color = s.hex || s.value;
             visualContent = `<div class="pill-swatch" style="background-color: ${color}"></div>`;
             pillClass += ' pill-color';
@@ -7431,7 +7441,7 @@
     }
 
     function generateColorCard(result) {
-      var icon = result.property === "Fill" ? ICONS.fill : ICONS.stroke;
+      var icon = (result.property === "Fill" || result.property === "Local Fill Style") ? ICONS.fill : ICONS.stroke;
       var cardHtml = '<div class="scan-result-card" data-index="' + result.originalIndex + '" style="display: flex; align-items: center; padding: 12px 16px; margin-bottom: 8px; background: var(--poly-surface-soft); border: 1px solid var(--poly-border-subtle); border-radius: 8px; transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);">';
 
       // Nom de la propriété

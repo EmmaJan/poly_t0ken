@@ -1113,6 +1113,14 @@ var Fixer = {
           success = applyColorVariableToStroke(node, variable, result.strokeIndex);
           break;
 
+        case "Local Fill Style":
+          success = applyVariableToLocalStyle(node, variable, 'fill', result);
+          break;
+
+        case "Local Stroke Style":
+          success = applyVariableToLocalStyle(node, variable, 'stroke', result);
+          break;
+
         case "CORNER RADIUS":
         case "TOP LEFT RADIUS":
         case "TOP RIGHT RADIUS":
@@ -2404,10 +2412,13 @@ function checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLaye
       
       checkNumericPropertiesSafely(node, valueToVariableMap, results);
 
-      
+
       if (node.type === CONFIG.types.TEXT) {
         checkTypographyPropertiesSafely(node, valueToVariableMap, results);
       }
+
+      // Détecter les styles locaux Figma appliqués
+      checkLocalStylesSafely(node, valueToVariableMap, results);
 
     } catch (propertyError) {
       
@@ -2443,6 +2454,95 @@ function checkTypographyPropertiesSafely(node, valueToVariableMap, results) {
     
 
   } catch (typographyError) {
+  }
+}
+
+
+function checkLocalStylesSafely(node, valueToVariableMap, results) {
+  try {
+    console.log('Local Style Detection: Checking node', node.id, 'for local styles');
+
+    // Vérifier les styles locaux de remplissage (fillStyleId)
+    if (node.fillStyleId && typeof node.fillStyleId === 'string' && node.fillStyleId.length > 0) {
+      console.log('Local Style Detection: Found fillStyleId:', node.fillStyleId);
+      try {
+        var localStyle = figma.getStyleById(node.fillStyleId);
+        console.log('Local Style Detection: Retrieved local style:', localStyle ? localStyle.name : 'null');
+
+        if (localStyle && localStyle.type === 'PAINT') {
+          // Récupérer la couleur du style local
+          var paint = localStyle.paints && localStyle.paints[0];
+          if (paint && paint.type === 'SOLID' && paint.color) {
+            var hexValue = rgbToHex(paint.color);
+            console.log('Local Style Detection: Style color:', hexValue);
+
+            if (hexValue) {
+              // Chercher des variables correspondantes
+              var suggestions = enrichSuggestionsWithRealValues(findColorSuggestions(hexValue, valueToVariableMap, "Local Fill Style"));
+              console.log('Local Style Detection: Found suggestions:', suggestions.length);
+
+              if (suggestions.length > 0) {
+                console.log('Local Style Detection: Added result for Local Fill Style');
+                results.push({
+                  nodeId: node.id,
+                  layerName: node.name,
+                  property: "Local Fill Style",
+                  value: hexValue + " (" + localStyle.name + ")",
+                  suggestedVariableId: suggestions[0].id,
+                  suggestedVariableName: suggestions[0].name,
+                  localStyleId: node.fillStyleId,
+                  localStyleName: localStyle.name,
+                  colorSuggestions: suggestions,
+                  isExact: suggestions[0].isExact || false,
+                  styleType: 'fill'
+                });
+              }
+            }
+          }
+        }
+      } catch (fillStyleError) {
+        // Erreur lors de l'accès au style local de remplissage
+      }
+    }
+
+    // Vérifier les styles locaux de contour (strokeStyleId)
+    if (node.strokeStyleId && typeof node.strokeStyleId === 'string' && node.strokeStyleId.length > 0) {
+      try {
+        var localStrokeStyle = figma.getStyleById(node.strokeStyleId);
+        if (localStrokeStyle && localStrokeStyle.type === 'PAINT') {
+          // Récupérer la couleur du style local
+          var strokePaint = localStrokeStyle.paints && localStrokeStyle.paints[0];
+          if (strokePaint && strokePaint.type === 'SOLID' && strokePaint.color) {
+            var strokeHexValue = rgbToHex(strokePaint.color);
+            if (strokeHexValue) {
+              // Chercher des variables correspondantes
+              var strokeSuggestions = enrichSuggestionsWithRealValues(findColorSuggestions(strokeHexValue, valueToVariableMap, "Local Stroke Style"));
+
+              if (strokeSuggestions.length > 0) {
+                results.push({
+                  nodeId: node.id,
+                  layerName: node.name,
+                  property: "Local Stroke Style",
+                  value: strokeHexValue + " (" + localStrokeStyle.name + ")",
+                  suggestedVariableId: strokeSuggestions[0].id,
+                  suggestedVariableName: strokeSuggestions[0].name,
+                  localStyleId: node.strokeStyleId,
+                  localStyleName: localStrokeStyle.name,
+                  colorSuggestions: strokeSuggestions,
+                  isExact: strokeSuggestions[0].isExact || false,
+                  styleType: 'stroke'
+                });
+              }
+            }
+          }
+        }
+      } catch (strokeStyleError) {
+        // Erreur lors de l'accès au style local de contour
+      }
+    }
+
+  } catch (localStylesError) {
+    // Erreur générale lors de la vérification des styles locaux
   }
 }
 
@@ -3291,6 +3391,28 @@ function getNodePropertyDebugInfo(node, result) {
         } : null;
         break;
 
+      case "Local Fill Style":
+        debugInfo.fillStyleId = node.fillStyleId;
+        debugInfo.fills = node.fills ? {
+          length: node.fills.length,
+          firstFill: node.fills[0] ? {
+            type: node.fills[0].type,
+            hasBoundVariables: !!node.fills[0].boundVariables
+          } : null
+        } : null;
+        break;
+
+      case "Local Stroke Style":
+        debugInfo.strokeStyleId = node.strokeStyleId;
+        debugInfo.strokes = node.strokes ? {
+          length: node.strokes.length,
+          firstStroke: node.strokes[0] ? {
+            type: node.strokes[0].type,
+            hasBoundVariables: !!node.strokes[0].boundVariables
+          } : null
+        } : null;
+        break;
+
       default:
         if (result.figmaProperty) {
           debugInfo[result.figmaProperty] = {
@@ -3337,6 +3459,20 @@ function captureNodeState(node, result) {
         }
         break;
 
+      case "Local Fill Style":
+        state.propertyValues.fillStyleId = node.fillStyleId;
+        if (node.fills && node.fills[0]) {
+          state.propertyValues.fill = JSON.parse(JSON.stringify(node.fills[0]));
+        }
+        break;
+
+      case "Local Stroke Style":
+        state.propertyValues.strokeStyleId = node.strokeStyleId;
+        if (node.strokes && node.strokes[0]) {
+          state.propertyValues.stroke = JSON.parse(JSON.stringify(node.strokes[0]));
+        }
+        break;
+
       default:
         
         if (result.figmaProperty && typeof node[result.figmaProperty] === 'number') {
@@ -3354,14 +3490,16 @@ function captureNodeState(node, result) {
 function verifyVariableApplication(node, variable, result, stateBefore, stateAfter) {
   try {
 
-    
-    var boundVariablesChanged = JSON.stringify(stateBefore.boundVariables) !== JSON.stringify(stateAfter.boundVariables);
+    // Pour les styles locaux, ne pas utiliser la vérification générale des boundVariables
+    // car les variables sont appliquées aux fills/strokes individuels, pas au nœud principal
+    if (result.property !== 'Local Fill Style' && result.property !== 'Local Stroke Style') {
+      var boundVariablesChanged = JSON.stringify(stateBefore.boundVariables) !== JSON.stringify(stateAfter.boundVariables);
 
-    if (boundVariablesChanged) {
-      return true;
+      if (boundVariablesChanged) {
+        return true;
+      }
     }
 
-    
     switch (result.property) {
       case "Fill":
         return verifyFillApplication(node, variable, result.fillIndex, stateBefore, stateAfter);
@@ -3369,11 +3507,75 @@ function verifyVariableApplication(node, variable, result, stateBefore, stateAft
       case "Stroke":
         return verifyStrokeApplication(node, variable, result.strokeIndex, stateBefore, stateAfter);
 
+      case "Local Fill Style":
+        return verifyLocalStyleApplication(node, variable, 'fill', stateBefore, stateAfter);
+
+      case "Local Stroke Style":
+        return verifyLocalStyleApplication(node, variable, 'stroke', stateBefore, stateAfter);
+
       default:
         return verifyNumericApplication(node, variable, result, stateBefore, stateAfter);
     }
 
   } catch (error) {
+    return false;
+  }
+}
+
+
+function verifyLocalStyleApplication(node, variable, styleType, stateBefore, stateAfter) {
+  try {
+    console.log('Verify Local Style: Checking node', node.id, 'styleType', styleType);
+    console.log('Verify Local Style: Current fills length:', node.fills ? node.fills.length : 'no fills');
+    console.log('Verify Local Style: Current strokes length:', node.strokes ? node.strokes.length : 'no strokes');
+    console.log('Verify Local Style: Current fillStyleId:', node.fillStyleId);
+    console.log('Verify Local Style: Current strokeStyleId:', node.strokeStyleId);
+
+    // Vérifier que le style local a été supprimé
+    if (styleType === 'fill') {
+      if (node.fillStyleId && node.fillStyleId !== '') {
+        console.log('Verify Local Style: fillStyleId still exists:', node.fillStyleId);
+        return false; // Le style local n'a pas été supprimé
+      } else {
+        console.log('Verify Local Style: fillStyleId correctly removed');
+      }
+    } else if (styleType === 'stroke') {
+      if (node.strokeStyleId && node.strokeStyleId !== '') {
+        console.log('Verify Local Style: strokeStyleId still exists:', node.strokeStyleId);
+        return false; // Le style local n'a pas été supprimé
+      } else {
+        console.log('Verify Local Style: strokeStyleId correctly removed');
+      }
+    }
+
+    // Vérifier qu'une variable a été appliquée à AU MOINS UN fill/stroke
+    var targetArray = styleType === 'fill' ? node.fills : node.strokes;
+    console.log('Verify Local Style: Checking target array exists, length:', targetArray ? targetArray.length : 'null');
+
+    if (!targetArray || !Array.isArray(targetArray) || targetArray.length === 0) {
+      console.log('Verify Local Style: Target array missing or empty');
+      return false;
+    }
+
+    // Chercher dans tous les fills/strokes pour voir si la variable est appliquée
+    for (var i = 0; i < targetArray.length; i++) {
+      var targetItem = targetArray[i];
+      console.log('Verify Local Style: Checking item', i, 'boundVariables:', !!targetItem.boundVariables);
+
+      if (targetItem && targetItem.boundVariables && targetItem.boundVariables.color) {
+        var boundVar = targetItem.boundVariables.color;
+        console.log('Verify Local Style: Item', i, 'has bound variable:', boundVar.id, 'expected:', variable.id);
+        if (boundVar.type === 'VARIABLE_ALIAS' && boundVar.id === variable.id) {
+          console.log('Verify Local Style: Variable correctly applied to item', i);
+          return true;
+        }
+      }
+    }
+
+    console.log('Verify Local Style: Variable not found in any item');
+    return false;
+  } catch (error) {
+    console.error('Verify Local Style: Error:', error);
     return false;
   }
 }
@@ -3462,6 +3664,12 @@ function validatePropertyExists(node, result) {
       case "Stroke":
         return node.strokes && Array.isArray(node.strokes) && node.strokes[result.strokeIndex] !== undefined;
 
+      case "Local Fill Style":
+        return node.fillStyleId && typeof node.fillStyleId === 'string' && node.fillStyleId.length > 0;
+
+      case "Local Stroke Style":
+        return node.strokeStyleId && typeof node.strokeStyleId === 'string' && node.strokeStyleId.length > 0;
+
       case "Corner Radius":
       case "Top Left Radius":
       case "Top Right Radius":
@@ -3493,6 +3701,8 @@ function validateVariableCanBeApplied(variable, result) {
     switch (result.property) {
       case "Fill":
       case "Stroke":
+      case "Local Fill Style":
+      case "Local Stroke Style":
         return variableType === "COLOR";
 
       case "Corner Radius":
@@ -3529,6 +3739,14 @@ function applyVariableToProperty(node, variable, result) {
         success = applyColorVariableToStroke(node, variable, result.strokeIndex);
         break;
 
+      case "Local Fill Style":
+        success = applyVariableToLocalStyle(node, variable, 'fill', result);
+        break;
+
+      case "Local Stroke Style":
+        success = applyVariableToLocalStyle(node, variable, 'stroke', result);
+        break;
+
       case "Corner Radius":
       case "Top Left Radius":
       case "Top Right Radius":
@@ -3556,40 +3774,133 @@ function applyVariableToProperty(node, variable, result) {
 }
 
 
+function findFillIndexWithLocalStyleColor(node) {
+  // Par défaut, on utilise l'index 0, mais on pourrait améliorer cette logique
+  // en comparant les couleurs des fills avec la couleur du style local
+  return 0;
+}
+
+function findStrokeIndexWithLocalStyleColor(node) {
+  // Par défaut, on utilise l'index 0, mais on pourrait améliorer cette logique
+  // en comparant les couleurs des strokes avec la couleur du style local
+  return 0;
+}
+
+function applyVariableToLocalStyle(node, variable, styleType, result) {
+  try {
+    console.log('Local Style Application: Applying', styleType, 'style to node', node.id, 'variable:', variable.name);
+
+    // Vérifier l'état avant application
+    var targetArray = styleType === 'fill' ? node.fills : node.strokes;
+    var targetIndex = 0;
+    var hasExistingVariable = false;
+
+    if (targetArray && targetArray[targetIndex] && targetArray[targetIndex].boundVariables && targetArray[targetIndex].boundVariables.color) {
+      var existingVar = targetArray[targetIndex].boundVariables.color;
+      if (existingVar.id === variable.id) {
+        console.log('Local Style Application: Variable already applied, this is expected');
+        hasExistingVariable = true;
+      } else {
+        console.log('Local Style Application: Different variable already applied:', existingVar.id);
+      }
+    }
+
+    // Supprimer le style local
+    if (styleType === 'fill' && node.fillStyleId) {
+      console.log('Local Style Application: Removing fillStyleId:', node.fillStyleId);
+      node.fillStyleId = '';
+    } else if (styleType === 'stroke' && node.strokeStyleId) {
+      console.log('Local Style Application: Removing strokeStyleId:', node.strokeStyleId);
+      node.strokeStyleId = '';
+    }
+
+    // Si la variable est déjà appliquée correctement, on considère que c'est un succès
+    if (hasExistingVariable) {
+      console.log('Local Style Application: Variable already correctly applied, success');
+      return true;
+    }
+
+    // IMPORTANT: Pour les styles locaux, on doit d'abord supprimer le style local,
+    // puis appliquer la variable. La suppression du style local peut modifier les fills/strokes.
+    console.log('Local Style Application: Removing style first');
+
+    // Supprimer le style local maintenant (on l'a déjà fait plus haut, mais on le refait pour être sûr)
+    if (styleType === 'fill' && node.fillStyleId) {
+      node.fillStyleId = '';
+      console.log('Local Style Application: fillStyleId removed');
+    } else if (styleType === 'stroke' && node.strokeStyleId) {
+      node.strokeStyleId = '';
+      console.log('Local Style Application: strokeStyleId removed');
+    }
+
+    // Maintenant appliquer la variable
+    console.log('Local Style Application: Applying variable to', styleType);
+    if (styleType === 'fill') {
+      // Pour les styles locaux, on applique généralement au premier fill
+      console.log('Local Style Application: Applying to fill index 0');
+      return applyColorVariableToFill(node, variable, 0);
+    } else if (styleType === 'stroke') {
+      // Pour les styles locaux, on applique généralement au premier stroke
+      console.log('Local Style Application: Applying to stroke index 0');
+      return applyColorVariableToStroke(node, variable, 0);
+    }
+
+    return false;
+  } catch (error) {
+    console.error('Local Style Application: Error:', error);
+    return false;
+  }
+}
+
+
 function applyColorVariableToFill(node, variable, fillIndex) {
 
   try {
     var fillPath = 'fills[' + fillIndex + '].color';
+    console.log('Apply Fill Variable: Node', node.id, 'fillIndex', fillIndex, 'variable', variable.name);
 
-    
     if (!node.fills || !Array.isArray(node.fills) || !node.fills[fillIndex]) {
+      console.log('Apply Fill Variable: Invalid fills array or index');
       return false;
     }
 
     var fill = node.fills[fillIndex];
+    console.log('Apply Fill Variable: Fill exists, checking bound variables');
 
-    
-    
+    // Vérifier si la variable est déjà appliquée
+    if (fill.boundVariables && fill.boundVariables.color && fill.boundVariables.color.id === variable.id) {
+      console.log('Apply Fill Variable: Variable already applied correctly');
+      return true;
+    }
+
+
     if (node.fillStyleId) {
+      console.log('Apply Fill Variable: Removing fillStyleId');
       try {
         node.fillStyleId = '';
       } catch (e) {
+        console.error('Apply Fill Variable: Error removing fillStyleId:', e);
       }
     }
 
-    
+
     try {
+      console.log('Apply Fill Variable: Setting bound variable');
       node.setBoundVariable(fillPath, variable);
 
-
+      console.log('Apply Fill Variable: Variable applied successfully via setBoundVariable');
       var updatedFill = node.fills[fillIndex];
 
       return true;
     } catch (setBoundError) {
+      console.error('Apply Fill Variable: Error setting bound variable:', setBoundError);
+      console.log('Apply Fill Variable: Trying fallback method');
+      // Ne pas retourner false ici, continuer vers le fallback
     }
 
-    
+
     try {
+      console.log('Apply Fill Variable: Using fallback method');
       var clonedFills = JSON.parse(JSON.stringify(node.fills));
       if (!clonedFills[fillIndex].boundVariables) {
         clonedFills[fillIndex].boundVariables = {};
@@ -3599,18 +3910,20 @@ function applyColorVariableToFill(node, variable, fillIndex) {
         id: variable.id
       };
 
-      
+      console.log('Apply Fill Variable: Removing fillStyleId in fallback');
       if (node.fillStyleId) {
         node.fillStyleId = '';
       }
 
+      console.log('Apply Fill Variable: Applying cloned fills');
       node.fills = clonedFills;
 
-
+      console.log('Apply Fill Variable: Variable applied successfully via fallback');
       var finalFill = node.fills[fillIndex];
 
       return true;
     } catch (fallbackError) {
+      console.error('Apply Fill Variable: Fallback method failed:', fallbackError);
       return false;
     }
 
@@ -4016,11 +4329,13 @@ figma.ui.onmessage = function (msg) {
   }
 
   if (msg.type === "preview-fix") {
+    console.log('Preview Fix: Received preview-fix message for indices:', msg.indices, 'variable:', msg.variableId);
+
     var indices = msg.indices || [];
     var variableId = msg.variableId;
 
 
-    
+
     var scanResults = Scanner.lastScanResults || lastScanResults;
 
     if (!scanResults || scanResults.length === 0) {
@@ -4048,11 +4363,11 @@ figma.ui.onmessage = function (msg) {
         if (node && !node.removed) {
 
           try {
-            
-            if (result.property === 'Fill' && node.fillStyleId) {
+
+            if ((result.property === 'Fill' || result.property === 'Local Fill Style') && node.fillStyleId) {
               node.fillStyleId = '';
             }
-            if (result.property === 'Stroke' && node.strokeStyleId) {
+            if ((result.property === 'Stroke' || result.property === 'Local Stroke Style') && node.strokeStyleId) {
               node.strokeStyleId = '';
             }
 
