@@ -4,6 +4,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Chargement des modules -->
+  <script src="modules.js"></script>
   <style>
     /* ============================================
        POLYCEA THEME - Variables CSS
@@ -362,6 +365,25 @@
     .cleaning-result-card {
       border: none;
       box-shadow: none;
+    }
+
+    /* Animations de disparition - transitions simplifiées */
+    .cleaning-result-card {
+      /* Transitions de base pour tous les états */
+      transition:
+        transform 0.3s ease,
+        opacity 0.3s ease,
+        background-color 0.2s ease,
+        border-color 0.2s ease,
+        height 0.3s ease,
+        margin-bottom 0.3s ease,
+        padding-top 0.3s ease,
+        padding-bottom 0.3s ease;
+
+      /* État de base */
+      overflow: hidden;
+      opacity: 1;
+      transform: translateX(0) scale(1);
     }
 
 
@@ -1150,7 +1172,6 @@
 
     /* Animation pour les cartes de corrections */
     .cleaning-result-card {
-      opacity: 0;
       animation: fadeInUp 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
     }
 
@@ -1196,6 +1217,33 @@
 
     .cleaning-result-card:nth-child(n+11) {
       animation-delay: 0.5s;
+    }
+
+    /* ============================================
+       ÉTATS D'ANIMATION POUR LA DISPARITION
+       ============================================ */
+
+    /* 1. État Succès (Green Flash) */
+    .cleaning-result-card.is-success {
+      background-color: var(--poly-success-light);
+      border-color: var(--poly-success);
+      transform: scale(1.02);
+    }
+
+    /* 2. État Sortie (Slide Out) */
+    .cleaning-result-card.is-exiting {
+      opacity: 0;
+      transform: translateX(50px) scale(0.95);
+      pointer-events: none;
+    }
+
+    /* 3. État Repli (Collapse) */
+    .cleaning-result-card.is-collapsed {
+      height: 0;
+      margin-bottom: 0;
+      padding-top: 0;
+      padding-bottom: 0;
+      border-width: 0;
     }
 
     /* Popular Badge */
@@ -3746,8 +3794,8 @@
                   </div>
 
                   <!-- Right Column: Auto Fix Button -->
-                  <button onclick="applyAllAutoFixes()" class="btn-soft-primary" id="applyAllAutoBtn" style="display: none; width: fit-content; border-radius: 50px;">
-                    Appliquer les corrections
+                  <button class="btn-soft-primary" id="applyAllAutoBtn" style="display: none; width: fit-content; border-radius: 50px;">
+                    ✨ Appliquer les corrections
                   </button>
                 </div>
 
@@ -3836,7 +3884,7 @@
     // STATE
     // ============================================
     var currentColor = "#6366F1";
-    var currentNaming = "";
+    var currentNaming = "custom"; // Valeur par défaut
     var currentTokens = null;
     var selectedFile = null;
     var activeCategory = "brand";
@@ -3994,6 +4042,18 @@
             "custom": "Custom"
           };
           libraryNameDisplay.textContent = displayMap[currentNaming] || currentNaming || "Custom";
+        }
+
+        // Initialiser l'affichage des tokens
+        if (currentTokens && typeof updatePreview === 'function') {
+          // Activer l'onglet brand par défaut
+          var brandTab = tokenTabs.querySelector('.tab[data-category="brand"]');
+          if (brandTab) {
+            tokenTabs.querySelectorAll('.tab').forEach(function(tab) { tab.classList.remove('active'); });
+            brandTab.classList.add('active');
+            activeCategory = 'brand';
+          }
+          updatePreview();
         }
       } else if (stepNumber === 4) {
         wizardStep4.classList.add("active");
@@ -4391,11 +4451,11 @@
       function getPropertyIcon(property) {
         switch (property) {
           case 'Fill':
-            return '<span class="property-label">Fond</span>';
+            return '<span class="property-label">FILL</span>';
           case 'Stroke':
             return '<span class="property-label">Contour</span>';
-          case 'Radius':
-            return '<span class="property-label">Rayon</span>';
+          case 'RADIUS':
+            return '<span class="property-label">RADIUS</span>';
           case 'Spacing':
           case 'Width':
           case 'Height':
@@ -4515,6 +4575,7 @@
     }
 
     function applyGroupFix(indices, variableId) {
+      console.log('applyGroupFix called with indices:', indices, 'variableId:', variableId);
       parent.postMessage({
         pluginMessage: {
           type: 'apply-group-fix',
@@ -6096,24 +6157,33 @@
     }
 
     function getPropertyIcon(property) {
+      // Fonction helper pour créer des SVGs harmonisés
+      function createHarmonizedSvg(svgPath, label) {
+        return '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle;">' + svgPath + '</svg><span class="property-label">' + label + '</span>';
+      }
+
       switch (property) {
         case 'Fill':
-          return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 10 10" fill="none" style="margin-right: 3px; vertical-align: middle;"><path d="M2.5 2.5H7.5V7.5H2.5V2.5Z" fill="currentColor"/><path fill-rule="evenodd" clip-rule="evenodd" d="M2 1.5H8C8.13261 1.5 8.25979 1.55268 8.35355 1.64645C8.44732 1.74021 8.5 1.86739 8.5 2V8C8.5 8.13261 8.44732 8.25979 8.35355 8.35355C8.25979 8.44732 8.13261 8.5 8 8.5H2C1.86739 8.5 1.74021 8.44732 1.64645 8.35355C1.55268 8.44732 1.5 8.13261 1.5 8V2C1.5 1.86739 1.55268 1.74021 1.64645 1.64645C1.74021 1.55268 1.86739 1.5 2 1.5ZM0.5 2C0.5 1.46957 0.710714 0.960859 1.08579 0.585786C1.46086 0.210714 1.96957 0 2.5 0H7.5C8.03043 0 8.53914 0.210714 8.91421 0.585786C9.28929 0.960859 9.5 1.46957 9.5 2V8C9.5 8.53043 9.28929 9.03914 8.91421 9.41421C8.53914 9.78929 8.03043 10 7.5 10H2.5C1.96957 10 1.46086 9.78929 1.08579 9.41421C0.710714 9.03914 0.5 8.53043 0.5 8V2ZM2.5 7.5V2.5H7.5V7.5H2.5ZM2 2.25C2 2.11193 2.11193 2 2.25 2H7.75C7.88807 2 8 2.11193 8 2.25V7.75C8 7.88807 7.88807 8 7.75 8H2.25C2.11193 8 2 7.88807 2 7.75V2.25Z" fill="currentColor"/></svg><span class="property-label">Fond</span>';
+          return createHarmonizedSvg('<path d="M9 9H15V15H9V9Z" fill="#90EE90"/><path fill-rule="evenodd" clip-rule="evenodd" d="M8 7H16C16.2652 7 16.5196 7.10536 16.7071 7.29289C16.8946 7.48043 17 7.73478 17 8V16C17 16.2652 16.8946 16.5196 16.7071 16.7071C16.5196 16.8946 16.2652 17 16 17H8C7.73478 17 7.48043 16.8946 7.29289 16.7071C7.10536 16.5196 7 16.2652 7 16V8C7 7.73478 7.10536 7.48043 7.29289 7.29289C7.48043 7.10536 7.73478 7 8 7ZM6 8C6 7.46957 6.21071 6.96086 6.58579 6.58579C6.96086 6.21071 7.46957 6 8 6H16C16.5304 6 17.0391 6.21071 17.4142 6.58579C17.7893 6.96086 18 7.46957 18 8V16C18 16.5304 17.7893 17.0391 17.4142 17.4142C17.0391 17.7893 16.5304 18 16 18H8C7.46957 18 6.96086 17.7893 6.58579 17.4142C6.21071 17.0391 6 16.5304 6 16V8ZM9 15V9H15V15H9ZM8 8.5C8 8.36739 8.05268 8.24021 8.14645 8.14645C8.24021 8.05268 8.36739 8 8.5 8H15.5C15.6326 8 15.7598 8.05268 15.8536 8.14645C15.9473 8.24021 16 8.36739 16 8.5V15.5C16 15.6326 15.9473 15.7598 15.8536 15.8536C15.7598 15.9473 15.6326 16 15.5 16H8.5C8.36739 16 8.24021 15.9473 8.14645 15.8536C8.05268 15.7598 8 15.6326 8 15.5V8.5Z" fill="#90EE90"/>', 'FILL');
         case 'Stroke':
-          return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 10 10" fill="none" style="margin-right: 3px; vertical-align: middle;"><path d="M2.5 2.5H7.5V7.5H2.5V2.5Z" fill="none" stroke="currentColor" stroke-width="0.5"/><path fill-rule="evenodd" clip-rule="evenodd" d="M2 1.5H8C8.13261 1.5 8.25979 1.55268 8.35355 1.64645C8.44732 1.74021 8.5 1.86739 8.5 2V8C8.5 8.13261 8.44732 8.25979 8.35355 8.35355C8.25979 8.44732 8.13261 8.5 8 8.5H2C1.86739 8.5 1.74021 8.44732 1.64645 8.35355C1.55268 8.44732 1.5 8.13261 1.5 8V2C1.5 1.86739 1.55268 1.74021 1.64645 1.64645C1.74021 1.55268 1.86739 1.5 2 1.5ZM0.5 2C0.5 1.46957 0.710714 0.960859 1.08579 0.585786C1.46086 0.210714 1.96957 0 2.5 0H7.5C8.03043 0 8.53914 0.210714 8.91421 0.585786C9.28929 0.960859 9.5 1.46957 9.5 2V8C9.5 8.53043 9.28929 9.03914 8.91421 9.41421C8.53914 9.78929 8.03043 10 7.5 10H2.5C1.96957 10 1.46086 9.78929 1.08579 9.41421C0.710714 9.03914 0.5 8.53043 0.5 8V2Z" fill="none" stroke="currentColor" stroke-width="0.5"/></svg><span class="property-label">Contour</span>';
+          return createHarmonizedSvg('<path d="M2.5 2.5H7.5V7.5H2.5V2.5Z" fill="none" stroke="#90EE90" stroke-width="1.5"/><path fill-rule="evenodd" clip-rule="evenodd" d="M2 1.5H8C8.13261 1.5 8.25979 1.55268 8.35355 1.64645C8.44732 1.74021 8.5 1.86739 8.5 2V8C8.5 8.13261 8.44732 8.25979 8.35355 8.35355C8.25979 8.44732 8.13261 8.5 8 8.5H2C1.86739 8.5 1.74021 8.44732 1.64645 8.35355C1.55268 8.44732 1.5 8.13261 1.5 8V2C1.5 1.86739 1.55268 1.74021 1.64645 1.64645C1.74021 1.55268 1.86739 1.5 2 1.5ZM0.5 2C0.5 1.46957 0.710714 0.960859 1.08579 0.585786C1.46086 0.210714 1.96957 0 2.5 0H7.5C8.03043 0 8.53914 0.210714 8.91421 0.585786C9.28929 0.960859 9.5 1.46957 9.5 2V8C9.5 8.53043 9.28929 9.03914 8.91421 9.41421C8.53914 9.78929 8.03043 10 7.5 10H2.5C1.96957 10 1.46086 9.78929 1.08579 9.41421C0.710714 9.03914 0.5 8.53043 0.5 8V2Z" fill="none" stroke="#90EE90" stroke-width="1.5"/>', 'STROKE');
         case 'Font Size':
-          return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 10 10" fill="none" style="margin-right: 3px; vertical-align: middle;"><path d="M3.5 6.5H1.2L0.6 8.5H0L2.1 0H2.8L5 8.5H4.4L3.5 6.5ZM3.1 5.5L2.4 1.8L1.7 5.5H3.1ZM6.5 4.5V4.2H6.9V8.5H6.5V8.2C6.3 8.4 6.1 8.5 5.8 8.5C5.1 8.5 4.5 7.9 4.5 7C4.5 6.1 5.1 5.5 5.8 5.5C6.1 5.5 6.3 5.6 6.5 5.8V4.5ZM5.8 7.5C6.1 7.5 6.2 7.3 6.2 7C6.2 6.7 6.1 6.5 5.8 6.5C5.5 6.5 5.4 6.7 5.4 7C5.4 7.3 5.5 7.5 5.8 7.5Z" fill="currentColor"/></svg><span class="property-label">Taille police</span>';
-        case 'Radius':
-        case 'Top Left Radius':
-        case 'Top Right Radius':
-        case 'Bottom Left Radius':
-        case 'Bottom Right Radius':
-          return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 10 10" fill="none" style="margin-right: 3px; vertical-align: middle;"><path d="M1 8V5C1 3.5 1 2.7 1.3 2.3C1.6 1.9 2.1 1.6 2.6 1.3C3.3 1 4.5 1 6 1H8" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="property-label">Rayon</span>';
+          return createHarmonizedSvg('<path d="M12.6317 16H11.6161L10.8114 13.7344H7.57703L6.77234 16H5.75671L8.69421 8H9.69421L12.6317 16ZM18.3563 16H17.3719L16.9501 14.7451H15.036L14.6151 16H13.6307L15.4227 10.9092H16.5614L18.3563 16ZM15.285 14.0039H16.701L16.0116 11.9531H15.9725L15.285 14.0039ZM7.88171 12.875H10.5067L9.22546 9.26562H9.16296L7.88171 12.875Z" fill="#90EE90"/>', 'FONT SIZE');
+        case 'RADIUS':
+        case 'TOP LEFT RADIUS':
+        case 'TOP RIGHT RADIUS':
+        case 'BOTTOM LEFT RADIUS':
+        case 'BOTTOM RIGHT RADIUS':
+          return createHarmonizedSvg('<path fill-rule="evenodd" clip-rule="evenodd" d="M8.89996 6H8.87996C8.47696 6 8.14496 6 7.87396 6.022C7.59396 6.045 7.33396 6.094 7.09196 6.218C6.71566 6.40974 6.40971 6.71569 6.21796 7.092C6.09396 7.335 6.04496 7.593 6.02196 7.874C5.99996 8.144 5.99996 8.477 5.99996 8.88V9.5C5.99996 9.63261 6.05264 9.75979 6.14641 9.85355C6.24018 9.94732 6.36736 10 6.49996 10C6.63257 10 6.75975 9.94732 6.85352 9.85355C6.94729 9.75979 6.99996 9.63261 6.99996 9.5V8.9C6.99996 8.472 6.99996 8.18 7.01896 7.956C7.03696 7.736 7.06896 7.624 7.10896 7.546C7.20484 7.35785 7.35781 7.20487 7.54596 7.109C7.62396 7.069 7.73596 7.037 7.95596 7.019C8.17996 7 8.47196 7 8.89996 7H9.49996C9.63257 7 9.75975 6.94732 9.85352 6.85355C9.94729 6.75979 9.99996 6.63261 9.99996 6.5C9.99996 6.36739 9.94729 6.24021 9.85352 6.14645C9.75975 6.05268 9.63257 6 9.49996 6H8.89996ZM15.1 6H15.12C15.523 6 15.855 6 16.126 6.022C16.407 6.045 16.666 6.094 16.908 6.218C17.2843 6.40974 17.5902 6.71569 17.782 7.092C17.906 7.335 17.955 7.593 17.978 7.874C18 8.144 18 8.477 18 8.879V9.5C18 9.63261 17.9473 9.75979 17.8535 9.85355C17.7597 9.94732 17.6326 10 17.5 10C17.3674 10 17.2402 9.94732 17.1464 9.85355C17.0526 9.75979 17 9.63261 17 9.5V8.9C17 8.472 17 8.18 16.981 7.956C16.963 7.736 16.931 7.624 16.891 7.546C16.7951 7.35785 16.6421 7.20487 16.454 7.109C16.376 7.069 16.264 7.037 16.044 7.019C15.7296 7.00117 15.4148 6.99483 15.1 7H14.5C14.3674 7 14.2402 6.94732 14.1464 6.85355C14.0526 6.75979 14 6.63261 14 6.5C14 6.36739 14.0526 6.24021 14.1464 6.14645C14.2402 6.05268 14.3674 6 14.5 6H15.1ZM15.12 18H14.5C14.3674 18 14.2402 17.9473 14.1464 17.8536C14.0526 17.7598 14 17.6326 14 17.5C14 17.3674 14.0526 17.2402 14.1464 17.1464C14.2402 17.0527 14.3674 17 14.5 17H15.1C15.528 17 15.82 17 16.044 16.981C16.264 16.963 16.376 16.931 16.454 16.891C16.6421 16.7951 16.7951 16.6422 16.891 16.454C16.931 16.376 16.963 16.264 16.981 16.044C17 15.819 17 15.528 17 15.1V14.5C17 14.3674 17.0526 14.2402 17.1464 14.1464C17.2402 14.0527 17.3674 14 17.5 14C17.6326 14 17.7597 14.0527 17.8535 14.1464C17.9473 14.2402 18 14.3674 18 14.5V15.12C18 15.523 18 15.855 17.978 16.126C17.955 16.407 17.906 16.666 17.782 16.908C17.5902 17.2843 17.2843 17.5903 16.908 17.782C16.665 17.906 16.407 17.955 16.126 17.978C15.856 18 15.523 18 15.121 18H15.12ZM8.89996 18H8.87996C8.47696 18 8.14496 18 7.87396 17.978C7.59296 17.955 7.33396 17.906 7.09196 17.782C6.71566 17.5903 6.40971 17.2843 6.21796 16.908C6.09396 16.665 6.04496 16.407 6.02196 16.126C6.00199 15.7911 5.99465 15.4555 5.99996 15.12V14.5C5.99996 14.3674 6.05264 14.2402 6.14641 14.1464C6.24018 14.0527 6.36736 14 6.49996 14C6.63257 14 6.75975 14.0527 6.85352 14.1464C6.94729 14.2402 6.99996 14.3674 6.99996 14.5V15.1C6.99996 15.528 6.99996 15.82 7.01896 16.044C7.03696 16.264 7.06896 16.376 7.10896 16.454C7.20484 16.6422 7.35781 16.7951 7.54596 16.891C7.62396 16.931 7.73596 16.963 7.95596 16.981C8.18096 17 8.47196 17 8.89996 17H9.49996C9.63257 17 9.75975 17.0527 9.85352 17.1464C9.94729 17.2402 9.99996 17.3674 9.99996 17.5C9.99996 17.6326 9.94729 17.7598 9.85352 17.8536C9.75975 17.9473 9.63257 18 9.49996 18H8.89996Z" fill="#90EE90"/>', 'RADIUS');
         case 'Spacing':
         case 'Item Spacing':
-          return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 10 10" fill="none" style="margin-right: 3px; vertical-align: middle;"><path fill-rule="evenodd" clip-rule="evenodd" d="M1 0.5C1 0.367392 0.947321 0.240215 0.853553 0.146447C0.759785 0.0526785 0.632608 0 0.5 0C0.367392 0 0.240215 0.0526785 0.146447 0.146447C0.0526785 0.240215 0 0.367392 0 0.5V9.5C0 9.63261 0.0526785 9.75979 0.146447 9.85355C0.240215 9.94732 0.367392 10 0.5 10C0.632608 10 0.759785 9.94732 0.853553 9.85355C0.947321 9.75979 1 9.63261 1 9.5V0.5ZM9.5 0C9.63261 0 9.75979 0.0526785 9.85355 0.146447C9.94732 0.240215 10 0.367392 10 0.5V9.5C10 9.63261 9.94732 9.75979 9.85355 9.85355C9.75979 9.94732 9.63261 10 9.5 10C9.36739 10 9.24021 9.94732 9.14645 9.85355C9.05268 9.75979 9 9.63261 9 9.5V0.5C9 0.367392 9.05268 0.240215 9.14645 0.146447C9.24021 0.0526785 9.36739 0 9.5 0ZM6 6V4H4V6H6ZM7 4C7 3.73478 6.89464 3.48043 6.70711 3.29289C6.51957 3.10536 6.26522 3 6 3H4C3.73478 3 3.48043 3.10536 3.29289 3.29289C3.10536 3.48043 3 3.73478 3 4V6C3 6.26522 3.10536 6.51957 3.29289 6.70711C3.48043 6.89464 3.73478 7 4 7H6C6.26522 7 6.51957 6.89464 6.70711 6.70711C6.89464 6.51957 7 6.26522 7 6V4Z" fill="currentColor"/></svg><span class="property-label">Espacement</span>';
+          return createHarmonizedSvg('<path d="M7.5 7.5V7.75C7.5 8.164 7.836 8.5 8.25 8.5H14.75C14.9489 8.5 15.1397 8.42098 15.2803 8.28033C15.421 8.13968 15.5 7.94891 15.5 7.75V7.5M7.5 15.5V15.25C7.5 15.0511 7.57902 14.8603 7.71967 14.7197C7.86032 14.579 8.05109 14.5 8.25 14.5H14.75C14.9489 14.5 15.1397 14.579 15.2803 14.7197C15.421 14.8603 15.5 15.0511 15.5 15.25V15.5M9.5 11.5H13.5" stroke="#90EE90" stroke-linecap="round" stroke-linejoin="round"/>', 'GAP');
+        case 'Padding Left':
+        case 'Padding Right':
+        case 'Padding Top':
+        case 'Padding Bottom':
         case 'Padding':
-          return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 10 10" fill="none" style="margin-right: 3px; vertical-align: middle;"><path fill-rule="evenodd" clip-rule="evenodd" d="M1 0.5C1 0.367392 0.947321 0.240215 0.853553 0.146447C0.759785 0.0526785 0.632608 0 0.5 0C0.367392 0 0.240215 0.0526785 0.146447 0.146447C0.0526785 0.240215 0 0.367392 0 0.5V9.5C0 9.63261 0.0526785 9.75979 0.146447 9.85355C0.240215 9.94732 0.367392 10 0.5 10C0.632608 10 0.759785 9.94732 0.853553 9.85355C0.947321 9.75979 1 9.63261 1 9.5V0.5ZM9.5 0C9.63261 0 9.75979 0.0526785 9.85355 0.146447C9.94732 0.240215 10 0.367392 10 0.5V9.5C10 9.63261 9.94732 9.75979 9.85355 9.85355C9.75979 9.94732 9.63261 10 9.5 10C9.36739 10 9.24021 9.94732 9.14645 9.85355C9.05268 9.75979 9 9.63261 9 9.5V0.5C9 0.367392 9.05268 0.240215 9.14645 0.146447C9.24021 0.0526785 9.36739 0 9.5 0ZM6 6V4H4V6H6ZM7 4C7 3.73478 6.89464 3.48043 6.70711 3.29289C6.51957 3.10536 6.26522 3 6 3H4C3.73478 3 3.48043 3.10536 3.29289 3.29289C3.10536 3.48043 3 3.73478 3 4V6C3 6.26522 3.10536 6.51957 3.29289 6.70711C3.48043 6.89464 3.73478 7 4 7H6C6.26522 7 6.51957 6.89464 6.70711 6.70711C6.89464 6.51957 7 6.26522 7 6V4Z" fill="currentColor"/></svg><span class="property-label">Padding</span>';
+          return createHarmonizedSvg('<path fill-rule="evenodd" clip-rule="evenodd" d="M8 7.5C8 7.36739 7.94732 7.24021 7.85355 7.14645C7.75979 7.05268 7.63261 7 7.5 7C7.36739 7 7.24021 7.05268 7.14645 7.14645C7.05268 7.24021 7 7.36739 7 7.5V16.5C7 16.6326 7.05268 16.7598 7.14645 16.8536C7.24021 16.9473 7.36739 17 7.5 17C7.63261 17 7.75979 16.9473 7.85355 16.8536C7.94732 16.7598 8 16.6326 8 16.5V7.5ZM16.5 7C16.6326 7 16.7598 7.05268 16.8536 7.14645C16.9473 7.24021 17 7.36739 17 7.5V16.5C17 16.6326 16.9473 16.7598 16.8536 16.8536C16.7598 16.9473 16.6326 17 16.5 17C16.3674 17 16.2402 16.9473 16.1464 16.8536C16.0527 16.7598 16 16.6326 16 16.5V7.5C16 7.36739 16.0527 7.24021 16.1464 7.14645C16.2402 7.05268 16.3674 7 16.5 7ZM13 13V11H11V13H13ZM14 11C14 10.7348 13.8946 10.4804 13.7071 10.2929C13.5196 10.1054 13.2652 10 13 10H11C10.7348 10 10.4804 10.1054 10.2929 10.2929C10.1054 10.4804 10 10.7348 10 11V13C10 13.2652 10.1054 13.5196 10.2929 13.7071C10.4804 13.8946 10.7348 14 11 14H13C13.2652 14 13.5196 13.8946 13.7071 13.7071C13.8946 13.5196 14 13.2652 14 13V11Z" fill="#90EE90"/>', 'PADDING');
         default:
           return '<span class="property-label">' + property + '</span>';
       }
@@ -6124,6 +6194,7 @@
     // ============================================
 
     var currentFilter = 'auto';
+    window.currentFilter = currentFilter; // Exposer globalement
     var selectedItems = new Set();
 
     // Initialisation du système      // Gérer la sélection des filtres (Tabs style)
@@ -6274,6 +6345,8 @@
       }
 
 
+      // Gestion de la visibilité du bouton selon l'onglet et présence d'éléments
+      var applyAllAutoBtn = document.getElementById('applyAllAutoBtn');
       // Gestion de la visibilité du bouton selon l'onglet et présence d'éléments
       var applyAllAutoBtn = document.getElementById('applyAllAutoBtn');
       if (applyAllAutoBtn) {
@@ -6727,90 +6800,88 @@
 
     // Gestionnaire de clic pour les Smart Pills (preview + sélection)
     function handleSmartPillClick(buttonElement, indices, variableId, variableName, variableValue) {
-      var card = buttonElement.closest('.cleaning-result-card');
+      // Utiliser le gestionnaire UI unifié
+      if (typeof UIManager !== 'undefined' && UIManager.handleSmartPillClick) {
+        UIManager.handleSmartPillClick(buttonElement, indices, variableId, variableName, variableValue);
+      } else {
+        // Fallback vers l'ancienne implémentation si les modules ne sont pas chargés
+        var card = buttonElement.closest('.cleaning-result-card');
 
-      // 1. Faire la preview
-      sendPreviewFix(indices, variableId);
+        sendPreviewFix(indices, variableId);
 
-      // 2. Stocker la sélection sur la carte (comme dans handleDropdownOptionClick)
-      card.setAttribute('data-selected-variable', variableId);
-      card._selectedVariableId = variableId;
+        card.setAttribute('data-selected-variable', variableId);
+        card._selectedVariableId = variableId;
 
-      // 3. Activer le bouton Appliquer
-      var applyBtn = card.querySelector('button[data-action="apply"]');
-      if (applyBtn) {
-        applyBtn.disabled = false;
-        applyBtn.classList.remove('btn-outline');
-        applyBtn.classList.add('btn-primary');
-        applyBtn.title = 'Appliquer ' + variableName;
+        var applyBtn = card.querySelector('button[data-action="apply"]');
+        if (applyBtn) {
+          applyBtn.disabled = false;
+          applyBtn.classList.remove('btn-outline');
+          applyBtn.classList.add('btn-primary');
+          applyBtn.title = 'Appliquer ' + variableName;
+        }
+
+        var pillRow = buttonElement.closest('.smart-suggestions-row');
+        pillRow.querySelectorAll('.smart-pill').forEach(function(pill) {
+          pill.classList.remove('selected');
+        });
+        buttonElement.classList.add('selected');
       }
-
-      // 4. Marquer visuellement la pill sélectionnée
-      var pillRow = buttonElement.closest('.smart-suggestions-row');
-      pillRow.querySelectorAll('.smart-pill').forEach(function(pill) {
-        pill.classList.remove('selected');
-      });
-      buttonElement.classList.add('selected');
     }
 
     // Nouvelle fonction pour les Smart Contextual Pills
     function renderSmartSuggestions(suggestions, property, indices) {
-      let html = '<div class="smart-suggestions-row">';
+      // Utiliser le gestionnaire UI unifié
+      if (typeof UIManager !== 'undefined' && UIManager.renderSmartSuggestions) {
+        return UIManager.renderSmartSuggestions(suggestions, property, indices);
+      } else {
+        // Fallback vers l'ancienne implémentation si les modules ne sont pas chargés
+        let html = '<div class="smart-suggestions-row">';
 
-      // Limite à 3 suggestions pour garder l'alignement, sinon "+X"
-      const displayLimit = 3;
-      const visibleSuggestions = suggestions.slice(0, displayLimit);
+        const displayLimit = 3;
+        const visibleSuggestions = suggestions.slice(0, displayLimit);
 
-      visibleSuggestions.forEach(s => {
-        // Déterminer le contenu visuel selon le type de propriété
-        let visualContent = '';
-        let pillClass = 'smart-pill';
+        visibleSuggestions.forEach(s => {
+          let visualContent = '';
+          let pillClass = 'smart-pill';
 
-        // CAS 1 : COULEURS
-        if (property === 'Fill' || property === 'Stroke') {
-          const color = s.hex || s.value;
-          visualContent = `<div class="pill-swatch" style="background-color: ${color}"></div>`;
-          pillClass += ' pill-color';
+          if (property === 'Fill' || property === 'Stroke') {
+            const color = s.hex || s.value;
+            visualContent = `<div class="pill-swatch" style="background-color: ${color}"></div>`;
+            pillClass += ' pill-color';
+          } else if (property === 'Font Size') {
+            const size = parseFloat(s.value);
+            visualContent = `<span class="pill-preview-text" style="font-size: ${Math.min(size, 20)}px">Ag</span>`;
+            pillClass += ' pill-typo';
+          } else {
+            visualContent = `<span class="pill-icon">📏</span>`;
+            pillClass += ' pill-metric';
+          }
+
+          html += `
+            <button class="${pillClass}"
+                    data-indices='${JSON.stringify(indices)}'
+                    onclick="handleSmartPillClick(this, ${JSON.stringify(indices)}, '${s.id}', '${s.name.replace(/'/g, "\\'")}', '${(s.resolvedValue || s.value).replace(/'/g, "\\'")}')"
+                    title="${s.name} (${s.value})">
+              ${visualContent}
+              <div class="pill-info">
+                <span class="pill-name">${s.name}</span>
+                <span class="pill-value">${s.resolvedValue || s.value}</span>
+              </div>
+            </button>
+          `;
+        });
+
+        if (suggestions.length > displayLimit) {
+          html += `
+            <button class="smart-pill pill-more" onclick="toggleCustomDropdown(event.target.closest('.cleaning-result-card').querySelector('.custom-select-container'))">
+              +${suggestions.length - displayLimit}
+            </button>
+          `;
         }
-        // CAS 2 : TYPOGRAPHIE
-        else if (property === 'Font Size') {
-          // On utilise la valeur brute (ex: 16) pour la taille de police de l'aperçu
-          const size = parseFloat(s.value);
-          visualContent = `<span class="pill-preview-text" style="font-size: ${Math.min(size, 20)}px">Ag</span>`;
-          pillClass += ' pill-typo';
-        }
-        // CAS 3 : ESPACEMENT / RAYON
-        else {
-          visualContent = `<span class="pill-icon">📏</span>`;
-          pillClass += ' pill-metric';
-        }
 
-        // Génération du bouton
-        html += `
-          <button class="${pillClass}"
-                  data-indices='${JSON.stringify(indices)}'
-                  onclick="handleSmartPillClick(this, ${JSON.stringify(indices)}, '${s.id}', '${s.name.replace(/'/g, "\\'")}', '${(s.resolvedValue || s.value).replace(/'/g, "\\'")}')"
-                  title="${s.name} (${s.value})">
-            ${visualContent}
-            <div class="pill-info">
-              <span class="pill-name">${s.name}</span>
-              <span class="pill-value">${s.resolvedValue || s.value}</span>
-            </div>
-          </button>
-        `;
-      });
-
-      // Bouton "Plus" si nécessaire (ouvre l'ancien dropdown pour les cas complexes)
-      if (suggestions.length > displayLimit) {
-        html += `
-          <button class="smart-pill pill-more" onclick="toggleCustomDropdown(event.target.closest('.cleaning-result-card').querySelector('.custom-select-container'))">
-            +${suggestions.length - displayLimit}
-          </button>
-        `;
+        html += '</div>';
+        return html;
       }
-
-      html += '</div>';
-      return html;
     }
 
     function generateCustomVariableSelector(suggestions, indices, selectedVariableId, disabled) {
@@ -7002,6 +7073,15 @@
 
     // Application groupée des corrections manuelles
     function applyAllManualFixes() {
+      // Vérifier que nous sommes sur l'onglet "Manuel"
+      var manualTab = document.querySelector('.tab[data-filter="manual"]');
+      var isManualTabActive = manualTab && manualTab.classList.contains('active');
+
+      if (!isManualTabActive) {
+        showNotification('Cette action n\'est disponible que sur l\'onglet "Manuel"', 'warning');
+        return;
+      }
+
       var readyCards = document.querySelectorAll('.manual-fix.ready-to-apply');
       var fixesApplied = 0;
 
@@ -7049,6 +7129,7 @@
         }, 300);
       }, 3000);
     }
+
 
     // Alias pour compatibilité
     function showNotification(message, type) {
@@ -7157,13 +7238,24 @@
 
     // Appliquer toutes les corrections automatiques avec animations séquentielles
     function applyAllAutoFixes() {
-      console.log('[DEBUG] applyAllAutoFixes called');
+      // Vérifier que nous sommes sur l'onglet "Auto"
+      var autoTab = document.querySelector('.tab[data-filter="auto"]');
+      var isAutoTabActive = autoTab && autoTab.classList.contains('active');
 
-      // Récupérer toutes les cartes auto-fixables visibles
-      var autoCards = Array.from(document.querySelectorAll('.cleaning-result-card.auto-fixable:not(.is-ignored-permanently)'))
+      if (!isAutoTabActive) {
+        showNotification('Cette action n\'est disponible que sur l\'onglet "Auto"', 'warning');
+        return;
+      }
+
+      // Récupérer TOUTES les cartes avec un bouton "Appliquer" visible dans l'onglet actif
+      var allVisibleCards = Array.from(document.querySelectorAll('.cleaning-result-card:not(.is-ignored-permanently)'))
         .filter(card => card.style.display !== 'none');
 
-      console.log('[DEBUG] Found cards:', autoCards.length);
+      // Filtrer pour ne garder que celles qui ont un bouton data-action="apply"
+      var autoCards = allVisibleCards.filter(card => {
+        var applyBtn = card.querySelector('button[data-action="apply"]');
+        return applyBtn !== null;
+      });
 
       if (autoCards.length === 0) return;
 
@@ -7182,45 +7274,43 @@
       // Fonction pour traiter chaque carte séquentiellement
       function processNextCard() {
         if (processedCards >= autoCards.length) {
-          console.log('[DEBUG] All cards processed, finishing');
           finishAnimation();
           return;
         }
 
         var card = autoCards[processedCards];
-        console.log('[DEBUG] Processing card', processedCards, 'of', autoCards.length);
 
-        var applyBtn = card.querySelector('button[onclick*="applyGroupFix"]');
-
+        var applyBtn = card.querySelector('button[data-action="apply"]');
         if (!applyBtn) {
-          console.log('[DEBUG] No apply button found for card', processedCards, '- skipping');
+          // Cette situation ne devrait pas arriver car on filtre les cartes avec boutons
           processedCards++;
           processNextCard();
           return;
         }
 
-        console.log('[DEBUG] Apply button found, applying correction for card', processedCards);
+        // Récupérer les données depuis les attributs data de la carte
+        var indicesJson = card.getAttribute('data-indices');
+        var variableId = card._selectedVariableId || card.getAttribute('data-suggested-variable');
 
-        // Appliquer LA CORRECTION D'ABORD (c'est elle qui déclenche l'animation)
-        var onclickStr = applyBtn.getAttribute('onclick');
-        var match = onclickStr.match(/applyGroupFix\(\[([^\]]+)\],\s*'([^']+)'\)/);
-        if (match) {
-          var indices = match[1].split(',').map(function (s) { return parseInt(s.trim()); });
-          var variableId = match[2];
-          console.log('[DEBUG] Applying correction with indices:', indices, 'variableId:', variableId);
+        console.log('Card data:', { indicesJson: indicesJson, variableId: variableId, selectedVariableId: card._selectedVariableId });
 
-          // APPLIQUER LA CORRECTION - cela déclenchera l'animation dans handleSingleFixApplied
-          applyGroupFix(indices, variableId);
+        if (indicesJson && variableId) {
+          var indices = JSON.parse(indicesJson);
+          console.log('Extracted indices:', indices, 'variableId:', variableId);
+
+          // Appliquer la correction
+          console.log('Calling applyGroupedFix with:', indices, variableId);
+          applyGroupedFix(indices, variableId);
           fixesApplied++;
-          console.log('[DEBUG] Correction applied successfully for card', processedCards);
+          console.log('applyGroupedFix called, fixesApplied now:', fixesApplied);
 
           // Attendre que l'animation se termine avant de passer à la suivante
           setTimeout(function() {
             processedCards++;
             processNextCard();
-          }, 400); // Même délai que l'animation dans handleSingleFixApplied
+          }, 400);
         } else {
-          console.log('[DEBUG] Could not parse onclick for card', processedCards, '- onclick:', onclickStr);
+          console.log('[DEBUG] Could not extract data for card', processedCards, '- indicesJson:', indicesJson, '- variableId:', variableId);
           processedCards++;
           processNextCard();
         }
@@ -7231,8 +7321,6 @@
       processNextCard();
 
       function finishAnimation() {
-        console.log('[DEBUG] Finishing animation');
-
         // Réactiver le bouton avec son emoji original
         if (applyBtn) {
           applyBtn.disabled = false;
@@ -7590,26 +7678,8 @@
     }
 
 
-    function applyAllFixes() {
-      parent.postMessage({
-        pluginMessage: {
-          type: "apply-all-fixes"
-        }
-      }, "*");
-
-      // Désactiver les boutons pendant l'application
-      var applyAllAutoBtn = document.getElementById("applyAllAutoBtn");
-      var step4ApplyAll = document.getElementById("step4ApplyAll");
-
-      if (applyAllAutoBtn) {
-        applyAllAutoBtn.disabled = true;
-        applyAllAutoBtn.textContent = "Application en cours...";
-      }
-      if (step4ApplyAll) {
-        step4ApplyAll.disabled = true;
-        step4ApplyAll.textContent = "⏳ Application...";
-      }
-    }
+    // SUPPRIMÉ : applyAllFixes() appliquait toutes les corrections sans distinction d'onglet
+    // function applyAllFixes() { ... }
 
     // Scan buttons
     scanBtn.addEventListener("click", function () {
@@ -7628,31 +7698,11 @@
     });
 
 
-    // Apply all fixes button (applyAllAutoBtn)
-    var applyAllAutoBtn = document.getElementById("applyAllAutoBtn");
-    if (applyAllAutoBtn) {
-      applyAllAutoBtn.addEventListener("click", function () {
-        applyAllFixes();
-      });
-    }
-
-    // Back button
-    step4Back.addEventListener("click", function () {
-      switchStep(0);
-    });
-
-    // Apply all button (sticky footer)
-    if (step4ApplyAll) {
-      step4ApplyAll.addEventListener("click", function () {
-        applyAllFixes();
-      });
-    }
-
     // ============================================
-    // NOUVEAUX GESTIONNAIRES POUR L'INTERFACE HIÉRARCHISÉE
+    // GESTIONNAIRES D'ÉVÉNEMENTS PROPRES
     // ============================================
 
-    // Bouton appliquer toutes les corrections automatiques
+    // Bouton appliquer toutes les corrections automatiques (onglet Auto seulement)
     var applyAllAutoBtn = document.getElementById("applyAllAutoBtn");
     if (applyAllAutoBtn) {
       applyAllAutoBtn.addEventListener("click", function () {
@@ -7660,11 +7710,26 @@
       });
     }
 
-    // Bouton appliquer les sélections manuelles
+    // Bouton appliquer les sélections manuelles (onglet Manuel seulement)
     var applyAllManualBtn = document.getElementById("applyAllManualBtn");
     if (applyAllManualBtn) {
       applyAllManualBtn.addEventListener("click", function () {
         applyAllManualFixes();
+      });
+    }
+
+    // Bouton back
+    if (step4Back) {
+      step4Back.addEventListener("click", function () {
+        switchStep(0);
+      });
+    }
+
+    // Bouton exporter le rapport
+    var exportReportBtn = document.getElementById("exportReportBtn");
+    if (exportReportBtn) {
+      exportReportBtn.addEventListener("click", function () {
+        exportCleaningReport();
       });
     }
 
@@ -7889,60 +7954,84 @@
         }
 
         if (msg.type === "all-fixes-applied") {
-          // Masquer les cartes progressivement avec animation
-          var cards = document.querySelectorAll('.cleaning-result-card');
-          var processed = 0;
+          // Utiliser le gestionnaire UI unifié pour l'animation
+          if (typeof UIManager !== 'undefined' && UIManager.handleAllFixesApplied) {
+            UIManager.handleAllFixesApplied({
+              appliedCount: msg.appliedCount,
+              cards: document.querySelectorAll('.cleaning-result-card')
+            });
+          } else {
+            // Fallback vers l'ancienne implémentation si les modules ne sont pas chargés
+            var cards = document.querySelectorAll('.cleaning-result-card');
+            var processed = 0;
 
-          function processNextCard() {
-            if (processed >= cards.length) {
-              // Animation terminée, afficher le message de succès
+            function processNextCard() {
+              if (processed >= cards.length) {
+                setTimeout(function() {
+                  var scanResultsList = document.getElementById("unifiedCleaningList");
+                  if (scanResultsList) scanResultsList.innerHTML = '<div style="text-align: center; padding: 40px 20px; color: var(--poly-success);"><p>✅ ' + msg.appliedCount + ' correction(s) appliquée(s) avec succès !</p></div>';
+                }, 200);
+                return;
+              }
+
+              var card = cards[processed];
+              card.style.transition = 'all 0.15s ease';
+              card.style.backgroundColor = 'rgba(34, 197, 94, 0.1)';
+              card.style.borderColor = 'rgba(34, 197, 94, 0.3)';
+
               setTimeout(function() {
-                var scanResultsList = document.getElementById("unifiedCleaningList");
-                if (scanResultsList) scanResultsList.innerHTML = '<div style="text-align: center; padding: 40px 20px; color: var(--poly-success);"><p>✅ ' + msg.appliedCount + ' correction(s) appliquée(s) avec succès !</p></div>';
-              }, 200);
-              return;
+                card.style.display = 'none';
+                card.style.backgroundColor = '';
+                card.style.borderColor = '';
+                card.style.transition = '';
+
+                processed++;
+                setTimeout(processNextCard, 200);
+              }, 150);
             }
 
-            var card = cards[processed];
-            card.style.transition = 'all 0.15s ease';
-            card.style.backgroundColor = 'rgba(34, 197, 94, 0.1)';
-            card.style.borderColor = 'rgba(34, 197, 94, 0.3)';
+            if (cards.length > 0) {
+              processNextCard();
+            } else {
+              var scanResultsList = document.getElementById("unifiedCleaningList");
+              if (scanResultsList) scanResultsList.innerHTML = '<div style="text-align: center; padding: 40px 20px; color: var(--poly-success);"><p>✅ ' + msg.appliedCount + ' correction(s) appliquée(s) avec succès !</p></div>';
+            }
 
-            setTimeout(function() {
-              card.style.display = 'none';
-              card.style.backgroundColor = '';
-              card.style.borderColor = '';
-              card.style.transition = '';
+            var applyAllAutoBtn = document.getElementById("applyAllAutoBtn");
+            var step4ApplyAll = document.getElementById("step4ApplyAll");
 
-              processed++;
-              setTimeout(processNextCard, 200);
-            }, 150);
+            if (applyAllAutoBtn) {
+              applyAllAutoBtn.disabled = false;
+              applyAllAutoBtn.textContent = '✨ Appliquer les corrections';
+            }
+            if (step4ApplyAll) {
+              step4ApplyAll.disabled = false;
+              step4ApplyAll.textContent = '✨ Appliquer tout';
+            }
+
+            var applyAllSection = document.getElementById("applyAllSection");
+            if (applyAllSection) applyAllSection.style.display = 'none';
+          }
+        }
+
+        if (msg.type === "tokens-generated") {
+          console.log("🎉 Tokens générés reçus dans l'UI:", msg.tokens);
+
+          // Stocker les tokens générés pour l'affichage
+          currentTokens = msg.tokens;
+
+          // Afficher une notification de succès
+          showNotification("Tokens générés avec succès !", "success");
+
+          // Passer automatiquement à l'étape suivante (résultats)
+          if (typeof switchStep === 'function') {
+            switchStep(3); // Aller à l'étape des résultats
           }
 
-          // Démarrer l'animation si il y a des cartes
-          if (cards.length > 0) {
-            processNextCard();
-          } else {
-            // Pas de cartes à masquer, afficher directement le message
-            var scanResultsList = document.getElementById("unifiedCleaningList");
-            if (scanResultsList) scanResultsList.innerHTML = '<div style="text-align: center; padding: 40px 20px; color: var(--poly-success);"><p>✅ ' + msg.appliedCount + ' correction(s) appliquée(s) avec succès !</p></div>';
+          // Actualiser l'aperçu des tokens si on est déjà à l'étape 3
+          if (typeof updatePreview === 'function') {
+            updatePreview();
           }
-
-          // Réactiver les boutons et restaurer leur texte original
-          var applyAllAutoBtn = document.getElementById("applyAllAutoBtn");
-          var step4ApplyAll = document.getElementById("step4ApplyAll");
-
-          if (applyAllAutoBtn) {
-            applyAllAutoBtn.disabled = false;
-            applyAllAutoBtn.textContent = '✨ Appliquer les corrections';
-          }
-          if (step4ApplyAll) {
-            step4ApplyAll.disabled = false;
-            step4ApplyAll.textContent = '✨ Appliquer tout';
-          }
-
-          var applyAllSection = document.getElementById("applyAllSection");
-          if (applyAllSection) applyAllSection.style.display = 'none';
         }
 
         if (msg.type === "preview-result" || msg.type === "preview-error" || msg.type === "sync-confirmation") {

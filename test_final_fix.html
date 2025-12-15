@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Final - Correction du Bouton Générer les Tokens</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .step { margin: 20px 0; padding: 15px; border-left: 4px solid #007acc; background: #f0f8ff; }
+        .success { color: green; font-weight: bold; }
+        .error { color: red; font-weight: bold; }
+        .info { color: blue; }
+        .result { font-family: monospace; background: #f9f9f9; padding: 10px; margin: 10px 0; border-radius: 4px; }
+        button { padding: 10px 20px; background: #007acc; color: white; border: none; border-radius: 4px; cursor: pointer; margin: 5px; }
+        button:hover { background: #005aa3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Test Final - Bouton "Générer les Tokens"</h1>
+
+        <div class="step">
+            <h3>📋 Corrections appliquées</h3>
+            <ul>
+                <li><span class="success">✓</span> Correction de <code>hexToRgb</code> qui normalisait incorrectement les valeurs RGB</li>
+                <li><span class="success">✓</span> Correction de la logique de fallback pour <code>msg.naming</code> (chaîne vide → "custom")</li>
+                <li><span class="success">✓</span> Ajout du gestionnaire du message "tokens-generated" dans l'UI</li>
+                <li><span class="success">✓</span> Définition d'une valeur par défaut "custom" pour <code>currentNaming</code></li>
+                <li><span class="success">✓</span> Ajout de logs détaillés pour le débogage</li>
+            </ul>
+        </div>
+
+        <div class="step">
+            <h3>🔍 Test des fonctions corrigées</h3>
+            <button id="testColors">Tester les conversions de couleur</button>
+            <button id="testTokens">Tester la génération de tokens</button>
+            <div id="testResults"></div>
+        </div>
+
+        <div class="step">
+            <h3>🎯 Simulation complète du bouton</h3>
+            <p>Cette simulation reproduit exactement le comportement du bouton "Générer les Tokens".</p>
+
+            <label>Couleur: <input type="color" id="colorInput" value="#007ACC"></label><br><br>
+
+            <label>Bibliothèque:
+                <select id="namingInput">
+                    <option value="custom">Custom</option>
+                    <option value="shadcn">ShadCN</option>
+                    <option value="antd">Ant Design</option>
+                </select>
+            </label><br><br>
+
+            <button id="simulateGenerate">🚀 Générer les Tokens (Simulation)</button>
+
+            <div id="simulationResults"></div>
+        </div>
+
+        <div id="logs"></div>
+    </div>
+
+    <!-- Charger le code du plugin -->
+    <script src="code.js"></script>
+
+    <script>
+        const testResults = document.getElementById('testResults');
+        const simulationResults = document.getElementById('simulationResults');
+        const logs = document.getElementById('logs');
+
+        function log(message, type = 'info') {
+            const entry = document.createElement('div');
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            entry.className = type;
+            logs.appendChild(entry);
+            logs.scrollTop = logs.scrollHeight;
+            console.log(`[${type}] ${message}`);
+        }
+
+        // Test des conversions de couleur
+        document.getElementById('testColors').addEventListener('click', () => {
+            testResults.innerHTML = '<h4>Test des conversions de couleur</h4>';
+
+            try {
+                // Test hexToRgb corrigé
+                const rgb = hexToRgb('#FF0000');
+                if (rgb.r === 255 && rgb.g === 0 && rgb.b === 0) {
+                    testResults.innerHTML += '<div class="success">✓ hexToRgb("#FF0000") fonctionne</div>';
+                } else {
+                    throw new Error(`hexToRgb retourne ${JSON.stringify(rgb)} au lieu de {r:255,g:0,b:0}`);
+                }
+
+                // Test hexToHsl
+                const hsl = hexToHsl('#FF0000');
+                if (Math.abs(hsl.h - 0) < 5 && Math.abs(hsl.s - 100) < 5 && Math.abs(hsl.l - 50) < 5) {
+                    testResults.innerHTML += '<div class="success">✓ hexToHsl("#FF0000") fonctionne</div>';
+                } else {
+                    throw new Error(`hexToHsl retourne ${JSON.stringify(hsl)}`);
+                }
+
+                // Test round-trip
+                const original = '#007ACC';
+                const hsl2 = hexToHsl(original);
+                const back = hslToHex(hsl2.h, hsl2.s, hsl2.l);
+                testResults.innerHTML += `<div class="info">Round-trip: ${original} → ${back.toUpperCase()}</div>`;
+
+                testResults.innerHTML += '<div class="success">🎉 Toutes les conversions de couleur fonctionnent !</div>';
+
+            } catch (error) {
+                testResults.innerHTML += `<div class="error">❌ Erreur: ${error.message}</div>`;
+            }
+        });
+
+        // Test de génération de tokens
+        document.getElementById('testTokens').addEventListener('click', () => {
+            testResults.innerHTML += '<h4>Test de génération de tokens</h4>';
+
+            try {
+                const tokens = generateBrandColors('#007ACC', 'custom');
+                if (tokens && tokens.base && tokens.light && tokens.dark) {
+                    testResults.innerHTML += '<div class="success">✓ generateBrandColors fonctionne</div>';
+                    testResults.innerHTML += `<div class="result">${JSON.stringify(tokens, null, 2)}</div>`;
+                } else {
+                    throw new Error('generateBrandColors ne retourne pas les bonnes propriétés');
+                }
+
+            } catch (error) {
+                testResults.innerHTML += `<div class="error">❌ Erreur génération tokens: ${error.message}</div>`;
+            }
+        });
+
+        // Simulation complète
+        document.getElementById('simulateGenerate').addEventListener('click', () => {
+            const color = document.getElementById('colorInput').value;
+            const naming = document.getElementById('namingInput').value;
+
+            simulationResults.innerHTML = '<h4>Simulation du bouton "Générer les Tokens"</h4>';
+
+            log(`🖱️ Bouton cliqué avec color=${color}, naming="${naming}"`);
+
+            // Simuler l'envoi du message au plugin
+            const message = {
+                pluginMessage: {
+                    type: "generate",
+                    color: color,
+                    naming: naming
+                }
+            };
+
+            log(`📤 Message envoyé: ${JSON.stringify(message)}`);
+
+            // Simuler la réception par le plugin (avec notre logique corrigée)
+            setTimeout(() => {
+                log('🔄 Plugin traite le message...');
+
+                try {
+                    // Appliquer la logique corrigée
+                    const resolvedNaming = message.pluginMessage.naming && message.pluginMessage.naming.trim() !== ""
+                        ? message.pluginMessage.naming
+                        : "custom";
+
+                    log(`📝 Naming résolu: "${message.pluginMessage.naming}" → "${resolvedNaming}"`);
+
+                    // Générer les tokens
+                    const tokens = {
+                        brand: generateBrandColors(message.pluginMessage.color, resolvedNaming),
+                        system: generateSystemColors(resolvedNaming),
+                        gray: generateGrayscale(resolvedNaming),
+                        spacing: generateSpacing(resolvedNaming),
+                        radius: generateRadius(resolvedNaming),
+                        typography: generateTypography(resolvedNaming),
+                        border: generateBorder()
+                    };
+
+                    log(`✅ Tokens générés: ${Object.keys(tokens).length} catégories`);
+
+                    // Simuler l'envoi à l'UI
+                    log('📤 Envoi du message tokens-generated à l\'UI');
+
+                    // Simuler la réception par l'UI
+                    setTimeout(() => {
+                        log('📥 UI reçoit tokens-generated');
+                        simulationResults.innerHTML += '<div class="success">🎉 Tokens générés avec succès !</div>';
+                        simulationResults.innerHTML += '<div class="result">Tokens créés pour les catégories: ' + Object.keys(tokens).join(', ') + '</div>';
+
+                        // Afficher quelques exemples
+                        const brandKeys = Object.keys(tokens.brand);
+                        if (brandKeys.length > 0) {
+                            simulationResults.innerHTML += `<div class="result">Exemples brand tokens: ${brandKeys.slice(0, 3).join(', ')}</div>`;
+                        }
+                    }, 100);
+
+                } catch (error) {
+                    log(`❌ Erreur: ${error.message}`, 'error');
+                    simulationResults.innerHTML += `<div class="error">❌ Erreur lors de la génération: ${error.message}</div>`;
+                }
+            }, 200);
+        });
+
+        // Auto-test au chargement
+        setTimeout(() => {
+            log('🚀 Démarrage des tests automatiques...');
+            document.getElementById('testColors').click();
+
+            setTimeout(() => {
+                document.getElementById('simulateGenerate').click();
+            }, 1000);
+        }, 500);
+    </script>
+</body>
+</html>

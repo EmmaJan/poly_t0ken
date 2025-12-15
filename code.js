@@ -60,16 +60,16 @@ var CONFIG = {
   scopes: {
     Fill: ['ALL_FILLS', 'FRAME_FILL', 'SHAPE_FILL', 'TEXT_FILL', 'ALL_SCOPES'],
     Stroke: ['STROKE_COLOR', 'ALL_SCOPES'],
-    'Corner Radius': ['CORNER_RADIUS', 'ALL_SCOPES'],
-    'Top Left Radius': ['CORNER_RADIUS', 'ALL_SCOPES'],
-    'Top Right Radius': ['CORNER_RADIUS', 'ALL_SCOPES'],
-    'Bottom Left Radius': ['CORNER_RADIUS', 'ALL_SCOPES'],
-    'Bottom Right Radius': ['CORNER_RADIUS', 'ALL_SCOPES'],
+    'CORNER RADIUS': ['CORNER_RADIUS', 'ALL_SCOPES'],
+    'TOP LEFT RADIUS': ['CORNER_RADIUS', 'ALL_SCOPES'],
+    'TOP RIGHT RADIUS': ['CORNER_RADIUS', 'ALL_SCOPES'],
+    'BOTTOM LEFT RADIUS': ['CORNER_RADIUS', 'ALL_SCOPES'],
+    'BOTTOM RIGHT RADIUS': ['CORNER_RADIUS', 'ALL_SCOPES'],
     'Item Spacing': ['GAP', 'ALL_SCOPES'],
-    'Padding Left': ['GAP', 'ALL_SCOPES'],
-    'Padding Right': ['GAP', 'ALL_SCOPES'],
-    'Padding Top': ['GAP', 'ALL_SCOPES'],
-    'Padding Bottom': ['GAP', 'ALL_SCOPES'],
+    'Padding Left': ['FILL', 'ALL_SCOPES'],
+    'Padding Right': ['FILL', 'ALL_SCOPES'],
+    'Padding Top': ['FILL', 'ALL_SCOPES'],
+    'Padding Bottom': ['FILL', 'ALL_SCOPES'],
     'Font Size': ['FONT_SIZE', 'ALL_SCOPES']
   },
 
@@ -1113,11 +1113,11 @@ var Fixer = {
           success = applyColorVariableToStroke(node, variable, result.strokeIndex);
           break;
 
-        case "Corner Radius":
-        case "Top Left Radius":
-        case "Top Right Radius":
-        case "Bottom Left Radius":
-        case "Bottom Right Radius":
+        case "CORNER RADIUS":
+        case "TOP LEFT RADIUS":
+        case "TOP RIGHT RADIUS":
+        case "BOTTOM LEFT RADIUS":
+        case "BOTTOM RIGHT RADIUS":
           success = applyNumericVariable(node, variable, result.figmaProperty, result.property);
           break;
 
@@ -2083,11 +2083,11 @@ function getScopesForProperty(propertyType) {
     "Stroke": ["STROKE_COLOR", "ALL_SCOPES"],
 
     
-    "Corner Radius": ["CORNER_RADIUS", "ALL_SCOPES"],
-    "Top Left Radius": ["CORNER_RADIUS", "ALL_SCOPES"],
-    "Top Right Radius": ["CORNER_RADIUS", "ALL_SCOPES"],
-    "Bottom Left Radius": ["CORNER_RADIUS", "ALL_SCOPES"],
-    "Bottom Right Radius": ["CORNER_RADIUS", "ALL_SCOPES"],
+    "CORNER RADIUS": ["CORNER_RADIUS", "ALL_SCOPES"],
+    "TOP LEFT RADIUS": ["CORNER_RADIUS", "ALL_SCOPES"],
+    "TOP RIGHT RADIUS": ["CORNER_RADIUS", "ALL_SCOPES"],
+    "BOTTOM LEFT RADIUS": ["CORNER_RADIUS", "ALL_SCOPES"],
+    "BOTTOM RIGHT RADIUS": ["CORNER_RADIUS", "ALL_SCOPES"],
 
     
     "Item Spacing": ["GAP", "ALL_SCOPES"],
@@ -2214,11 +2214,27 @@ function findColorSuggestions(hexValue, valueToVariableMap, propertyType) {
 
 
 function findNumericSuggestions(targetValue, valueToVariableMap, tolerance, propertyType) {
-  
+
   tolerance = tolerance !== undefined ? tolerance : (propertyType.indexOf('Spacing') !== -1 ? 8 : 4);
 
+  // Auto-correction spéciale pour les radius: 999 -> 9999 (full)
+  if (targetValue === 999 && propertyType && propertyType.indexOf('Radius') !== -1) {
+    var fullMatches = valueToVariableMap.get(9999);
+    if (fullMatches && fullMatches.length > 0) {
+      var filteredFullMatches = filterVariablesByScopes(fullMatches, getScopesForProperty(propertyType));
+      if (filteredFullMatches.length > 0) {
+        return [{
+          id: filteredFullMatches[0].id,
+          name: filteredFullMatches[0].name,
+          value: 9999,
+          difference: 0,
+          isExact: false,
+          isAutoCorrected: true // Marquer comme auto-corrigée
+        }];
+      }
+    }
+  }
 
-  
   var requiredScopes = getScopesForProperty(propertyType);
 
   
@@ -2525,10 +2541,10 @@ function checkCornerRadiusSafely(node, valueToVariableMap, results) {
     
     if (node.cornerRadius === figma.mixed) {
       var radiusProperties = [
-        { name: 'topLeftRadius', displayName: 'Top Left Radius', figmaProp: 'topLeftRadius' },
-        { name: 'topRightRadius', displayName: 'Top Right Radius', figmaProp: 'topRightRadius' },
-        { name: 'bottomLeftRadius', displayName: 'Bottom Left Radius', figmaProp: 'bottomLeftRadius' },
-        { name: 'bottomRightRadius', displayName: 'Bottom Right Radius', figmaProp: 'bottomRightRadius' }
+        { name: 'topLeftRadius', displayName: 'TOP LEFT RADIUS', figmaProp: 'topLeftRadius' },
+        { name: 'topRightRadius', displayName: 'TOP RIGHT RADIUS', figmaProp: 'topRightRadius' },
+        { name: 'bottomLeftRadius', displayName: 'BOTTOM LEFT RADIUS', figmaProp: 'bottomLeftRadius' },
+        { name: 'bottomRightRadius', displayName: 'BOTTOM RIGHT RADIUS', figmaProp: 'bottomRightRadius' }
       ];
 
       for (var k = 0; k < radiusProperties.length; k++) {
@@ -2571,7 +2587,7 @@ function checkCornerRadiusSafely(node, valueToVariableMap, results) {
         isPropertyBoundToVariable(boundVars, 'bottomRightRadius');
 
       if (!isBound) {
-        var suggestions = enrichSuggestionsWithRealValues(findNumericSuggestions(node.cornerRadius, valueToVariableMap, undefined, "Corner Radius"));
+        var suggestions = enrichSuggestionsWithRealValues(findNumericSuggestions(node.cornerRadius, valueToVariableMap, undefined, "CORNER RADIUS"));
         if (suggestions.length > 0) {
           var bestSuggestion = suggestions[0];
           results.push({
@@ -3955,10 +3971,12 @@ figma.ui.onmessage = function (msg) {
   }
 
   if (msg.type === "apply-group-fix") {
+    console.log('Received apply-group-fix message:', msg);
     var appliedCount = 0;
     var applicationError = null;
     var indices = msg.indices || [];
     var variableId = msg.variableId;
+    console.log('Processing indices:', indices, 'variableId:', variableId);
 
     if (!variableId || indices.length === 0 || !lastScanResults) {
       figma.ui.postMessage({

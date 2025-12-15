@@ -60,11 +60,11 @@ const CONFIG = {
   scopes: {
     Fill: ['ALL_FILLS', 'FRAME_FILL', 'SHAPE_FILL', 'TEXT_FILL', 'ALL_SCOPES'],
     Stroke: ['STROKE_COLOR', 'ALL_SCOPES'],
-    'Corner Radius': ['CORNER_RADIUS', 'ALL_SCOPES'],
-    'Top Left Radius': ['CORNER_RADIUS', 'ALL_SCOPES'],
-    'Top Right Radius': ['CORNER_RADIUS', 'ALL_SCOPES'],
-    'Bottom Left Radius': ['CORNER_RADIUS', 'ALL_SCOPES'],
-    'Bottom Right Radius': ['CORNER_RADIUS', 'ALL_SCOPES'],
+    'CORNER RADIUS': ['CORNER_RADIUS', 'ALL_SCOPES'],
+    'TOP LEFT RADIUS': ['CORNER_RADIUS', 'ALL_SCOPES'],
+    'TOP RIGHT RADIUS': ['CORNER_RADIUS', 'ALL_SCOPES'],
+    'BOTTOM LEFT RADIUS': ['CORNER_RADIUS', 'ALL_SCOPES'],
+    'BOTTOM RIGHT RADIUS': ['CORNER_RADIUS', 'ALL_SCOPES'],
     'Item Spacing': ['GAP', 'ALL_SCOPES'],
     'Padding Left': ['GAP', 'ALL_SCOPES'],
     'Padding Right': ['GAP', 'ALL_SCOPES'],
@@ -1087,11 +1087,11 @@ const Fixer = {
           success = applyColorVariableToStroke(node, variable, result.strokeIndex);
           break;
 
-        case "Corner Radius":
-        case "Top Left Radius":
-        case "Top Right Radius":
-        case "Bottom Left Radius":
-        case "Bottom Right Radius":
+        case "CORNER RADIUS":
+        case "TOP LEFT RADIUS":
+        case "TOP RIGHT RADIUS":
+        case "BOTTOM LEFT RADIUS":
+        case "BOTTOM RIGHT RADIUS":
           success = applyNumericVariable(node, variable, result.figmaProperty, result.property);
           break;
 
@@ -2037,11 +2037,11 @@ function getScopesForProperty(propertyType) {
     "Stroke": ["STROKE_COLOR", "ALL_SCOPES"],
 
     
-    "Corner Radius": ["CORNER_RADIUS", "ALL_SCOPES"],
-    "Top Left Radius": ["CORNER_RADIUS", "ALL_SCOPES"],
-    "Top Right Radius": ["CORNER_RADIUS", "ALL_SCOPES"],
-    "Bottom Left Radius": ["CORNER_RADIUS", "ALL_SCOPES"],
-    "Bottom Right Radius": ["CORNER_RADIUS", "ALL_SCOPES"],
+    "CORNER RADIUS": ["CORNER_RADIUS", "ALL_SCOPES"],
+    "TOP LEFT RADIUS": ["CORNER_RADIUS", "ALL_SCOPES"],
+    "TOP RIGHT RADIUS": ["CORNER_RADIUS", "ALL_SCOPES"],
+    "BOTTOM LEFT RADIUS": ["CORNER_RADIUS", "ALL_SCOPES"],
+    "BOTTOM RIGHT RADIUS": ["CORNER_RADIUS", "ALL_SCOPES"],
 
     
     "Item Spacing": ["GAP", "ALL_SCOPES"],
@@ -2430,10 +2430,10 @@ function checkCornerRadiusSafely(node, valueToVariableMap, results) {
     
     if (node.cornerRadius === figma.mixed) {
       var radiusProperties = [
-        { name: 'topLeftRadius', displayName: 'Top Left Radius', figmaProp: 'topLeftRadius' },
-        { name: 'topRightRadius', displayName: 'Top Right Radius', figmaProp: 'topRightRadius' },
-        { name: 'bottomLeftRadius', displayName: 'Bottom Left Radius', figmaProp: 'bottomLeftRadius' },
-        { name: 'bottomRightRadius', displayName: 'Bottom Right Radius', figmaProp: 'bottomRightRadius' }
+        { name: 'topLeftRadius', displayName: 'TOP LEFT RADIUS', figmaProp: 'topLeftRadius' },
+        { name: 'topRightRadius', displayName: 'TOP RIGHT RADIUS', figmaProp: 'topRightRadius' },
+        { name: 'bottomLeftRadius', displayName: 'BOTTOM LEFT RADIUS', figmaProp: 'bottomLeftRadius' },
+        { name: 'bottomRightRadius', displayName: 'BOTTOM RIGHT RADIUS', figmaProp: 'bottomRightRadius' }
       ];
 
       for (var k = 0; k < radiusProperties.length; k++) {
@@ -2467,7 +2467,7 @@ function checkCornerRadiusSafely(node, valueToVariableMap, results) {
         isPropertyBoundToVariable(boundVars, 'bottomRightRadius');
 
       if (!isBound) {
-        var suggestions = enrichSuggestionsWithRealValues(findNumericSuggestions(node.cornerRadius, valueToVariableMap, undefined, "Corner Radius"));
+        var suggestions = enrichSuggestionsWithRealValues(findNumericSuggestions(node.cornerRadius, valueToVariableMap, undefined, "CORNER RADIUS"));
         if (suggestions.length > 0) {
           var bestSuggestion = suggestions[0];
           results.push({

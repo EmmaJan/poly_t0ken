@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Bouton ApplyAllAutoFixes</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        button { padding: 10px 20px; margin: 10px; }
+        .hidden { display: none !important; }
+        .log { border: 1px solid #ddd; padding: 10px; margin: 20px 0; background: #f9f9f9; max-height: 300px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <h1>Test Bouton ApplyAllAutoFixes</h1>
+
+    <button id="applyAllAutoBtn">✨ Appliquer les corrections</button>
+
+    <div class="log" id="log"></div>
+
+    <script>
+        var currentFilter = 'auto';
+
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+
+        function showNotification(message, type) {
+            log(`NOTIFICATION [${type}]: ${message}`);
+        }
+
+        function applyAllAutoFixes() {
+            log('applyAllAutoFixes called - currentFilter: ' + currentFilter);
+
+            // Vérifier que nous sommes sur l'onglet "Auto"
+            if (currentFilter !== 'auto') {
+                log('applyAllAutoFixes ignoré - onglet actif: ' + currentFilter);
+                showNotification('Cette action n\'est disponible que sur l\'onglet "Auto"', 'warning');
+                return;
+            }
+
+            log('applyAllAutoFixes proceeding with auto fixes');
+            showNotification('Corrections appliquées!', 'success');
+        }
+
+        // Test 1: Attacher l'event listener
+        log('Setting up event listener...');
+        var applyAllAutoBtn = document.getElementById("applyAllAutoBtn");
+        if (applyAllAutoBtn) {
+            applyAllAutoBtn.addEventListener("click", function () {
+                log('Event listener triggered');
+                applyAllAutoFixes();
+            });
+            log('Event listener attached successfully');
+        } else {
+            log('ERROR: applyAllAutoBtn not found!');
+        }
+
+        // Test 2: Vérifier la visibilité
+        setTimeout(() => {
+            log('Button visibility check: ' + applyAllAutoBtn.style.display);
+            log('Button disabled: ' + applyAllAutoBtn.disabled);
+        }, 100);
+
+        // Test 3: Changer le filtre et tester
+        setTimeout(() => {
+            log('Changing currentFilter to "manual"');
+            currentFilter = 'manual';
+
+            setTimeout(() => {
+                log('Clicking button with manual filter...');
+                applyAllAutoBtn.click();
+            }, 500);
+        }, 2000);
+
+        // Test 4: Remettre auto et tester
+        setTimeout(() => {
+            log('Changing currentFilter back to "auto"');
+            currentFilter = 'auto';
+
+            setTimeout(() => {
+                log('Clicking button with auto filter...');
+                applyAllAutoBtn.click();
+            }, 500);
+        }, 4000);
+
+        log('Test initialized - click the button manually or wait for automated tests');
+    </script>
+</body>
+</html>

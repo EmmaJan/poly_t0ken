@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Bouton Minimal</title>
+    <style>
+        button { padding: 10px 20px; margin: 10px; }
+        .log { border: 1px solid #ddd; padding: 10px; margin: 20px 0; background: #f9f9f9; max-height: 300px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+    <h1>Test Bouton Minimal</h1>
+
+    <button id="applyAllAutoBtn">✨ Appliquer les corrections</button>
+
+    <div class="log" id="log"></div>
+
+    <script>
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+
+        function applyAllAutoFixes() {
+            log('✅ applyAllAutoFixes function executed successfully!');
+            alert('Fonction applyAllAutoFixes appelée!');
+        }
+
+        // Test 1: Vérifier que le bouton existe
+        var applyAllAutoBtn = document.getElementById("applyAllAutoBtn");
+        log('Button found: ' + !!applyAllAutoBtn);
+
+        if (applyAllAutoBtn) {
+            // Test 2: Attacher event listener
+            log('Attaching event listener...');
+            applyAllAutoBtn.addEventListener("click", function(event) {
+                log('Event listener triggered!');
+                log('Event type: ' + event.type);
+                log('Event target: ' + event.target.id);
+                applyAllAutoFixes();
+            });
+            log('Event listener attached');
+
+            // Test 3: Vérifier que le bouton est cliquable
+            log('Button disabled: ' + applyAllAutoBtn.disabled);
+            log('Button visible: ' + (applyAllAutoBtn.offsetWidth > 0));
+        }
+
+        log('Test ready - click the button!');
+    </script>
+</body>
+</html>

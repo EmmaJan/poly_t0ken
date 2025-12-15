@@ -53,9 +53,27 @@ Consultez [`COMPATIBILITY.md`](COMPATIBILITY.md) pour les règles détaillées e
 - `ui.html` : Interface utilisateur
 - `manifest.json` : Configuration du plugin
 - `assets/` : Icônes et ressources
+- `modules.js` : Chargeur de modules
+- `animationManager.js` : Gestionnaire d'animations
+- `pillManager.js` : Gestionnaire des pastilles
+- `uiManager.js` : Coordinateur UI
 - `check-compatibility.js` : Script de vérification de compatibilité
-- `COMPATIBILITY.md` : Guide de compatibilité JavaScript</contents>
+- `COMPATIBILITY.md` : Guide de compatibilité JavaScript
+- `MODULES_README.md` : Documentation de l'architecture modulaire
+
+## Architecture Modulaire
+
+Le plugin utilise une architecture modulaire pour séparer les préoccupations :
+
+- **Animations indépendantes** : Les effets visuels peuvent être modifiés sans affecter les pastilles
+- **Pastilles configurables** : L'affichage des suggestions est isolé des animations
+- **Configuration centralisée** : Tous les paramètres sont regroupés et modifiables
+- **Fallback automatique** : Compatibilité avec l'ancienne implémentation
+
+Voir [`MODULES_README.md`](MODULES_README.md) pour les détails techniques.</contents>
 </xai:function_call">Créer un README avec les informations de compatibilité
+
+
 
 
 

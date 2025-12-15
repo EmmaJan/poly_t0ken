@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Affichage des Tokens</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .tabs { display: flex; gap: 8px; margin-bottom: 20px; border-bottom: 1px solid #ddd; }
+        .tab { padding: 8px 16px; border: none; background: #f0f0f0; cursor: pointer; border-radius: 4px 4px 0 0; }
+        .tab.active { background: #007acc; color: white; }
+        .token-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+        .token-item { display: flex; align-items: center; gap: 12px; padding: 12px; background: #f9f9f9; border-radius: 8px; border: 1px solid #ddd; }
+        .token-preview { flex-shrink: 0; }
+        .token-info { flex: 1; }
+        .token-name { font-family: monospace; font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+        .token-value { font-family: monospace; font-size: 11px; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Test Affichage des Tokens Générés</h1>
+
+        <div class="tabs" id="tokenTabs">
+            <button class="tab active" data-category="brand">Brand</button>
+            <button class="tab" data-category="system">System</button>
+            <button class="tab" data-category="gray">Gray</button>
+            <button class="tab" data-category="spacing">Spacing</button>
+            <button class="tab" data-category="radius">Radius</button>
+            <button class="tab" data-category="typography">Typography</button>
+            <button class="tab" data-category="border">Border</button>
+        </div>
+
+        <div id="tokenPreview">
+            <div style="text-align: center; padding: 40px; color: #666;">
+                Cliquez sur "Charger des tokens de test" pour voir l'affichage
+            </div>
+        </div>
+
+        <br><br>
+        <button id="loadTestTokens">Charger des tokens de test</button>
+    </div>
+
+    <script src="code.js"></script>
+    <script>
+        // Simuler les tokens générés (comme ceux que vous avez vus dans les logs)
+        const testTokens = {
+            brand: {
+                subtle: "#E8EFFF",
+                light: "#C7D4FF",
+                base: "#6366F1",
+                hover: "#5855EB",
+                dark: "#4F46E5"
+            },
+            system: {
+                "success-light": "#FDE7EF",
+                "success-main": "#10B981",
+                "success-dark": "#FFFFFF",
+                "warning-light": "#E7EFFE",
+                "warning-main": "#F59E0B",
+                "warning-dark": "#FFFFFF",
+                "error-light": "#FDE2E1",
+                "error-main": "#EF4444",
+                "error-dark": "#FFFFFF",
+                "info-light": "#DBEAFE",
+                "info-main": "#3B82F6",
+                "info-dark": "#FFFFFF"
+            },
+            gray: {
+                "50": "#F9FAFB",
+                "100": "#F3F4F6",
+                "200": "#E5E7EB",
+                "300": "#D1D5DB",
+                "400": "#9CA3AF",
+                "500": "#6B7280",
+                "600": "#4B5563",
+                "700": "#374151",
+                "800": "#1F2937",
+                "900": "#111827",
+                "950": "#030712",
+                "white": "#FFFFFF"
+            },
+            spacing: {
+                "1": "4px",
+                "2": "8px",
+                "3": "12px",
+                "4": "16px",
+                "5": "20px"
+            },
+            radius: {
+                "sm": "2px",
+                "default": "4px",
+                "md": "6px",
+                "lg": "8px",
+                "xl": "12px"
+            },
+            typography: {
+                "text-xs": "0.75rem",
+                "text-sm": "0.875rem",
+                "text-base": "1rem",
+                "text-lg": "1.125rem",
+                "text-xl": "1.25rem"
+            },
+            border: {
+                "1": "1px",
+                "2": "2px",
+                "4": "4px"
+            }
+        };
+
+        // Fonction pour afficher les tokens générés dans l'interface
+        function displayGeneratedTokens(tokens) {
+            console.log("🎨 Displaying generated tokens:", tokens);
+
+            var tokenPreview = document.getElementById("tokenPreview");
+            var tokenTabs = document.getElementById("tokenTabs");
+
+            if (!tokenPreview || !tokenTabs) {
+                console.error("❌ Token preview or tabs not found");
+                return;
+            }
+
+            // Stocker les tokens globalement pour les onglets
+            window.generatedTokens = tokens;
+
+            // Activer le premier onglet par défaut
+            var firstTab = tokenTabs.querySelector('.tab[data-category="brand"]');
+            if (firstTab) {
+                firstTab.classList.add('active');
+                displayTokensForCategory('brand');
+            }
+
+            // Configurer les gestionnaires d'onglets
+            var tabs = tokenTabs.querySelectorAll('.tab');
+            tabs.forEach(function(tab) {
+                tab.addEventListener('click', function() {
+                    // Désactiver tous les onglets
+                    tabs.forEach(function(t) { t.classList.remove('active'); });
+
+                    // Activer l'onglet cliqué
+                    this.classList.add('active');
+
+                    // Afficher les tokens de cette catégorie
+                    var category = this.getAttribute('data-category');
+                    displayTokensForCategory(category);
+                });
+            });
+
+            console.log("✅ Token display interface initialized");
+        }
+
+        // Fonction pour afficher les tokens d'une catégorie spécifique
+        function displayTokensForCategory(category) {
+            console.log("📊 Displaying tokens for category:", category);
+
+            var tokenPreview = document.getElementById("tokenPreview");
+            if (!tokenPreview) return;
+
+            var tokens = window.generatedTokens;
+            if (!tokens || !tokens[category]) {
+                tokenPreview.innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">Aucun token trouvé pour cette catégorie</div>';
+                return;
+            }
+
+            var categoryTokens = tokens[category];
+            var tokenKeys = Object.keys(categoryTokens);
+
+            if (tokenKeys.length === 0) {
+                tokenPreview.innerHTML = '<div style="text-align: center; padding: 40px; color: #666;">Cette catégorie est vide</div>';
+                return;
+            }
+
+            // Créer l'affichage des tokens selon le type
+            var html = '<div class="token-grid">';
+
+            tokenKeys.forEach(function(key) {
+                var value = categoryTokens[key];
+                var displayValue = value;
+                var previewStyle = '';
+
+                // Formater la valeur selon le type
+                if (typeof value === 'string' && value.startsWith('#')) {
+                    // Couleur
+                    previewStyle = 'background-color: ' + value + '; width: 24px; height: 24px; border-radius: 4px; border: 1px solid #ddd;';
+                    displayValue = value;
+                } else if (typeof value === 'string' && (value.includes('px') || value.includes('rem') || value.includes('em'))) {
+                    // Taille/espacement
+                    previewStyle = 'width: 40px; height: 8px; background: #007acc; border-radius: 2px;';
+                } else if (typeof value === 'string' && value.includes('rem')) {
+                    // Typographie
+                    displayValue = value;
+                } else {
+                    // Autre valeur
+                    displayValue = value;
+                }
+
+                html += '<div class="token-item">';
+                html += '<div class="token-preview" style="' + previewStyle + '"></div>';
+                html += '<div class="token-info">';
+                html += '<div class="token-name">' + key + '</div>';
+                html += '<div class="token-value">' + displayValue + '</div>';
+                html += '</div>';
+                html += '</div>';
+            });
+
+            html += '</div>';
+            tokenPreview.innerHTML = html;
+
+            console.log("✅ Displayed", tokenKeys.length, "tokens for category", category);
+        }
+
+        // Charger les tokens de test
+        document.getElementById('loadTestTokens').addEventListener('click', function() {
+            console.log('🎯 Loading test tokens...');
+            displayGeneratedTokens(testTokens);
+        });
+
+        console.log('🎬 Test page ready. Click "Charger des tokens de test" to see the display.');
+    </script>
+</body>
+</html>

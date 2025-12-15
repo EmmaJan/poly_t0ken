@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Bouton Générer les Tokens</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        button { padding: 10px 20px; margin: 10px; background: #007acc; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #005aa3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .hidden { display: none !important; }
+        .log { border: 1px solid #ddd; padding: 10px; margin: 20px 0; background: #f9f9f9; max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+        .step { margin: 10px 0; padding: 10px; border-left: 4px solid #007acc; background: #f0f8ff; }
+        .error { color: red; }
+        .success { color: green; }
+    </style>
+</head>
+<body>
+    <h1>Test Bouton "Générer les Tokens"</h1>
+
+    <div class="step">
+        <h3>Étape 1: Sélection de la bibliothèque</h3>
+        <button id="lib-custom">Custom</button>
+        <button id="lib-shadcn">ShadCN</button>
+        <button id="lib-antd">Ant Design</button>
+    </div>
+
+    <div class="step">
+        <h3>Étape 2: Configuration des tokens</h3>
+        <input type="color" id="colorPicker" value="#007acc">
+        <span id="colorValue">#007acc</span>
+        <br><br>
+        <button id="step2Generate">Générer les Tokens →</button>
+    </div>
+
+    <div class="log" id="log"></div>
+
+    <script>
+        var currentColor = '#007acc';
+        var currentNaming = 'custom';
+
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            entry.className = type;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(`[${type}] ${message}`);
+        }
+
+        // Simuler le message handler du plugin
+        function simulatePluginMessageHandler(msg) {
+            log(`Plugin received message: ${JSON.stringify(msg)}`, 'success');
+
+            if (msg.type === 'generate') {
+                log(`Processing generate request with color: ${msg.color}, naming: ${msg.naming}`, 'info');
+
+                try {
+                    // Simuler la génération de tokens
+                    var tokens = {
+                        brand: { primary: msg.color, secondary: '#666' },
+                        system: { success: '#28a745', error: '#dc3545' },
+                        gray: { 100: '#f8f9fa', 900: '#212529' },
+                        spacing: { small: '8px', medium: '16px' },
+                        radius: { small: '4px', medium: '8px' },
+                        typography: { fontFamily: 'Arial', fontSize: '16px' },
+                        border: { width: '1px', style: 'solid' }
+                    };
+
+                    log(`Tokens generated successfully: ${Object.keys(tokens).length} categories`, 'success');
+
+                    // Simuler la réponse du plugin
+                    setTimeout(() => {
+                        log('Plugin sent tokens-generated message back to UI', 'info');
+                        handleTokensGenerated(tokens);
+                    }, 500);
+
+                } catch (error) {
+                    log(`Error generating tokens: ${error.message}`, 'error');
+                }
+            }
+        }
+
+        function handleTokensGenerated(tokens) {
+            log(`UI received tokens-generated message with ${Object.keys(tokens).length} token categories`, 'success');
+            alert('Tokens générés avec succès ! Vérifiez la console pour les détails.');
+        }
+
+        // Initialisation
+        log('Initializing test page...', 'info');
+
+        // Configuration du sélecteur de couleur
+        var colorPicker = document.getElementById('colorPicker');
+        var colorValue = document.getElementById('colorValue');
+
+        if (colorPicker) {
+            colorPicker.addEventListener('input', function() {
+                var val = colorPicker.value.toUpperCase();
+                colorValue.textContent = val;
+                currentColor = val;
+                log(`Color changed to: ${val}`);
+            });
+
+            colorPicker.addEventListener('change', function() {
+                var val = colorPicker.value.toUpperCase();
+                currentColor = val;
+                log(`Color confirmed: ${val}`);
+            });
+        }
+
+        // Configuration des boutons de bibliothèque
+        ['custom', 'shadcn', 'antd'].forEach(lib => {
+            var btn = document.getElementById(`lib-${lib}`);
+            if (btn) {
+                btn.addEventListener('click', function() {
+                    currentNaming = lib;
+                    log(`Library changed to: ${lib}`);
+
+                    // Mettre à jour l'apparence des boutons
+                    ['custom', 'shadcn', 'antd'].forEach(l => {
+                        var b = document.getElementById(`lib-${l}`);
+                        if (b) b.style.background = l === lib ? '#28a745' : '#007acc';
+                    });
+                });
+            }
+        });
+
+        // Test du bouton principal
+        var step2Generate = document.getElementById("step2Generate");
+        if (step2Generate) {
+            log('Button step2Generate found', 'success');
+
+            step2Generate.addEventListener("click", function () {
+                log('step2Generate button clicked', 'info');
+
+                // Simuler l'envoi du message au plugin (comme dans ui.html)
+                var message = {
+                    pluginMessage: {
+                        type: "generate",
+                        color: currentColor,
+                        naming: currentNaming
+                    }
+                };
+
+                log(`Sending message to plugin: ${JSON.stringify(message)}`, 'info');
+
+                // Simuler la réception par le plugin
+                setTimeout(() => {
+                    simulatePluginMessageHandler(message.pluginMessage);
+                }, 100);
+            });
+
+            log('Event listener attached to step2Generate', 'success');
+        } else {
+            log('ERROR: step2Generate button not found!', 'error');
+        }
+
+        // Tests automatiques
+        setTimeout(() => {
+            log('Running automated test...', 'info');
+
+            if (step2Generate) {
+                log('Clicking button programmatically...');
+                step2Generate.click();
+            }
+        }, 2000);
+
+        log('Test page initialized - click the button or wait for automated test', 'info');
+    </script>
+</body>
+</html>

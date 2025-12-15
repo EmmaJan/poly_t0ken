@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Génération de Palette</title>
+    <style>
+        body { font-family: monospace; margin: 20px; background: #1e1e1e; color: #d4d4d4; }
+        .container { max-width: 800px; margin: 0 auto; }
+        .section { margin: 20px 0; padding: 15px; border: 1px solid #333; border-radius: 5px; }
+        .color-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin: 10px 0; }
+        .color-item { display: flex; align-items: center; gap: 10px; padding: 10px; background: #2d2d2d; border-radius: 5px; }
+        .color-preview { width: 30px; height: 30px; border-radius: 4px; border: 1px solid #555; }
+        .color-info { flex: 1; }
+        .color-name { font-size: 12px; font-weight: bold; margin-bottom: 2px; }
+        .color-value { font-size: 11px; color: #888; }
+        .success { color: #4ade80; }
+        .error { color: #ef4444; }
+        .warning { color: #f59e0b; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Test Génération de Palette - Correction Appliquée</h1>
+
+        <div class="section">
+            <h3>Test des fonctions de conversion</h3>
+            <button id="testConversions">Tester hexToRgb → hexToHsl → hslToHex</button>
+            <div id="conversionResults"></div>
+        </div>
+
+        <div class="section">
+            <h3>Génération de palette Brand</h3>
+            <label>Couleur: <input type="color" id="testColor" value="#6366F1"></label>
+            <button id="testPalette">Générer la palette</button>
+            <div id="paletteResults"></div>
+        </div>
+    </div>
+
+    <script src="code.js"></script>
+    <script>
+        function testConversions() {
+            const results = document.getElementById('conversionResults');
+            results.innerHTML = '<h4>Résultats des conversions</h4>';
+
+            const testHex = "#6366F1";
+
+            try {
+                // Test hexToRgb
+                const rgb = hexToRgb(testHex);
+                results.innerHTML += `<div>hexToRgb("${testHex}") → r: ${rgb.r.toFixed(3)}, g: ${rgb.g.toFixed(3)}, b: ${rgb.b.toFixed(3)}</div>`;
+
+                if (rgb.r < 0 || rgb.r > 1 || rgb.g < 0 || rgb.g > 1 || rgb.b < 0 || rgb.b > 1) {
+                    results.innerHTML += '<div class="error">❌ ERREUR: rgb values should be between 0 and 1</div>';
+                    return;
+                }
+
+                // Test hexToHsl
+                const hsl = hexToHsl(testHex);
+                results.innerHTML += `<div>hexToHsl("${testHex}") → h: ${hsl.h.toFixed(1)}, s: ${hsl.s.toFixed(1)}%, l: ${hsl.l.toFixed(1)}%</div>`;
+
+                if (hsl.h < 0 || hsl.h > 360 || hsl.s < 0 || hsl.s > 100 || hsl.l < 0 || hsl.l > 100) {
+                    results.innerHTML += '<div class="error">❌ ERREUR: hsl values out of range</div>';
+                    return;
+                }
+
+                // Test round-trip
+                const backToHex = hslToHex(hsl.h, hsl.s, hsl.l);
+                results.innerHTML += `<div>hslToHex(${hsl.h.toFixed(1)}, ${hsl.s.toFixed(1)}, ${hsl.l.toFixed(1)}) → "${backToHex}"</div>`;
+
+                if (backToHex.toUpperCase() !== testHex.toUpperCase()) {
+                    results.innerHTML += `<div class="warning">⚠️ Round-trip imprecise: ${testHex} → ${backToHex}</div>`;
+                } else {
+                    results.innerHTML += '<div class="success">✅ Round-trip perfect!</div>';
+                }
+
+            } catch (error) {
+                results.innerHTML += `<div class="error">❌ ERREUR: ${error.message}</div>`;
+            }
+        }
+
+        function testPalette() {
+            const color = document.getElementById('testColor').value;
+            const results = document.getElementById('paletteResults');
+
+            results.innerHTML = '<h4>Palette générée</h4>';
+
+            try {
+                const tokens = generateBrandColors(color, 'custom');
+                results.innerHTML += '<div class="color-grid">';
+
+                Object.entries(tokens).forEach(([name, hexValue]) => {
+                    results.innerHTML += `
+                        <div class="color-item">
+                            <div class="color-preview" style="background-color: ${hexValue}"></div>
+                            <div class="color-info">
+                                <div class="color-name">${name}</div>
+                                <div class="color-value">${hexValue}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                results.innerHTML += '</div>';
+
+                // Vérifier qu'il n'y a pas que du blanc
+                const hasOnlyWhite = Object.values(tokens).every(hex => hex === '#FFFFFF');
+                if (hasOnlyWhite) {
+                    results.innerHTML += '<div class="error">❌ ERREUR: Tous les tokens sont blancs !</div>';
+                } else {
+                    results.innerHTML += '<div class="success">✅ Palette générée avec succès</div>';
+                }
+
+            } catch (error) {
+                results.innerHTML += `<div class="error">❌ ERREUR: ${error.message}</div>`;
+            }
+        }
+
+        document.getElementById('testConversions').addEventListener('click', testConversions);
+        document.getElementById('testPalette').addEventListener('click', testPalette);
+
+        // Test automatique au chargement
+        setTimeout(() => {
+            testConversions();
+            testPalette();
+        }, 500);
+    </script>
+</body>
+</html>
