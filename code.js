@@ -1,6 +1,218 @@
 
 
 
+// Plugin startup verification - verified manually: 0 occurrences of variable.scopes = assignments
+console.log("✅ Plugin initialized: scopes use setScopes() method only");
+
+// Naming persistence utilities (per-file)
+function saveNamingToFile(naming) {
+  try {
+    figma.clientStorage.setAsync("tokenStarter.naming", naming);
+    console.log('💾 Saved naming to client storage:', naming);
+  } catch (e) {
+    console.warn('Could not save naming to client storage:', e);
+  }
+}
+
+function saveSemanticTokensToFile(semanticTokens) {
+  try {
+    if (semanticTokens && Object.keys(semanticTokens).length > 0) {
+      // Nouveau format: chaque token a resolvedValue, type, aliasTo optionnel, meta optionnel
+      var formattedTokens = {};
+      var aliasCount = 0;
+      var valueCount = 0;
+
+      for (var key in semanticTokens) {
+        if (!semanticTokens.hasOwnProperty(key)) continue;
+
+        var tokenData = semanticTokens[key];
+        var tokenType = SEMANTIC_TYPE_MAP[key] || "COLOR";
+
+        // Si c'est déjà le nouveau format, le conserver tel quel
+        if (typeof tokenData === 'object' && tokenData.resolvedValue !== undefined) {
+          formattedTokens[key] = tokenData;
+          if (tokenData.aliasTo) aliasCount++;
+          else valueCount++;
+          continue;
+        }
+
+        // Migration depuis l'ancien format (valeur brute)
+        formattedTokens[key] = {
+          resolvedValue: tokenData,
+          type: tokenType,
+          aliasTo: null, // Pas d'alias connu lors de la génération initiale
+          meta: {
+            sourceCategory: getCategoryFromSemanticKey(key),
+            sourceKey: getKeyFromSemanticKey(key),
+            updatedAt: Date.now()
+          }
+        };
+        valueCount++;
+      }
+
+      var semanticData = JSON.stringify(formattedTokens);
+      figma.root.setPluginData("tokenStarter.semantic", semanticData);
+      console.log(`💾 DEBUG: Saved semantic tokens to file: ${Object.keys(formattedTokens).length} tokens (${aliasCount} aliases, ${valueCount} values)`);
+    }
+  } catch (e) {
+    console.warn('Could not save semantic tokens to file:', e);
+  }
+}
+
+function getSemanticTokensFromFile() {
+  try {
+    var saved = figma.root.getPluginData("tokenStarter.semantic");
+    if (saved) {
+      var rawTokens = JSON.parse(saved);
+      var migratedTokens = {};
+      var migratedCount = 0;
+      var aliasCount = 0;
+      var valueCount = 0;
+
+      // Migrer depuis l'ancien format si nécessaire
+      for (var key in rawTokens) {
+        if (!rawTokens.hasOwnProperty(key)) continue;
+
+        var tokenData = rawTokens[key];
+
+        // Si c'est déjà le nouveau format (avec resolvedValue)
+        if (typeof tokenData === 'object' && tokenData.resolvedValue !== undefined) {
+          migratedTokens[key] = tokenData;
+          if (tokenData.aliasTo) aliasCount++;
+          else valueCount++;
+          continue;
+        }
+
+        // Migration depuis l'ancien format (valeur brute)
+        var tokenType = SEMANTIC_TYPE_MAP[key] || "COLOR";
+        migratedTokens[key] = {
+          resolvedValue: tokenData,
+          type: tokenType,
+          aliasTo: null,
+          meta: {
+            sourceCategory: getCategoryFromSemanticKey(key),
+            sourceKey: getKeyFromSemanticKey(key),
+            updatedAt: Date.now()
+          }
+        };
+        migratedCount++;
+        valueCount++;
+      }
+
+      if (migratedCount > 0) {
+        console.log(`🔄 DEBUG: Migrated ${migratedCount} tokens from old format`);
+        // Sauvegarder automatiquement la version migrée
+        saveSemanticTokensToFile(migratedTokens);
+      }
+
+      console.log(`📂 DEBUG: Restored semantic tokens from file: ${Object.keys(migratedTokens).length} tokens (${aliasCount} aliases, ${valueCount} values)`);
+      return migratedTokens;
+    }
+  } catch (e) {
+    console.warn('Could not retrieve semantic tokens from file:', e);
+  }
+  return null;
+}
+
+function getNamingFromFile() {
+  try {
+    // Essayer d'abord clientStorage (nouveau), puis root (ancien)
+    var saved = figma.root.getPluginData("tokenStarter.naming");
+    return saved || "custom"; // Default to custom if not set
+  } catch (e) {
+    console.warn('Could not retrieve naming from file:', e);
+    return "custom";
+  }
+}
+
+// Fonctions utilitaires pour extraire les métadonnées des clés sémantiques
+function getCategoryFromSemanticKey(semanticKey) {
+  var categoryMap = {
+    'bg.canvas': 'gray',
+    'bg.surface': 'gray',
+    'bg.elevated': 'gray',
+    'bg.muted': 'gray',
+    'bg.inverse': 'gray',
+    'text.primary': 'gray',
+    'text.secondary': 'gray',
+    'text.muted': 'gray',
+    'text.inverse': 'gray',
+    'text.disabled': 'gray',
+    'border.default': 'gray',
+    'border.muted': 'gray',
+    'action.primary.default': 'brand',
+    'action.primary.hover': 'brand',
+    'action.primary.active': 'brand',
+    'action.primary.disabled': 'gray',
+    'status.success': 'system',
+    'status.warning': 'system',
+    'status.error': 'system',
+    'status.info': 'system',
+    'radius.sm': 'radius',
+    'radius.md': 'radius',
+    'space.sm': 'spacing',
+    'space.md': 'spacing',
+    'font.size.base': 'typography',
+    'font.weight.base': 'typography'
+  };
+  return categoryMap[semanticKey] || 'unknown';
+}
+
+function getKeyFromSemanticKey(semanticKey) {
+  var keyMap = {
+    'bg.canvas': '50',
+    'bg.surface': '50',
+    'bg.elevated': '100',
+    'bg.muted': '100',
+    'bg.inverse': '950',
+    'text.primary': '950',
+    'text.secondary': '700',
+    'text.muted': '500',
+    'text.inverse': '50',
+    'text.disabled': '400',
+    'border.default': '200',
+    'border.muted': '100',
+    'action.primary.default': '600',
+    'action.primary.hover': '700',
+    'action.primary.active': '800',
+    'action.primary.disabled': '300',
+    'status.success': 'success',
+    'status.warning': 'warning',
+    'status.error': 'error',
+    'status.info': 'info',
+    'radius.sm': 'sm',
+    'radius.md': 'md',
+    'space.sm': '8',
+    'space.md': '16',
+    'font.size.base': 'base',
+    'font.weight.base': 'regular'
+  };
+  return keyMap[semanticKey] || 'unknown';
+}
+
+// Alias resolution cache management
+function initializeCollectionCache() {
+  tryResolveSemanticAlias.collectionCache = {};
+  var collections = figma.variables.getLocalVariableCollections();
+  for (var i = 0; i < collections.length; i++) {
+    var collection = collections[i];
+    var collectionName = collection.name;
+
+    // Déterminer la catégorie de la collection
+    var category = null;
+    if (collectionName === "Brand Colors") category = "brand";
+    else if (collectionName === "System Colors") category = "system";
+    else if (collectionName === "Grayscale") category = "gray";
+    else if (collectionName === "Spacing") category = "spacing";
+    else if (collectionName === "Radius") category = "radius";
+    else if (collectionName === "Typography") category = "typography";
+
+    if (category) {
+      tryResolveSemanticAlias.collectionCache[category] = collection;
+    }
+  }
+}
+
 var CONFIG = {
   
   DEBUG_MODE: true,
@@ -86,7 +298,8 @@ var CONFIG = {
     spacing: 'spacing',
     radius: 'radius',
     typography: 'typography',
-    border: 'border'
+    border: 'border',
+    semantic: 'semantic'
   },
 
   
@@ -99,7 +312,857 @@ var CONFIG = {
   }
 };
 
+// Configuration des tokens sémantiques
+var SEMANTIC_TOKENS = [
+  // Background / Surface
+  'bg.canvas',
+  'bg.surface',
+  'bg.elevated',
+  'bg.muted',
+  'bg.inverse',
 
+  // Text
+  'text.primary',
+  'text.secondary',
+  'text.muted',
+  'text.inverse',
+  'text.disabled',
+
+  // Border
+  'border.default',
+  'border.muted',
+
+  // Action (Primary)
+  'action.primary.default',
+  'action.primary.hover',
+  'action.primary.active',
+  'action.primary.disabled',
+
+  // Status
+  'status.success',
+  'status.warning',
+  'status.error',
+  'status.info',
+
+  // Shape & Space
+  'radius.sm',
+  'radius.md',
+  'space.sm',
+  'space.md',
+
+  // Typography base
+  'font.size.base',
+  'font.weight.base'
+];
+
+// Mapping des types pour chaque token sémantique
+var SEMANTIC_TYPE_MAP = {
+  // Background - COLOR
+  'bg.canvas': 'COLOR',
+  'bg.surface': 'COLOR',
+  'bg.elevated': 'COLOR',
+  'bg.muted': 'COLOR',
+  'bg.inverse': 'COLOR',
+
+  // Text - COLOR
+  'text.primary': 'COLOR',
+  'text.secondary': 'COLOR',
+  'text.muted': 'COLOR',
+  'text.inverse': 'COLOR',
+  'text.disabled': 'COLOR',
+
+  // Border - COLOR
+  'border.default': 'COLOR',
+  'border.muted': 'COLOR',
+
+  // Action - COLOR
+  'action.primary.default': 'COLOR',
+  'action.primary.hover': 'COLOR',
+  'action.primary.active': 'COLOR',
+  'action.primary.disabled': 'COLOR',
+
+  // Status - COLOR
+  'status.success': 'COLOR',
+  'status.warning': 'COLOR',
+  'status.error': 'COLOR',
+  'status.info': 'COLOR',
+
+  // Shape & Space - FLOAT
+  'radius.sm': 'FLOAT',
+  'radius.md': 'FLOAT',
+  'space.sm': 'FLOAT',
+  'space.md': 'FLOAT',
+
+  // Typography - FLOAT/STRING
+  'font.size.base': 'FLOAT',
+  'font.weight.base': 'FLOAT'
+};
+
+// Mapping des noms selon la librairie
+var SEMANTIC_NAME_MAP = {
+  tailwind: {
+    // Background
+    'bg.canvas': 'background-canvas',
+    'bg.surface': 'background-surface',
+    'bg.elevated': 'background-elevated',
+    'bg.muted': 'background-muted',
+    'bg.inverse': 'background-inverse',
+
+    // Text
+    'text.primary': 'text-primary',
+    'text.secondary': 'text-secondary',
+    'text.muted': 'text-muted',
+    'text.inverse': 'text-inverse',
+    'text.disabled': 'text-disabled',
+
+    // Border
+    'border.default': 'border-default',
+    'border.muted': 'border-muted',
+
+    // Action
+    'action.primary.default': 'primary',
+    'action.primary.hover': 'primary-hover',
+    'action.primary.active': 'primary-active',
+    'action.primary.disabled': 'primary-disabled',
+
+    // Status
+    'status.success': 'success',
+    'status.warning': 'warning',
+    'status.error': 'destructive',
+    'status.info': 'info',
+
+    // Shape & Space
+    'radius.sm': 'radius-sm',
+    'radius.md': 'radius-md',
+    'space.sm': 'space-sm',
+    'space.md': 'space-md',
+
+    // Typography
+    'font.size.base': 'font-size-base',
+    'font.weight.base': 'font-weight-base'
+  },
+
+  mui: {
+    // Background
+    'bg.canvas': 'palette/background/default',
+    'bg.surface': 'palette/background/paper',
+    'bg.elevated': 'palette/background/paper',
+    'bg.muted': 'palette/action/disabledBackground',
+    'bg.inverse': 'palette/grey/900',
+
+    // Text
+    'text.primary': 'palette/text/primary',
+    'text.secondary': 'palette/text/secondary',
+    'text.muted': 'palette/text/disabled',
+    'text.inverse': 'palette/common/white',
+    'text.disabled': 'palette/text/disabled',
+
+    // Border
+    'border.default': 'palette/divider',
+    'border.muted': 'palette/divider',
+
+    // Action
+    'action.primary.default': 'palette/primary/main',
+    'action.primary.hover': 'palette/primary/dark',
+    'action.primary.active': 'palette/primary/dark',
+    'action.primary.disabled': 'palette/action/disabled',
+
+    // Status
+    'status.success': 'palette/success/main',
+    'status.warning': 'palette/warning/main',
+    'status.error': 'palette/error/main',
+    'status.info': 'palette/info/main',
+
+    // Shape & Space
+    'radius.sm': 'shape/borderRadius',
+    'radius.md': 'shape/borderRadius',
+    'space.sm': 'spacing/sm',
+    'space.md': 'spacing/md',
+
+    // Typography
+    'font.size.base': 'typography/fontSize',
+    'font.weight.base': 'typography/fontWeightRegular'
+  },
+
+  ant: {
+    // Background
+    'bg.canvas': 'colorBgLayout',
+    'bg.surface': 'colorBgContainer',
+    'bg.elevated': 'colorBgElevated',
+    'bg.muted': 'colorBgTextHover',
+    'bg.inverse': 'colorTextBase',
+
+    // Text
+    'text.primary': 'colorText',
+    'text.secondary': 'colorTextSecondary',
+    'text.muted': 'colorTextQuaternary',
+    'text.inverse': 'colorTextLightSolid',
+    'text.disabled': 'colorTextDisabled',
+
+    // Border
+    'border.default': 'colorBorder',
+    'border.muted': 'colorBorderSecondary',
+
+    // Action
+    'action.primary.default': 'colorPrimary',
+    'action.primary.hover': 'colorPrimaryHover',
+    'action.primary.active': 'colorPrimaryActive',
+    'action.primary.disabled': 'colorPrimaryBg',
+
+    // Status
+    'status.success': 'colorSuccess',
+    'status.warning': 'colorWarning',
+    'status.error': 'colorError',
+    'status.info': 'colorInfo',
+
+    // Shape & Space
+    'radius.sm': 'borderRadiusSM',
+    'radius.md': 'borderRadius',
+    'space.sm': 'paddingSM',
+    'space.md': 'padding',
+
+    // Typography
+    'font.size.base': 'fontSize',
+    'font.weight.base': 'fontWeightNormal'
+  },
+
+  bootstrap: {
+    // Background
+    'bg.canvas': '$body-bg',
+    'bg.surface': '$card-bg',
+    'bg.elevated': '$modal-content-bg',
+    'bg.muted': '$secondary-bg',
+    'bg.inverse': '$body-color',
+
+    // Text
+    'text.primary': '$body-color',
+    'text.secondary': '$secondary-color',
+    'text.muted': '$text-muted',
+    'text.inverse': '$white',
+    'text.disabled': '$btn-disabled-color',
+
+    // Border
+    'border.default': '$border-color',
+    'border.muted': '$border-color-translucent',
+
+    // Action
+    'action.primary.default': '$primary',
+    'action.primary.hover': '$primary-hover',
+    'action.primary.active': '$primary-active',
+    'action.primary.disabled': '$primary-disabled',
+
+    // Status
+    'status.success': '$success',
+    'status.warning': '$warning',
+    'status.error': '$danger',
+    'status.info': '$info',
+
+    // Shape & Space
+    'radius.sm': '$border-radius-sm',
+    'radius.md': '$border-radius',
+    'space.sm': '$spacer',
+    'space.md': '$spacer',
+
+    // Typography
+    'font.size.base': '$font-size-base',
+    'font.weight.base': '$font-weight-base'
+  }
+};
+
+/**
+ * Génère les tokens sémantiques à partir des primitives
+ * @param {Object} primitives - Les tokens primitifs organisés par catégorie
+ * @param {Object} options - Options de génération (contrastCheck, etc.)
+ * @returns {Object} Les tokens sémantiques générés
+ */
+function generateSemanticTokens(primitives, options = {}) {
+  console.log(`🔄 generateSemanticTokens appelée avec primitives:`, Object.keys(primitives || {}).filter(k => primitives[k]));
+  const semanticTokens = {};
+
+  // Fonctions utilitaires pour les fallbacks
+  function safeGet(obj, path, fallback) {
+    try {
+      const keys = path.split('.');
+      let current = obj;
+      for (const key of keys) {
+        if (current && typeof current === 'object' && key in current) {
+          current = current[key];
+        } else {
+          console.warn(`Semantic token generation: key "${path}" not found, using fallback:`, fallback);
+          return fallback;
+        }
+      }
+      return current;
+    } catch (error) {
+      console.warn(`Semantic token generation: error accessing "${path}", using fallback:`, fallback);
+      return fallback;
+    }
+  }
+
+  // Extraction des primitives avec fallbacks
+  const gray = primitives.gray || {};
+  const brand = primitives.brand || {};
+  const system = primitives.system || {};
+  const spacing = primitives.spacing || {};
+  const radius = primitives.radius || {};
+  const typography = primitives.typography || {};
+
+  console.log('🔍 Primitives reçues pour génération sémantique:');
+  console.log('  gray:', Object.keys(gray).length > 0 ? Object.keys(gray).slice(0, 5).join(', ') + '...' : 'vide');
+  console.log('  brand:', Object.keys(brand).length > 0 ? Object.keys(brand).slice(0, 3).join(', ') + '...' : 'vide');
+  console.log('  system:', Object.keys(system).length > 0 ? Object.keys(system).join(', ') : 'vide');
+
+  // Règles de génération - Light mode (adaptées pour Tailwind)
+  semanticTokens['bg.canvas'] = safeGet(gray, '50', '#FFFFFF'); // Blanc pur si pas de gray-50
+  semanticTokens['bg.surface'] = safeGet(gray, '50', '#FFFFFF'); // Utilise gray-50 (blanc) pour surface aussi
+  semanticTokens['bg.elevated'] = safeGet(gray, '100', '#F9F9F9'); // Légèrement plus foncé que surface
+  semanticTokens['bg.muted'] = safeGet(gray, '100', '#F5F5F5');
+  semanticTokens['bg.inverse'] = safeGet(gray, '950', '#0A0A0A');
+
+  console.log('🎨 Valeurs sémantiques générées:');
+  console.log('  bg.canvas:', semanticTokens['bg.canvas']);
+  console.log('  bg.surface:', semanticTokens['bg.surface']);
+  console.log('  bg.muted:', semanticTokens['bg.muted']);
+  console.log('  text.primary:', semanticTokens['text.primary']);
+  console.log('  text.secondary:', semanticTokens['text.secondary']);
+  console.log('  action.primary.default:', semanticTokens['action.primary.default']);
+
+  semanticTokens['text.primary'] = safeGet(gray, '950', '#0A0A0A');
+  semanticTokens['text.secondary'] = safeGet(gray, '700', '#404040');
+  semanticTokens['text.muted'] = safeGet(gray, '500', '#737373');
+  semanticTokens['text.inverse'] = safeGet(gray, '50', '#FAFAFA');
+  semanticTokens['text.disabled'] = safeGet(gray, '400', '#A3A3A3');
+
+  semanticTokens['border.default'] = safeGet(gray, '200', '#E5E5E5');
+  semanticTokens['border.muted'] = safeGet(gray, '100', '#F5F5F5');
+
+  semanticTokens['action.primary.default'] = safeGet(brand, '600', '#2563EB');
+  semanticTokens['action.primary.hover'] = safeGet(brand, '700', '#1D4ED8');
+  semanticTokens['action.primary.active'] = safeGet(brand, '800', '#1E40AF');
+  semanticTokens['action.primary.disabled'] = safeGet(gray, '300', '#D1D5DB');
+
+  // Status tokens avec fallbacks vers system ou valeurs par défaut
+  semanticTokens['status.success'] = safeGet(system, 'success.main', safeGet(system, 'success', safeGet(brand, '600', '#16A34A')));
+  semanticTokens['status.warning'] = safeGet(system, 'warning.main', safeGet(system, 'warning', '#F59E0B'));
+  semanticTokens['status.error'] = safeGet(system, 'error.main', safeGet(system, 'error', '#DC2626'));
+  semanticTokens['status.info'] = safeGet(system, 'info.main', safeGet(system, 'info', '#2563EB'));
+
+  // Shape & Space
+  semanticTokens['radius.sm'] = safeGet(radius, 'sm', safeGet(radius, '4', 4));
+  semanticTokens['radius.md'] = safeGet(radius, 'md', safeGet(radius, '8', 8));
+  semanticTokens['space.sm'] = safeGet(spacing, '8', safeGet(spacing, '2', 8));
+  semanticTokens['space.md'] = safeGet(spacing, '16', safeGet(spacing, '4', 16));
+
+  // Typography
+  semanticTokens['font.size.base'] = safeGet(typography, 'base', safeGet(typography, '16', 16));
+  semanticTokens['font.weight.base'] = safeGet(typography, 'regular', 400);
+
+  // Normalisation des tokens FLOAT pour assurer qu'ils sont des numbers
+  const floatTokens = ['radius.sm', 'radius.md', 'space.sm', 'space.md', 'font.size.base', 'font.weight.base'];
+  floatTokens.forEach(key => {
+    if (semanticTokens[key] !== undefined) {
+      const normalized = normalizeFloatValue(semanticTokens[key]);
+      if (normalized !== null) {
+        semanticTokens[key] = normalized;
+      } else {
+        // Fallback sur une valeur par défaut raisonnable
+        const fallbacks = {
+          'radius.sm': 4,
+          'radius.md': 8,
+          'space.sm': 8,
+          'space.md': 16,
+          'font.size.base': 16,
+          'font.weight.base': 400
+        };
+        console.warn(`Semantic token generation: Invalid FLOAT value for "${key}", using fallback:`, fallbacks[key]);
+        semanticTokens[key] = fallbacks[key];
+      }
+    }
+  });
+
+  // Vérification contraste si activée (optionnel mais recommandé)
+  if (options.contrastCheck !== false) {
+    const contrastResults = checkSemanticContrast(semanticTokens);
+    if (!contrastResults.passed) {
+      console.warn('Semantic token generation: Contrast issues detected, adjusting colors...');
+      applyContrastAdjustments(semanticTokens, contrastResults.issues, primitives);
+    }
+  }
+
+  return semanticTokens;
+}
+
+/**
+ * Normalise une valeur float en s'assurant qu'elle est un number
+ * @param {number|string} value - La valeur à normaliser
+ * @returns {number|null} La valeur normalisée ou null si impossible à parser
+ */
+function normalizeFloatValue(value) {
+  if (typeof value === 'number' && !isNaN(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    // Supprimer les unités et convertir
+    var cleanValue = value.replace(/px|rem|em|%|vh|vw|vmin|vmax/g, '');
+    var parsed = parseFloat(cleanValue);
+
+    if (!isNaN(parsed)) {
+      // Convertir rem en px (1rem = 16px)
+      if (value.includes('rem')) {
+        return parsed * 16;
+      }
+      // Convertir em en px (approximation, 1em ≈ 16px)
+      if (value.includes('em')) {
+        return parsed * 16;
+      }
+      // Autres unités : retourner tel quel (px, %, vh, etc. sont gardés comme nombres)
+      return parsed;
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Vérifie le contraste WCAG des tokens sémantiques
+ * @param {Object} semanticTokens - Les tokens sémantiques à vérifier
+ * @returns {Object} Résultats de la vérification
+ */
+function checkSemanticContrast(semanticTokens) {
+  const issues = [];
+  let passed = true;
+
+  // Contraste text.primary sur bg.surface ≥ 4.5
+  const primaryContrast = calculateContrastRatio(semanticTokens['text.primary'], semanticTokens['bg.surface']);
+  if (primaryContrast < 4.5) {
+    issues.push({
+      token: 'text.primary',
+      background: 'bg.surface',
+      currentRatio: primaryContrast,
+      requiredRatio: 4.5
+    });
+    passed = false;
+  }
+
+  // Contraste text.inverse sur bg.inverse ≥ 4.5
+  const inverseContrast = calculateContrastRatio(semanticTokens['text.inverse'], semanticTokens['bg.inverse']);
+  if (inverseContrast < 4.5) {
+    issues.push({
+      token: 'text.inverse',
+      background: 'bg.inverse',
+      currentRatio: inverseContrast,
+      requiredRatio: 4.5
+    });
+    passed = false;
+  }
+
+  // Contraste texte blanc sur bouton primary ≥ 4.5 (CRITIQUE UX)
+  const buttonContrast = calculateContrastRatio('#FFFFFF', semanticTokens['action.primary.default']);
+  if (buttonContrast < 4.5) {
+    issues.push({
+      token: 'action.primary.default',
+      background: 'button-text',
+      currentRatio: buttonContrast,
+      requiredRatio: 4.5
+    });
+    passed = false;
+  }
+
+  return { passed, issues };
+}
+
+/**
+ * Applique les ajustements automatiques pour corriger les problèmes de contraste
+ * @param {Object} semanticTokens - Les tokens à ajuster
+ * @param {Array} issues - Les problèmes de contraste détectés
+ * @param {Object} primitives - Les tokens primitifs pour accéder aux valeurs brand
+ */
+function applyContrastAdjustments(semanticTokens, issues, primitives = {}) {
+  // Ajustements simples basés sur des nuances de gris prédéfinies
+  const grayScale = ['#0A0A0A', '#1A1A1A', '#262626', '#404040', '#525252', '#737373', '#A3A3A3'];
+
+  issues.forEach(issue => {
+    if (issue.token === 'text.primary') {
+      // Essayer des nuances plus sombres
+      for (const darkerGray of grayScale.slice(0, 3)) {
+        const newRatio = calculateContrastRatio(darkerGray, semanticTokens['bg.surface']);
+        if (newRatio >= 4.5) {
+          semanticTokens['text.primary'] = darkerGray;
+          console.log(`Adjusted text.primary to ${darkerGray} (contrast: ${newRatio})`);
+          break;
+        }
+      }
+    } else if (issue.token === 'text.inverse') {
+      // Essayer des nuances plus claires
+      for (const lighterGray of grayScale.slice(-3).reverse()) {
+        const newRatio = calculateContrastRatio(lighterGray, semanticTokens['bg.inverse']);
+        if (newRatio >= 4.5) {
+          semanticTokens['text.inverse'] = lighterGray;
+          console.log(`Adjusted text.inverse to ${lighterGray} (contrast: ${newRatio})`);
+          break;
+        }
+      }
+    } else if (issue.token === 'action.primary.default') {
+      // Essayer d'assombrir la couleur primary en utilisant les nuances brand disponibles
+      const brand = primitives.brand || {};
+      const darkerShades = ['700', '800', '900'];
+
+      for (const shade of darkerShades) {
+        const darkerColor = brand[shade];
+        if (darkerColor) {
+          const newRatio = calculateContrastRatio('#FFFFFF', darkerColor);
+          if (newRatio >= 4.5) {
+            semanticTokens['action.primary.default'] = darkerColor;
+            console.log(`Adjusted action.primary.default to ${darkerColor} (brand-${shade}, contrast: ${newRatio})`);
+            break;
+          }
+        }
+      }
+    }
+  });
+}
+
+/**
+ * Calcule le ratio de contraste WCAG entre deux couleurs
+ * @param {string} foreground - Couleur du texte (hex)
+ * @param {string} background - Couleur du fond (hex)
+ * @returns {number} Ratio de contraste
+ */
+function calculateContrastRatio(foreground, background) {
+  // Fonction simplifiée - en production, utiliser une vraie bibliothèque de calcul de contraste
+  // Pour l'instant, on retourne un ratio basé sur une logique simple
+  try {
+    const fgLuminance = getRelativeLuminance(foreground);
+    const bgLuminance = getRelativeLuminance(background);
+
+    const lighter = Math.max(fgLuminance, bgLuminance);
+    const darker = Math.min(fgLuminance, bgLuminance);
+
+    return (lighter + 0.05) / (darker + 0.05);
+  } catch (error) {
+    console.warn('Error calculating contrast ratio:', error);
+    return 1; // Ratio minimum si erreur
+  }
+}
+
+/**
+ * Calcule la luminance relative d'une couleur hex
+ * @param {string} hex - Couleur en hexadécimal
+ * @returns {number} Luminance relative
+ */
+function getRelativeLuminance(hex) {
+  // Conversion hex vers RGB
+  const r = parseInt(hex.slice(1, 3), 16) / 255;
+  const g = parseInt(hex.slice(3, 5), 16) / 255;
+  const b = parseInt(hex.slice(5, 7), 16) / 255;
+
+  // Fonction de luminance
+  const toLinear = c => c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+
+  return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+}
+
+/**
+ * Retourne le nom de variable sémantique selon la librairie
+ * @param {string} semanticKey - Clé sémantique (ex: 'bg.canvas')
+ * @param {string} libType - Type de librairie ('tailwind', 'mui', 'ant', 'bootstrap')
+ * @returns {string} Nom de variable adapté
+ */
+function getSemanticVariableName(semanticKey, libType) {
+  const mapping = SEMANTIC_NAME_MAP[libType] || SEMANTIC_NAME_MAP.tailwind;
+  return mapping[semanticKey] || semanticKey.replace(/\./g, '/');
+}
+
+/**
+ * Génère les données de preview pour les tokens sémantiques
+ * @param {Object} tokens - Les tokens disponibles
+ * @param {string} naming - Le type de naming (tailwind, mui, ant, bootstrap)
+ * @returns {Array} Liste des rows pour le preview
+ */
+function getSemanticPreviewRows(tokens, naming) {
+  var rows = [];
+  if (!tokens || !tokens.semantic) return rows;
+
+  for (var key in tokens.semantic) {
+    if (!tokens.semantic.hasOwnProperty(key)) continue;
+
+    var tokenData = tokens.semantic[key];
+
+    // Nouveau format: extraire resolvedValue et infos d'alias
+    var resolvedValue, tokenType, isAlias, aliasTo;
+    if (typeof tokenData === 'object' && tokenData.resolvedValue !== undefined) {
+      // Nouveau format
+      resolvedValue = tokenData.resolvedValue;
+      tokenType = tokenData.type || SEMANTIC_TYPE_MAP[key] || "COLOR";
+      isAlias = !!tokenData.aliasTo;
+      aliasTo = tokenData.aliasTo;
+    } else {
+      // Ancien format ou valeur brute (fallback)
+      resolvedValue = tokenData;
+      tokenType = SEMANTIC_TYPE_MAP[key] || "COLOR";
+      isAlias = false;
+      aliasTo = null;
+    }
+
+    rows.push({
+      key: key,
+      figmaName: getSemanticVariableName(key, naming),
+      type: tokenType,
+      value: resolvedValue,
+      isAlias: isAlias,
+      aliasTo: aliasTo
+    });
+  }
+  return rows;
+}
+
+/**
+ * Tente de résoudre un alias vers une variable primitive pour un token sémantique
+ * @param {string} semanticKey - Clé du token sémantique (ex: 'bg.canvas')
+ * @param {Object} allTokens - Tous les tokens disponibles
+ * @returns {Object|null} Variable Figma correspondante ou null
+ */
+function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
+  console.log(`🔍 tryResolveSemanticAlias: ${semanticKey} avec naming=${naming}`);
+  try {
+    // Créer un mapping adapté selon le système de design
+    var primitiveMapping;
+
+    if (naming === 'tailwind') {
+      // Mapping spécifique pour Tailwind - clés exactes de extractVariableKey
+      primitiveMapping = {
+        // Background - utiliser gray-50, gray-100, etc. (pas '0')
+        'bg.canvas': { category: 'gray', keys: ['50'] },
+        'bg.surface': { category: 'gray', keys: ['50'] },
+        'bg.muted': { category: 'gray', keys: ['100'] },
+        'bg.inverse': { category: 'gray', keys: ['950', '900'] },
+
+        // Text
+        'text.primary': { category: 'gray', keys: ['950', '900'] },
+        'text.secondary': { category: 'gray', keys: ['700', '600'] },
+        'text.muted': { category: 'gray', keys: ['500', '400'] },
+        'text.inverse': { category: 'gray', keys: ['50'] },
+        'text.disabled': { category: 'gray', keys: ['400', '300'] },
+
+        // Border
+        'border.default': { category: 'gray', keys: ['200'] },
+        'border.muted': { category: 'gray', keys: ['100'] },
+
+        // Action primary - utiliser primary-600, etc.
+        'action.primary.default': { category: 'brand', keys: ['600', '500'] },
+        'action.primary.hover': { category: 'brand', keys: ['700', '600'] },
+        'action.primary.active': { category: 'brand', keys: ['800', '700'] },
+        'action.primary.disabled': { category: 'gray', keys: ['300'] },
+
+        // Status - pour Tailwind, utiliser system si disponible sinon fallback
+        'status.success': { category: 'system', keys: ['success'], fallback: { category: 'brand', keys: ['600'] } },
+        'status.warning': { category: 'system', keys: ['warning'], fallback: '#F59E0B' },
+        'status.error': { category: 'system', keys: ['error'], fallback: '#DC2626' },
+        'status.info': { category: 'system', keys: ['info'], fallback: '#2563EB' },
+
+        // Shape & Space - utiliser radius-4, spacing-8, etc.
+        'radius.sm': { category: 'radius', keys: ['4'] },
+        'radius.md': { category: 'radius', keys: ['8'] },
+        'space.sm': { category: 'spacing', keys: ['4'] },
+        'space.md': { category: 'spacing', keys: ['8'] },
+
+        // Typography - utiliser typo-base, etc.
+        'font.size.base': { category: 'typography', keys: ['base'] },
+        'font.weight.base': { category: 'typography', keys: ['regular'] }
+      };
+    } else {
+      // Mapping générique pour les autres systèmes
+      primitiveMapping = {
+        // Background
+        'bg.canvas': { category: 'gray', keys: ['50', 'white'] },
+        'bg.surface': { category: 'gray', keys: ['white', '50'] },
+        'bg.muted': { category: 'gray', keys: ['100'] },
+        'bg.inverse': { category: 'gray', keys: ['950', '900'] },
+
+        // Text
+        'text.primary': { category: 'gray', keys: ['950', '900'] },
+        'text.secondary': { category: 'gray', keys: ['700', '600'] },
+        'text.muted': { category: 'gray', keys: ['500', '400'] },
+        'text.inverse': { category: 'gray', keys: ['50', '100'] },
+        'text.disabled': { category: 'gray', keys: ['400', '300'] },
+
+        // Border
+        'border.default': { category: 'gray', keys: ['200', '300'] },
+        'border.muted': { category: 'gray', keys: ['100', '200'] },
+
+        // Action primary
+        'action.primary.default': { category: 'brand', keys: ['600', '500'] },
+        'action.primary.hover': { category: 'brand', keys: ['700', '600'] },
+        'action.primary.active': { category: 'brand', keys: ['800', '700'] },
+        'action.primary.disabled': { category: 'gray', keys: ['300', '400'] },
+
+        // Status - utiliser system si disponible, sinon brand ou defaults
+        'status.success': { category: 'system', keys: ['success'], fallback: { category: 'brand', keys: ['600'] } },
+        'status.warning': { category: 'system', keys: ['warning'], fallback: '#F59E0B' },
+        'status.error': { category: 'system', keys: ['error'], fallback: '#DC2626' },
+        'status.info': { category: 'system', keys: ['info'], fallback: '#2563EB' },
+
+        // Shape & Space - utiliser les primitives directes
+        'radius.sm': { category: 'radius', keys: ['sm', '4'] },
+        'radius.md': { category: 'radius', keys: ['md', '8'] },
+        'space.sm': { category: 'spacing', keys: ['8', '2'] },
+        'space.md': { category: 'spacing', keys: ['16', '4'] },
+
+        // Typography
+        'font.size.base': { category: 'typography', keys: ['base', '16'] },
+        'font.weight.base': { category: 'typography', keys: ['regular', '400'] }
+      };
+    }
+
+    var mapping = primitiveMapping[semanticKey];
+    if (!mapping) return null;
+
+    // Créer un cache des collections pour optimiser les recherches
+    if (!tryResolveSemanticAlias.collectionCache) {
+      tryResolveSemanticAlias.collectionCache = {};
+      var collections = figma.variables.getLocalVariableCollections();
+      for (var i = 0; i < collections.length; i++) {
+        var collection = collections[i];
+        var collectionName = collection.name;
+
+        // Déterminer la catégorie de la collection
+        var category = null;
+        if (collectionName === "Brand Colors") category = "brand";
+        else if (collectionName === "System Colors") category = "system";
+        else if (collectionName === "Grayscale") category = "gray";
+        else if (collectionName === "Spacing") category = "spacing";
+        else if (collectionName === "Radius") category = "radius";
+        else if (collectionName === "Typography") category = "typography";
+
+        if (category) {
+          tryResolveSemanticAlias.collectionCache[category] = collection;
+        }
+      }
+    }
+
+    var collection = tryResolveSemanticAlias.collectionCache[mapping.category];
+    if (!collection) return null;
+
+    // Chercher la variable dans cette collection
+    var variables = collection.variableIds.map(function(id) { return figma.variables.getVariableById(id); });
+
+    // Essayer chaque clé possible dans l'ordre de priorité
+    for (var k = 0; k < mapping.keys.length; k++) {
+      var targetKey = mapping.keys[k];
+
+      for (var j = 0; j < variables.length; j++) {
+        var variable = variables[j];
+        if (!variable) continue;
+
+        // Déterminer si cette variable correspond à la clé recherchée
+        var varKey = extractVariableKey(variable, collection.name);
+
+        if (varKey === targetKey) {
+          console.log(`✅ Alias success: ${semanticKey} → ${mapping.category}/${targetKey} (${variable.name})`);
+          return variable;
+        }
+      }
+    }
+
+    // Si pas trouvé et qu'il y a un fallback, essayer le fallback
+    if (mapping.fallback) {
+      if (typeof mapping.fallback === 'object') {
+        // Essayer de trouver la variable de fallback dans une autre catégorie
+        var fallbackCollection = tryResolveSemanticAlias.collectionCache[mapping.fallback.category];
+        if (fallbackCollection) {
+          var fallbackVariables = fallbackCollection.variableIds.map(function(id) { return figma.variables.getVariableById(id); });
+
+          for (var fk = 0; fk < mapping.fallback.keys.length; fk++) {
+            var fallbackKey = mapping.fallback.keys[fk];
+
+            for (var fj = 0; fj < fallbackVariables.length; fj++) {
+              var fallbackVar = fallbackVariables[fj];
+              if (!fallbackVar) continue;
+
+              var fallbackVarKey = extractVariableKey(fallbackVar, fallbackCollection.name);
+              if (fallbackVarKey === fallbackKey) {
+                console.log(`✅ Alias fallback success: ${semanticKey} → ${mapping.fallback.category}/${fallbackKey} (${fallbackVar.name})`);
+                return fallbackVar;
+              }
+            }
+          }
+        }
+      }
+      // Pour les fallbacks de couleur hex, on ne peut pas créer d'alias
+    }
+
+    // Log détaillé quand aucun alias n'est trouvé
+    var availableKeys = variables.map(function(v) {
+      return v ? extractVariableKey(v, collection.name) : null;
+    }).filter(function(k) { return k !== null; });
+
+    console.log(`❌ Alias fallback: ${semanticKey} → ${mapping.category} keys [${mapping.keys.join(', ')}] not found. Available: [${availableKeys.join(', ')}]`);
+
+    return null;
+  } catch (error) {
+    console.warn('Error resolving semantic alias for', semanticKey, error);
+    return null;
+  }
+}
+
+/**
+ * Extrait la clé d'une variable selon sa collection et son nom
+ * @param {Object} variable - Variable Figma
+ * @param {string} collectionName - Nom de la collection
+ * @returns {string|null} Clé extraite ou null
+ */
+function extractVariableKey(variable, collectionName) {
+  if (!variable || !variable.name) return null;
+
+  var name = variable.name;
+
+  // Déterminer la catégorie selon le nom de collection
+  var category = null;
+  if (collectionName === "Brand Colors") {
+    // Pour brand: "primary/600" -> "600", "primary-600" -> "600", "600" -> "600", "primary" -> "500"
+    if (name.startsWith("primary/")) {
+      return name.replace("primary/", "");
+    } else if (name.match(/^(?:primary|brand)[-_](\d{2,3})$/)) {
+      // primary-600, brand-500, primary_600, etc.
+      return name.match(/^(?:primary|brand)[-_](\d{2,3})$/)[1];
+    } else if (name.match(/^\d{2,3}$/)) {
+      // Juste un nombre comme 600 (Bootstrap)
+      return name;
+    } else if (name === "primary") {
+      return "500"; // default brand
+    }
+  } else if (collectionName === "System Colors") {
+    // Pour system: nom direct ("success", "warning", etc.)
+    return name;
+  } else if (collectionName === "Grayscale") {
+    // Pour gray: "gray-50" -> "50", "grey-100" -> "100", "50" -> "50"
+    var grayMatch = name.match(/^(gray|grey)[-_](.+)$/);
+    if (grayMatch) {
+      return grayMatch[2];
+    } else if (name.match(/^\d{2,3}$/)) {
+      // Juste un nombre comme 50 (format simple)
+      return name;
+    }
+  } else if (collectionName === "Spacing") {
+    // Pour spacing: "spacing-8" -> "8", "spacing-2" -> "2"
+    if (name.startsWith("spacing-")) {
+      return name.replace("spacing-", "").replace(/-/g, ".");
+    }
+  } else if (collectionName === "Radius") {
+    // Pour radius: "radius-4" -> "4", "radius-sm" -> "sm"
+    if (name.startsWith("radius-")) {
+      return name.replace("radius-", "").replace(/-/g, ".");
+    }
+  } else if (collectionName === "Typography") {
+    // Pour typography: "typo-base" -> "base", "typo-regular" -> "regular"
+    if (name.startsWith("typo-")) {
+      return name.replace("typo-", "").replace(/-/g, ".");
+    }
+  }
+
+  return null;
+}
 
 
 var Utils = {
@@ -456,186 +1519,22 @@ var FigmaService = {
 
   
   getOrCreateCollection: function (name, overwrite) {
-    var collections = FigmaService.getCollections();
-
-    for (var i = 0; i < collections.length; i++) {
-      if (collections[i].name === name) {
-        if (overwrite) {
-          
-          var variables = collections[i].variableIds;
-          for (var j = 0; j < variables.length; j++) {
-            try {
-              var variable = FigmaService.getVariableById(variables[j]);
-              if (variable) {
-                variable.remove();
-              }
-            } catch (error) {
-            }
-          }
-        }
-        return collections[i];
-      }
-    }
-
-    return figma.variables.createVariableCollection(name);
+    return getOrCreateCollection(name, overwrite);
   },
 
   
-  createOrUpdateVariable: function (collection, name, type, value, category, overwrite) {
-    
-    var allVariables = figma.variables.getLocalVariables();
-    var existingVariable = null;
-
-    for (var i = 0; i < allVariables.length; i++) {
-      var variable = allVariables[i];
-      if (variable.name === name && variable.variableCollectionId === collection.id) {
-        existingVariable = variable;
-        break;
-      }
-    }
-
-    if (existingVariable && !overwrite) {
-      return existingVariable;
-    }
-
-    if (existingVariable) {
-      
-      existingVariable.setValueForMode(collection.modes[0].modeId, value);
-      return existingVariable;
-    }
-
-    
-    var variable = figma.variables.createVariable(name, collection, type);
-
-    
-    var scopes = [];
-    if (category === CONFIG.categories.brand || category === CONFIG.categories.system || category === CONFIG.categories.gray) {
-      scopes = CONFIG.scopes.Fill;
-    } else if (category === CONFIG.categories.spacing || category === CONFIG.categories.radius) {
-      scopes = CONFIG.scopes['Item Spacing'];
-    } else if (category === CONFIG.categories.typography) {
-      scopes = CONFIG.scopes['Font Size'];
-    } else if (category === CONFIG.categories.border) {
-      scopes = CONFIG.scopes.Stroke;
-    }
-
-    if (scopes.length > 0) {
-      variable.setScopes(scopes);
-    }
-
-    variable.setValueForMode(collection.modes[0].modeId, value);
-    return variable;
+  createOrUpdateVariable: function (collection, name, type, value, category, overwrite, hintKey) {
+    return createOrUpdateVariable(collection, name, type, value, category, overwrite, hintKey);
   },
 
-  
-  importTokens: function (tokens, naming, overwrite) {
+  importTokens: function(tokens, naming, overwrite) {
+    // Deprecated: keep a single source of truth for imports
+    return importTokensToFigma(tokens, naming, overwrite);
+  },
 
-    
-    if (tokens.brand) {
-      var brandCollection = FigmaService.getOrCreateCollection("Brand Colors", overwrite);
-
-      for (var key in tokens.brand) {
-        if (!tokens.brand.hasOwnProperty(key)) continue;
-
-        var varName = "";
-        if (naming === CONFIG.naming.shadcn) varName = "primary";
-        else if (naming === CONFIG.naming.mui) varName = "primary/" + key;
-        else if (naming === CONFIG.naming.ant) varName = "primary-" + key;
-        else if (naming === CONFIG.naming.bootstrap) varName = key;
-        else varName = "primary-" + key;
-
-        FigmaService.createOrUpdateVariable(brandCollection, varName, CONFIG.variableTypes.COLOR, ColorService.hexToRgb(tokens.brand[key]), CONFIG.categories.brand, overwrite);
-      }
-    }
-
-    
-    if (tokens.system) {
-      var systemCollection = FigmaService.getOrCreateCollection("System Colors", overwrite);
-
-      for (var sKey in tokens.system) {
-        if (!tokens.system.hasOwnProperty(sKey)) continue;
-
-        if (typeof tokens.system[sKey] === 'object') {
-          
-          for (var subKey in tokens.system[sKey]) {
-            if (!tokens.system[sKey].hasOwnProperty(subKey)) continue;
-            FigmaService.createOrUpdateVariable(systemCollection, sKey + "/" + subKey, CONFIG.variableTypes.COLOR, ColorService.hexToRgb(tokens.system[sKey][subKey]), CONFIG.categories.system, overwrite);
-          }
-        } else {
-          
-          FigmaService.createOrUpdateVariable(systemCollection, sKey, CONFIG.variableTypes.COLOR, ColorService.hexToRgb(tokens.system[sKey]), CONFIG.categories.system, overwrite);
-        }
-      }
-    }
-
-    
-    if (tokens.gray) {
-      var grayCollection = FigmaService.getOrCreateCollection("Grayscale", overwrite);
-
-      for (var gKey in tokens.gray) {
-        if (!tokens.gray.hasOwnProperty(gKey)) continue;
-
-        var grayName = "";
-        if (naming === CONFIG.naming.shadcn) grayName = "gray-" + gKey;
-        else if (naming === CONFIG.naming.mui) grayName = "grey-" + gKey;
-        else if (naming === CONFIG.naming.ant) grayName = "gray-" + gKey;
-        else grayName = "gray-" + gKey;
-
-        FigmaService.createOrUpdateVariable(grayCollection, grayName, CONFIG.variableTypes.COLOR, ColorService.hexToRgb(tokens.gray[gKey]), CONFIG.categories.gray, overwrite);
-      }
-    }
-
-    
-    if (tokens.spacing) {
-      var spacingCollection = FigmaService.getOrCreateCollection("Spacing", overwrite);
-
-      for (var sKey in tokens.spacing) {
-        if (!tokens.spacing.hasOwnProperty(sKey)) continue;
-        var cleanKey = sKey.toString().replace(/[^a-zA-Z0-9_-]/g, '');
-        FigmaService.createOrUpdateVariable(spacingCollection, "spacing-" + cleanKey, CONFIG.variableTypes.FLOAT, tokens.spacing[sKey], CONFIG.categories.spacing, overwrite);
-      }
-    }
-
-    
-    if (tokens.radius) {
-      var radiusCollection = FigmaService.getOrCreateCollection("Radius", overwrite);
-
-      for (var rKey in tokens.radius) {
-        if (!tokens.radius.hasOwnProperty(rKey)) continue;
-        var cleanRKey = rKey.toString().replace(/[^a-zA-Z0-9_-]/g, '');
-        FigmaService.createOrUpdateVariable(radiusCollection, "radius-" + cleanRKey, CONFIG.variableTypes.FLOAT, tokens.radius[rKey], CONFIG.categories.radius, overwrite);
-      }
-    }
-
-    
-    if (tokens.typography) {
-      var typoCollection = FigmaService.getOrCreateCollection("Typography", overwrite);
-
-      for (var tKey in tokens.typography) {
-        if (!tokens.typography.hasOwnProperty(tKey)) continue;
-        var cleanTKey = tKey.toString().replace(/[^a-zA-Z0-9_-]/g, '');
-        FigmaService.createOrUpdateVariable(typoCollection, "typo-" + cleanTKey, CONFIG.variableTypes.FLOAT, tokens.typography[tKey], CONFIG.categories.typography, overwrite);
-      }
-    }
-
-    
-    if (tokens.border) {
-      var borderCollection = FigmaService.getOrCreateCollection("Border", overwrite);
-
-      for (var bKey in tokens.border) {
-        if (!tokens.border.hasOwnProperty(bKey)) continue;
-        var cleanBKey = bKey.toString().replace(/[^a-zA-Z0-9_-]/g, '');
-        FigmaService.createOrUpdateVariable(borderCollection, "border-" + cleanBKey, CONFIG.variableTypes.FLOAT, tokens.border[bKey], CONFIG.categories.border, overwrite);
-      }
-    }
-
-    FigmaService.notify("✅ Tokens importés depuis le fichier (Ctrl+Z pour annuler)");
-  }
 };
 
-
-
-
+// Scanner utility for token analysis and suggestions
 var Scanner = {
   
   valueMap: null,
@@ -1178,8 +2077,34 @@ var Fixer = {
 
 figma.showUI(__html__, { width: 700, height: 950, themeColors: true });
 
+// Load saved naming and semantic tokens, then send to UI
+var savedSemanticTokens = getSemanticTokensFromFile();
+
+// Charger le naming de manière asynchrone
+figma.clientStorage.getAsync("tokenStarter.naming").then(function(clientSavedNaming) {
+  var savedNaming = clientSavedNaming || getNamingFromFile();
+
+  figma.ui.postMessage({
+    type: "init",
+    naming: savedNaming,
+    savedSemanticTokens: savedSemanticTokens
+  });
+}).catch(function() {
+  // Fallback vers la méthode synchrone
+  var savedNaming = getNamingFromFile();
+
+  figma.ui.postMessage({
+    type: "init",
+    naming: savedNaming,
+    savedSemanticTokens: savedSemanticTokens
+  });
+});
+
 
 figma.ui.onmessage = function (msg) {
+
+  // Initialize collection cache for alias resolution
+  initializeCollectionCache();
 
   try {
     switch (msg.type) {
@@ -1193,10 +2118,21 @@ figma.ui.onmessage = function (msg) {
 
       case 'generate-tokens':
         var tokens = TokenService.generateAll(msg);
-        figma.ui.postMessage({ type: 'tokens-generated', tokens: tokens });
+        var savedNaming = getNamingFromFile();
+        var effectiveNaming = msg.naming || savedNaming;
+        // Save naming preference to file (always save what will be used)
+        saveNamingToFile(effectiveNaming);
+        var semanticPreview = getSemanticPreviewRows(tokens, effectiveNaming);
+        figma.ui.postMessage({
+          type: 'tokens-generated',
+          tokens: tokens,
+          semanticPreview: semanticPreview,
+          naming: effectiveNaming
+        });
         break;
 
       case 'import-tokens':
+        console.log('🔄 Pipeline d\'import : import-tokens → FigmaService.importTokens');
         FigmaService.importTokens(msg.tokens, msg.naming, msg.overwrite);
         break;
 
@@ -1211,6 +2147,10 @@ figma.ui.onmessage = function (msg) {
 
       case 'apply-all':
         Fixer.applyAll();
+        break;
+
+      case 'save-naming':
+        saveNamingToFile(msg.naming);
         break;
 
       default:
@@ -1262,7 +2202,9 @@ if (existingCollections.length > 0) {
 
 
 function extractExistingTokens() {
+  console.log('🔍 extractExistingTokens: starting extraction');
   var collections = figma.variables.getLocalVariableCollections();
+  console.log('📚 Found collections:', collections.map(c => c.name));
 
   var tokens = {
     brand: {},
@@ -1271,7 +2213,8 @@ function extractExistingTokens() {
     spacing: {},
     radius: {},
     typography: {},
-    border: {}
+    border: {},
+    semantic: {}
   };
 
   var detectedLibrary = "tailwind"; 
@@ -1297,6 +2240,8 @@ function extractExistingTokens() {
       category = "typography";
     } else if (collectionName === "Border") {
       category = "border";
+    } else if (collectionName === "Semantic") {
+      category = "semantic";
     }
 
 
@@ -1315,34 +2260,95 @@ function extractExistingTokens() {
       if (!variable) continue;
 
       var modeId = collection.modes[0].modeId;
-      var value = variable.valuesByMode[modeId];
+      var value = resolveVariableValue(variable, modeId);
 
-      
-      var cleanName = variable.name
-        .replace(/^(primary|brand|gray|grey|spacing|radius|typo|border)-/i, "")
-
-      
-      if (variable.name.indexOf("/") !== -1) {
-        detectedLibrary = "mui";
-      } else if (cleanName.match(/^(main|light|dark|contrastText)$/)) {
-        detectedLibrary = "mui";
-      } else if (cleanName.match(/^(subtle|hover|emphasis)$/)) {
-        detectedLibrary = "bootstrap";
+      // Debug log pour voir les valeurs extraites
+      if (!value) {
+        console.warn(`⚠️ Variable ${category}/${cleanName} (${variable.name}) a une valeur null/undefined`);
+      } else {
+        console.log(`📖 Extracted ${category}/${cleanName}:`, typeof value, value);
       }
 
       
-      var formattedValue = value;
-      if (variable.resolvedType === "COLOR" && typeof value === "object") {
-        formattedValue = rgbToHex(value);
+      var cleanName = variable.name;
+
+      if (category === "semantic") {
+        // Pour les tokens sémantiques, utiliser directement le nom Figma comme clé
+        cleanName = variable.name;
+      } else {
+        // Pour les primitives, nettoyer le préfixe
+        cleanName = variable.name
+          .replace(/^(primary|brand|gray|grey|system|spacing|radius|typo|border)-/i, "");
+      }
+
+
+      // Ignorer complètement la collection Semantic dans la détection de librairie
+      // La détection ne se base que sur les primitives : Brand/System/Grayscale/Spacing/Radius/Typography/Border
+      if (category !== "semantic") {
+        if (cleanName.match(/^(main|light|dark|contrastText)$/)) {
+          detectedLibrary = "mui";
+        } else if (cleanName.match(/^(subtle|hover|emphasis)$/)) {
+          detectedLibrary = "bootstrap";
+        }
+      }
+
+      
+      // Normaliser TOUTES les valeurs selon leur type (primitives ET sémantiques)
+      var formattedValue;
+
+      if (variable.resolvedType === "COLOR") {
+        // Toujours convertir les couleurs en hex string
+        if (typeof value === "object" && value && value.r !== undefined) {
+          formattedValue = rgbToHex(value);
+        } else if (typeof value === "string" && value && value.startsWith("#")) {
+          formattedValue = value; // Déjà en hex
+        } else {
+          // Valeur par défaut selon la catégorie
+          formattedValue = category === "semantic" ? "#000000" : "#FFFFFF";
+        }
       } else if (variable.resolvedType === "FLOAT") {
-        formattedValue = value + "px";
+        // Convertir en number
+        if (typeof value === "number") {
+          formattedValue = value;
+        } else if (typeof value === "string") {
+          var parsed = parseFloat(value);
+          formattedValue = isNaN(parsed) ? 0 : parsed;
+        } else {
+          formattedValue = 0;
+        }
       } else if (variable.resolvedType === "STRING") {
-        formattedValue = value;
+        // Garder les strings
+        formattedValue = typeof value === "string" ? value : "";
+      } else {
+        // Pour tout autre type, convertir en string safe
+        formattedValue = String(value || "");
       }
 
+      // Log si on utilise une valeur par défaut pour les couleurs
+      if (variable.resolvedType === "COLOR" &&
+          formattedValue === (category === "semantic" ? "#000000" : "#FFFFFF") &&
+          value !== formattedValue) {
+        console.warn(`⚠️ Valeur par défaut utilisée pour ${category}/${cleanName}:`, value, '→', formattedValue);
+      }
+
+      console.log(`✅ Final ${category}/${cleanName}: ${formattedValue}`);
       tokens[category][cleanName] = formattedValue;
     }
   }
+
+  // Les tokens sémantiques sont maintenant extraits depuis la collection "Semantic" de Figma
+
+  console.log('📦 extractExistingTokens result:', {
+    brand: Object.keys(tokens.brand).length + ' keys: ' + Object.keys(tokens.brand).slice(0, 3).join(', '),
+    system: Object.keys(tokens.system).length,
+    gray: Object.keys(tokens.gray).length,
+    spacing: Object.keys(tokens.spacing).length,
+    radius: Object.keys(tokens.radius).length,
+    typography: Object.keys(tokens.typography).length,
+    border: Object.keys(tokens.border).length,
+    semantic: Object.keys(tokens.semantic).length,
+    detectedLibrary: detectedLibrary
+  });
 
   for (var cat in tokens) {
   }
@@ -1358,16 +2364,29 @@ function extractExistingTokens() {
 
 
 function hexToRgb(hex) {
-  hex = hex.replace("#", "");
-  if (hex.length === 3) {
-    hex = hex.split("").map(function (x) { return x + x; }).join("");
+  // Si c'est déjà un objet RGB, le retourner tel quel
+  if (hex && typeof hex === 'object' && hex.r !== undefined && hex.g !== undefined && hex.b !== undefined) {
+    return hex;
   }
-  var num = parseInt(hex, 16);
-  return {
-    r: ((num >> 16) & 255) / 255,
-    g: ((num >> 8) & 255) / 255,
-    b: (num & 255) / 255
-  };
+
+  // Sinon, convertir depuis hex string
+  if (typeof hex === 'string') {
+    hex = hex.replace("#", "");
+    if (hex.length === 3) {
+      hex = hex.split("").map(function (x) { return x + x; }).join("");
+    }
+    var num = parseInt(hex, 16);
+    if (!isNaN(num)) {
+      return {
+        r: ((num >> 16) & 255) / 255,
+        g: ((num >> 8) & 255) / 255,
+        b: (num & 255) / 255
+      };
+    }
+  }
+
+  // Valeur par défaut si format invalide
+  return { r: 0, g: 0, b: 0 };
 }
 
 function rgbToHex(c) {
@@ -1774,13 +2793,72 @@ var scopesByCategory = {
   typography: ["FONT_SIZE", "LINE_HEIGHT", "LETTER_SPACING", "TEXT_CONTENT"]
 };
 
+function applySemanticScopes(variable, semanticKey, variableType) {
+  if (!variable || !semanticKey) return;
+
+  // Normaliser la clé (supporter clé en bg.canvas OU nom Figma background/canvas)
+  var normalizedKey = semanticKey.replace(/\//g, '.').toLowerCase();
+
+  // Déterminer la famille
+  var family = '';
+  if (normalizedKey.startsWith('bg.') || normalizedKey.startsWith('text.') ||
+      normalizedKey.startsWith('action.') || normalizedKey.startsWith('status.')) {
+    family = 'color';
+  } else if (normalizedKey.startsWith('border.')) {
+    family = 'borderColor';
+  } else if (normalizedKey.startsWith('radius.')) {
+    family = 'radius';
+  } else if (normalizedKey.startsWith('space.')) {
+    family = 'space';
+  } else if (normalizedKey.startsWith('font.size.')) {
+    family = 'fontSize';
+  } else if (normalizedKey.startsWith('font.weight.')) {
+    family = 'fontWeight';
+  }
+
+  // Scopes à appliquer
+  var scopes = [];
+  switch (family) {
+    case 'color':
+      // Utiliser les scopes déjà présents dans scopesByCategory quand possible
+      scopes = scopesByCategory.brand; // ["ALL_FILLS", "STROKE_COLOR", "EFFECT_COLOR"]
+      break;
+    case 'borderColor':
+      // Au minimum ["STROKE_COLOR"]
+      scopes = ["STROKE_COLOR"];
+      break;
+    case 'radius':
+      scopes = ["CORNER_RADIUS"];
+      break;
+    case 'space':
+      scopes = scopesByCategory.spacing; // ["GAP", "WIDTH_HEIGHT"]
+      break;
+    case 'fontSize':
+      scopes = scopesByCategory.typography; // ["FONT_SIZE", "LINE_HEIGHT", "LETTER_SPACING", "TEXT_CONTENT"]
+      break;
+    case 'fontWeight':
+      // Ne rien mettre ([])
+      scopes = [];
+      break;
+  }
+
+  // Appliquer
+  if (scopes.length > 0) {
+    try {
+      variable.setScopes(scopes);
+    } catch (e) {
+      console.warn("Unable to set semantic scopes:", semanticKey, e);
+    }
+  }
+}
+
 function applyScopesForCategory(variable, category) {
   if (!variable || !category) return;
   var scopes = scopesByCategory[category];
   if (!scopes || scopes.length === 0) return;
   try {
-    variable.scopes = scopes;
-  } catch (error) {
+    variable.setScopes(scopes);
+  } catch (e) {
   }
 }
 
@@ -1807,8 +2885,9 @@ function getOrCreateCollection(name, overwrite) {
 }
 
 
-function createOrUpdateVariable(collection, name, type, value, category, overwrite) {
-  
+function createOrUpdateVariable(collection, name, type, value, category, overwrite, hintKey) {
+  console.log('🔧 createOrUpdateVariable:', category, name, type, typeof value);
+
   var allVariables = figma.variables.getLocalVariables();
   var variable = null;
 
@@ -1819,27 +2898,49 @@ function createOrUpdateVariable(collection, name, type, value, category, overwri
     }
   }
 
-  
+
   if (!variable) {
-    variable = figma.variables.createVariable(name, collection, type);
+    try {
+      variable = figma.variables.createVariable(name, collection, type);
+      console.log('✅ Variable created:', name);
+    } catch (e) {
+      console.error('❌ Failed to create variable:', name, e);
+      return;
+    }
+  } else {
+    console.log('📝 Variable exists:', name);
   }
 
   
   if (variable) {
     var modeId = collection.modes[0].modeId;
-    variable.setValueForMode(modeId, value);
-    applyScopesForCategory(variable, category);
+    try {
+      variable.setValueForMode(modeId, value);
+      console.log('💾 Value set for', name + ':', typeof value, value);
+    } catch (e) {
+      console.error('❌ Failed to set value for', name + ':', e);
+    }
+    if (category === "semantic") {
+      applySemanticScopes(variable, hintKey || name, type);
+    } else {
+      applyScopesForCategory(variable, category);
+    }
   }
 
   return variable;
 }
 
 function importTokensToFigma(tokens, naming, overwrite) {
-  
-  
+  console.log('🔄 Pipeline d\'import : importTokensToFigma appelé directement');
 
-  
+  // Save the naming preference to file for persistence
+  saveNamingToFile(naming);
+
+
+
+
   if (tokens.brand) {
+    console.log('🎨 Importing brand tokens:', Object.keys(tokens.brand).length, 'tokens');
     var brandCollection = getOrCreateCollection("Brand Colors", overwrite);
 
     for (var key in tokens.brand) {
@@ -1852,8 +2953,12 @@ function importTokensToFigma(tokens, naming, overwrite) {
       else if (naming === "bootstrap") varName = key;
       else varName = "primary-" + key;
 
-      createOrUpdateVariable(brandCollection, varName, "COLOR", hexToRgb(tokens.brand[key]), "brand", overwrite);
+      var brandValue = tokens.brand[key];
+      console.log('  Brand', key + ':', typeof brandValue, brandValue);
+      createOrUpdateVariable(brandCollection, varName, "COLOR", hexToRgb(brandValue), "brand", overwrite, undefined);
     }
+  } else {
+    console.log('⚠️ No brand tokens to import');
   }
 
   
@@ -1862,7 +2967,7 @@ function importTokensToFigma(tokens, naming, overwrite) {
 
     for (var sKey in tokens.system) {
       if (!tokens.system.hasOwnProperty(sKey)) continue;
-      createOrUpdateVariable(systemCollection, sKey, "COLOR", hexToRgb(tokens.system[sKey]), "system", overwrite);
+      createOrUpdateVariable(systemCollection, sKey, "COLOR", hexToRgb(tokens.system[sKey]), "system", overwrite, undefined);
     }
   }
 
@@ -1879,7 +2984,7 @@ function importTokensToFigma(tokens, naming, overwrite) {
       else if (naming === "ant") grayName = "gray-" + gKey;
       else grayName = "gray-" + gKey;
 
-      createOrUpdateVariable(grayCollection, grayName, "COLOR", hexToRgb(tokens.gray[gKey]), "gray", overwrite);
+      createOrUpdateVariable(grayCollection, grayName, "COLOR", hexToRgb(tokens.gray[gKey]), "gray", overwrite, undefined);
     }
   }
 
@@ -1891,14 +2996,22 @@ function importTokensToFigma(tokens, naming, overwrite) {
       if (!tokens.spacing.hasOwnProperty(spKey)) continue;
 
       var cleanKey = spKey.replace(/\./g, "-");
-      var valueStr = tokens.spacing[spKey];
-      var value = parseFloat(valueStr);
+      var valueRaw = tokens.spacing[spKey];
 
-      if (valueStr.indexOf("rem") !== -1) {
-        value = value * 16;
+      // Gérer les deux formats : string avec unité ou number normalisé
+      var value;
+      if (typeof valueRaw === "string") {
+        value = parseFloat(valueRaw);
+        if (valueRaw.indexOf("rem") !== -1) {
+          value = value * 16;
+        }
+      } else if (typeof valueRaw === "number") {
+        value = valueRaw; // Déjà normalisé
+      } else {
+        value = 0; // Fallback
       }
 
-      createOrUpdateVariable(spacingCollection, "spacing-" + cleanKey, "FLOAT", value, "spacing", overwrite);
+      createOrUpdateVariable(spacingCollection, "spacing-" + cleanKey, "FLOAT", value, "spacing", overwrite, undefined);
     }
   }
 
@@ -1910,14 +3023,22 @@ function importTokensToFigma(tokens, naming, overwrite) {
       if (!tokens.radius.hasOwnProperty(rKey)) continue;
 
       var cleanRKey = rKey.replace(/\./g, "-");
-      var rValueStr = tokens.radius[rKey];
-      var rValue = parseFloat(rValueStr);
+      var rValueRaw = tokens.radius[rKey];
 
-      if (rValueStr.indexOf("rem") !== -1) {
-        rValue = rValue * 16;
+      // Gérer les deux formats : string avec unité ou number normalisé
+      var rValue;
+      if (typeof rValueRaw === "string") {
+        rValue = parseFloat(rValueRaw);
+        if (rValueRaw.indexOf("rem") !== -1) {
+          rValue = rValue * 16;
+        }
+      } else if (typeof rValueRaw === "number") {
+        rValue = rValueRaw; // Déjà normalisé
+      } else {
+        rValue = 0; // Fallback
       }
 
-      createOrUpdateVariable(radiusCollection, "radius-" + cleanRKey, "FLOAT", rValue, "radius", overwrite);
+      createOrUpdateVariable(radiusCollection, "radius-" + cleanRKey, "FLOAT", rValue, "radius", overwrite, undefined);
     }
   }
 
@@ -1929,14 +3050,22 @@ function importTokensToFigma(tokens, naming, overwrite) {
       if (!tokens.typography.hasOwnProperty(tKey)) continue;
 
       var cleanTKey = tKey.replace(/\./g, "-");
-      var typoValueStr = tokens.typography[tKey];
-      var typoValue = parseFloat(typoValueStr);
+      var typoValueRaw = tokens.typography[tKey];
 
-      if (typoValueStr.indexOf("rem") !== -1) {
-        typoValue = typoValue * 16;
+      // Gérer les deux formats : string avec unité ou number normalisé
+      var typoValue;
+      if (typeof typoValueRaw === "string") {
+        typoValue = parseFloat(typoValueRaw);
+        if (typoValueRaw.indexOf("rem") !== -1) {
+          typoValue = typoValue * 16;
+        }
+      } else if (typeof typoValueRaw === "number") {
+        typoValue = typoValueRaw; // Déjà normalisé
+      } else {
+        typoValue = 16; // Fallback pour font-size
       }
 
-      createOrUpdateVariable(typoCollection, "typo-" + cleanTKey, "FLOAT", typoValue, "typography", overwrite);
+      createOrUpdateVariable(typoCollection, "typo-" + cleanTKey, "FLOAT", typoValue, "typography", overwrite, undefined);
     }
   }
 
@@ -1949,7 +3078,95 @@ function importTokensToFigma(tokens, naming, overwrite) {
 
       var cleanBKey = bKey.replace(/\./g, "-");
       var bValue = parseFloat(tokens.border[bKey]);
-      createOrUpdateVariable(borderCollection, "border-" + cleanBKey, "FLOAT", bValue, "border", overwrite);
+      createOrUpdateVariable(borderCollection, "border-" + cleanBKey, "FLOAT", bValue, "border", overwrite, undefined);
+    }
+  }
+
+  // Rafraîchir le cache des collections après avoir importé les primitives
+  initializeCollectionCache();
+
+  // Import Semantic Tokens
+  if (tokens.semantic) {
+    var semanticCollection = getOrCreateCollection("Semantic", overwrite);
+    var aliasCount = 0;
+    var valueCount = 0;
+    var valueOnlyKeys = [];
+    var updatedSemanticTokens = {}; // Pour mettre à jour la sauvegarde avec les alias
+
+    for (var semanticKey in tokens.semantic) {
+      if (!tokens.semantic.hasOwnProperty(semanticKey)) continue;
+
+      var semanticValue = tokens.semantic[semanticKey];
+      var variableName = getSemanticVariableName(semanticKey, naming);
+      var variableType = SEMANTIC_TYPE_MAP[semanticKey] || "COLOR";
+
+      // Extraire resolvedValue selon le nouveau format
+      var resolvedValue, currentAliasTo;
+      if (typeof semanticValue === 'object' && semanticValue.resolvedValue !== undefined) {
+        resolvedValue = semanticValue.resolvedValue;
+        currentAliasTo = semanticValue.aliasTo;
+      } else {
+        resolvedValue = semanticValue;
+        currentAliasTo = null;
+      }
+
+      // Convertir la valeur selon le type
+      var processedValue;
+      var aliasTo = null; // ID de la variable primitive pour la sauvegarde
+      if (variableType === "COLOR") {
+        // Essayer de résoudre comme alias vers les primitives si possible
+        var aliasVariable = tryResolveSemanticAlias(semanticKey, tokens, naming);
+        if (aliasVariable) {
+          console.log(`✅ Alias créé pour ${semanticKey}: ${aliasVariable.name}`);
+          processedValue = { type: "VARIABLE_ALIAS", id: aliasVariable.id };
+          aliasTo = aliasVariable.id; // Conserver l'ID pour la sauvegarde
+          aliasCount++;
+        } else if (typeof resolvedValue === 'string' && /^#[0-9A-Fa-f]{3,8}$/.test(resolvedValue)) {
+          // Fallback vers hexToRgb uniquement si resolvedValue est un hex valide
+          console.log(`❌ Fallback pour ${semanticKey}: ${resolvedValue}`);
+          processedValue = hexToRgb(resolvedValue);
+          valueCount++;
+          valueOnlyKeys.push(semanticKey);
+        } else {
+          console.warn(`Import tokens: Invalid color value "${resolvedValue}" for semantic token "${semanticKey}", skipping import`);
+          continue; // Skip this token
+        }
+      } else if (variableType === "FLOAT") {
+        processedValue = normalizeFloatValue(resolvedValue);
+        if (processedValue === null) {
+          console.warn(`Import tokens: Invalid FLOAT value for semantic token "${semanticKey}", skipping import`);
+          return; // Skip this token
+        }
+        valueCount++;
+        valueOnlyKeys.push(semanticKey);
+      }
+
+      createOrUpdateVariable(semanticCollection, variableName, variableType, processedValue, "semantic", overwrite, semanticKey);
+
+      // Mettre à jour les tokens sauvegardés avec l'info d'alias
+      updatedSemanticTokens[semanticKey] = {
+        resolvedValue: resolvedValue,
+        type: variableType,
+        aliasTo: aliasTo,
+        meta: {
+          sourceCategory: getCategoryFromSemanticKey(semanticKey),
+          sourceKey: getKeyFromSemanticKey(semanticKey),
+          updatedAt: Date.now()
+        }
+      };
+    }
+
+    // Sauvegarder les tokens mis à jour avec les infos d'alias
+    if (Object.keys(updatedSemanticTokens).length > 0) {
+      saveSemanticTokensToFile(updatedSemanticTokens);
+      console.log(`💾 DEBUG: Updated semantic tokens with alias info: ${aliasCount} aliases detected`);
+    }
+
+    // Rapport après import sémantique
+    var reportMessage = "Semantic: " + aliasCount + " alias, " + valueCount + " values";
+    figma.notify(reportMessage);
+    if (valueOnlyKeys.length > 0) {
+      console.log("Semantic tokens imported as values (no alias found):", valueOnlyKeys.join(", "));
     }
   }
 
@@ -4132,6 +5349,8 @@ figma.ui.onmessage = function (msg) {
   if (msg.type === "generate") {
     var naming = msg.naming || "custom";
 
+    console.log('🎨 Generating tokens for naming:', naming);
+
     var tokens = {
       brand: generateBrandColors(msg.color, naming),
       system: generateSystemColors(naming),
@@ -4142,18 +5361,73 @@ figma.ui.onmessage = function (msg) {
       border: generateBorder()
     };
 
+  console.log('📊 Generated primitives:', {
+    brand: tokens.brand ? Object.keys(tokens.brand).length + ' keys: ' + Object.keys(tokens.brand).slice(0, 3).join(', ') : 0,
+    system: tokens.system ? Object.keys(tokens.system).length : 0,
+    gray: tokens.gray ? Object.keys(tokens.gray).length : 0,
+    spacing: tokens.spacing ? Object.keys(tokens.spacing).length : 0,
+    radius: tokens.radius ? Object.keys(tokens.radius).length : 0,
+    typography: tokens.typography ? Object.keys(tokens.typography).length : 0
+  });
+
+    // Générer automatiquement les tokens sémantiques pour les presets connus
+    if (naming === "tailwind" || naming === "mui" || naming === "ant" || naming === "bootstrap") {
+      console.log(`🎨 Génération automatique des sémantiques pour ${naming}`);
+      console.log(`🔍 Primitives disponibles:`, Object.keys(tokens).filter(k => tokens[k] && Object.keys(tokens[k]).length > 0));
+      try {
+        tokens.semantic = generateSemanticTokens(tokens);
+        console.log(`✅ Sémantiques générées:`, tokens.semantic ? Object.keys(tokens.semantic).length : 0, 'tokens');
+        if (tokens.semantic) {
+          console.log(`📋 Exemples:`, Object.entries(tokens.semantic).slice(0, 3).map(([k,v]) => `${k}=${JSON.stringify(v)}`).join(', '));
+          // Sauvegarder les sémantiques générées
+          saveSemanticTokensToFile(tokens.semantic);
+        }
+      } catch (error) {
+        console.error('❌ Erreur génération sémantiques:', error);
+        tokens.semantic = {};
+      }
+    } else {
+      // Restaurer les tokens sémantiques sauvegardés si disponibles
+      var savedSemantic = getSemanticTokensFromFile();
+      if (savedSemantic) {
+        tokens.semantic = savedSemantic;
+        console.log(`📂 Sémantiques restaurées depuis la sauvegarde:`, Object.keys(savedSemantic).length, 'tokens');
+      } else if (cachedTokens && cachedTokens.semantic) {
+        tokens.semantic = cachedTokens.semantic;
+      }
+    }
+
+    // Pour tous les cas, si on a des sémantiques sauvegardées et qu'on régénère,
+    // on les restaure automatiquement (sauf si on vient de les régénérer)
+    if (!tokens.semantic) {
+      var savedSemantic = getSemanticTokensFromFile();
+      if (savedSemantic) {
+        tokens.semantic = savedSemantic;
+        console.log(`📂 Sémantiques restaurées automatiquement:`, Object.keys(savedSemantic).length, 'tokens');
+      }
+    }
+
     cachedTokens = tokens;
 
+    console.log('💾 cachedTokens après génération:', {
+      primitives: Object.keys(cachedTokens).filter(k => k !== 'semantic'),
+      semantic: cachedTokens.semantic ? Object.keys(cachedTokens.semantic).length + ' tokens' : 'aucun'
+    });
+
+    var semanticPreview = getSemanticPreviewRows(cachedTokens, naming);
     figma.ui.postMessage({
       type: "tokens-generated",
-      tokens: tokens
+      tokens: cachedTokens,
+      semanticPreview: semanticPreview,
+      naming: naming
     });
   }
 
   if (msg.type === "import") {
+    console.log('🔄 Pipeline d\'import : import → FigmaService.importTokens');
     var tokensToImport = msg.tokens || cachedTokens;
     if (tokensToImport) {
-      importTokensToFigma(tokensToImport, msg.naming || "custom", msg.overwrite);
+      FigmaService.importTokens(tokensToImport, msg.naming || "custom", msg.overwrite);
     } else {
       figma.notify("⚠️ Generate tokens first!");
     }
@@ -4169,7 +5443,8 @@ figma.ui.onmessage = function (msg) {
     }
 
     try {
-      importTokensToFigma(tokensFromFile, namingFromFile, false);
+      console.log('🔄 Pipeline d\'import : import depuis fichier → FigmaService.importTokens');
+      FigmaService.importTokens(tokensFromFile, namingFromFile, false);
       figma.notify("✅ Tokens importés depuis le fichier (Ctrl+Z pour annuler)");
     } catch (e) {
       figma.notify("❌ Erreur lors de l'import depuis le fichier");
@@ -4254,6 +5529,41 @@ figma.ui.onmessage = function (msg) {
 
   if (msg.type === "check-selection") {
     checkAndNotifySelection();
+  }
+
+  if (msg.type === "generate-semantic") {
+    try {
+      // Récupérer les tokens primitifs depuis les collections Figma
+      var extractedData = extractExistingTokens();
+      var primitiveTokens = extractedData.tokens;
+
+      if (!primitiveTokens || Object.keys(primitiveTokens).length === 0) {
+        figma.notify("⚠️ Aucun token primitif trouvé. Générez d'abord les tokens primitifs.");
+        return;
+      }
+
+      // Générer les tokens sémantiques
+      var semanticTokens = generateSemanticTokens(primitiveTokens);
+
+      // Ajouter les tokens sémantiques au cache
+      cachedTokens = cachedTokens || {};
+      cachedTokens.semantic = semanticTokens;
+
+      // Sauvegarder les sémantiques générées
+      saveSemanticTokensToFile(semanticTokens);
+
+      // Notifier l'UI
+      figma.ui.postMessage({
+        type: "semantic-generated",
+        semanticTokens: semanticTokens
+      });
+
+      figma.notify("✅ Tokens sémantiques générés depuis les primitives");
+
+    } catch (error) {
+      console.error("Erreur lors de la génération sémantique:", error);
+      figma.notify("❌ Erreur lors de la génération des tokens sémantiques");
+    }
   }
 
   if (msg.type === "resize") {

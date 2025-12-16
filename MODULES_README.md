@@ -160,3 +160,5 @@ Le code existant (`ui.html`) utilise automatiquement les nouveaux modules avec f
 - ✅ `pillManager.js`: Nouveau module pastilles
 - ✅ `uiManager.js`: Nouveau coordinateur UI
 - ✅ `test_independence.js`: Tests d'indépendance
+
+

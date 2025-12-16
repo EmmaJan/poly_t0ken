@@ -3669,7 +3669,7 @@
 
             <div id="activeLibraryBadge"
               style="font-size: 11px; background: var(--poly-surface-soft); padding: 4px 8px; border-radius: 6px; border: 1px solid var(--poly-border-subtle); color: var(--poly-text-muted);">
-              Library: <span id="libraryNameDisplay"
+              Lib utilisée pour générer : <span id="libraryNameDisplay"
                 style="color: var(--poly-accent); font-weight: 600;">Tailwind</span>
             </div>
           </div>
@@ -3684,6 +3684,7 @@
               <button class="tab" data-category="radius">Radius</button>
               <button class="tab" data-category="typography">Typography</button>
               <button class="tab" data-category="border">Border</button>
+              <button class="tab" data-category="semantic">Semantic</button>
             </div>
 
             <div class="preview-section" id="tokenPreview"></div>
@@ -3702,6 +3703,7 @@
               <option value="json">JSON (Design Tokens)</option>
               <option value="tailwind">Tailwind Config (JS)</option>
               <option value="scss">SCSS Variables</option>
+              <option value="semantic">Semantic Only</option>
             </select>
 
             <!-- Code Editor Wrapper -->
@@ -3729,6 +3731,7 @@
           <!-- Footer Content: Designer View -->
           <div id="footerDesignerOps" class="sticky-footer-content" style="gap: 10px; width: 100%;">
             <button class="btn-secondary" id="backToLibBtn" style="flex: 1;">← Retour</button>
+            <button class="btn-outline" id="generateSemanticBtn" style="flex: 1.5;" title="Générer les tokens sémantiques depuis les primitives">Générer sémantique</button>
             <button class="btn-primary" id="importBtn" style="flex: 2;">Synchroniser avec Figma</button>
           </div>
 
@@ -3886,11 +3889,196 @@
     var currentColor = "#6366F1";
     var currentNaming = "custom"; // Valeur par défaut
     var currentTokens = null;
+    var semanticPreview = []; // Données de preview sémantique depuis le backend
     var selectedFile = null;
     var activeCategory = "brand";
     var currentStep = 0;
     var lastScanResults = null; // Stockage global des résultats du dernier scan
     var livePreviewReady = false; // Indicateur simple : système prêt pour Live Preview
+
+    // ============================================
+    // SEMANTIC TOKENS MAPPINGS
+    // ============================================
+    var SEMANTIC_NAME_MAP = {
+      tailwind: {
+        // Background
+        'bg.canvas': 'background/canvas',
+        'bg.surface': 'background/surface',
+        'bg.elevated': 'background/elevated',
+        'bg.muted': 'background/muted',
+        'bg.inverse': 'background/inverse',
+
+        // Text
+        'text.primary': 'text/primary',
+        'text.secondary': 'text/secondary',
+        'text.muted': 'text/muted',
+        'text.inverse': 'text/inverse',
+        'text.disabled': 'text/disabled',
+
+        // Border
+        'border.default': 'border/default',
+        'border.muted': 'border/muted',
+
+        // Action
+        'action.primary.default': 'primary/default',
+        'action.primary.hover': 'primary/hover',
+        'action.primary.active': 'primary/active',
+        'action.primary.disabled': 'primary/disabled',
+
+        // Status
+        'status.success': 'success/default',
+        'status.warning': 'warning/default',
+        'status.error': 'destructive/default',
+        'status.info': 'info/default',
+
+        // Shape & Space
+        'radius.sm': 'radius/sm',
+        'radius.md': 'radius/md',
+        'space.sm': 'space/sm',
+        'space.md': 'space/md',
+
+        // Typography
+        'font.size.base': 'font/size/base',
+        'font.weight.base': 'font/weight/base'
+      },
+
+      mui: {
+        // Background
+        'bg.canvas': 'palette/background/default',
+        'bg.surface': 'palette/background/paper',
+        'bg.elevated': 'palette/background/paper',
+        'bg.muted': 'palette/action/disabledBackground',
+        'bg.inverse': 'palette/grey/900',
+
+        // Text
+        'text.primary': 'palette/text/primary',
+        'text.secondary': 'palette/text/secondary',
+        'text.muted': 'palette/text/disabled',
+        'text.inverse': 'palette/common/white',
+        'text.disabled': 'palette/text/disabled',
+
+        // Border
+        'border.default': 'palette/divider',
+        'border.muted': 'palette/divider',
+
+        // Action
+        'action.primary.default': 'palette/primary/main',
+        'action.primary.hover': 'palette/primary/dark',
+        'action.primary.active': 'palette/primary/dark',
+        'action.primary.disabled': 'palette/action/disabled',
+
+        // Status
+        'status.success': 'palette/success/main',
+        'status.warning': 'palette/warning/main',
+        'status.error': 'palette/error/main',
+        'status.info': 'palette/info/main',
+
+        // Shape & Space
+        'radius.sm': 'shape/borderRadius',
+        'radius.md': 'shape/borderRadius',
+        'space.sm': 'spacing',
+        'space.md': 'spacing',
+
+        // Typography
+        'font.size.base': 'typography/fontSize',
+        'font.weight.base': 'typography/fontWeightRegular'
+      },
+
+      ant: {
+        // Background
+        'bg.canvas': 'colorBgLayout',
+        'bg.surface': 'colorBgContainer',
+        'bg.elevated': 'colorBgElevated',
+        'bg.muted': 'colorBgTextHover',
+        'bg.inverse': 'colorTextBase',
+
+        // Text
+        'text.primary': 'colorText',
+        'text.secondary': 'colorTextSecondary',
+        'text.muted': 'colorTextQuaternary',
+        'text.inverse': 'colorTextLightSolid',
+        'text.disabled': 'colorTextDisabled',
+
+        // Border
+        'border.default': 'colorBorder',
+        'border.muted': 'colorBorderSecondary',
+
+        // Action
+        'action.primary.default': 'colorPrimary',
+        'action.primary.hover': 'colorPrimaryHover',
+        'action.primary.active': 'colorPrimaryActive',
+        'action.primary.disabled': 'colorPrimaryBg',
+
+        // Status
+        'status.success': 'colorSuccess',
+        'status.warning': 'colorWarning',
+        'status.error': 'colorError',
+        'status.info': 'colorInfo',
+
+        // Shape & Space
+        'radius.sm': 'borderRadiusSM',
+        'radius.md': 'borderRadius',
+        'space.sm': 'paddingSM',
+        'space.md': 'padding',
+
+        // Typography
+        'font.size.base': 'fontSize',
+        'font.weight.base': 'fontWeightNormal'
+      },
+
+      bootstrap: {
+        // Background
+        'bg.canvas': '$body-bg',
+        'bg.surface': '$card-bg',
+        'bg.elevated': '$modal-content-bg',
+        'bg.muted': '$secondary-bg',
+        'bg.inverse': '$body-color',
+
+        // Text
+        'text.primary': '$body-color',
+        'text.secondary': '$secondary-color',
+        'text.muted': '$text-muted',
+        'text.inverse': '$white',
+        'text.disabled': '$btn-disabled-color',
+
+        // Border
+        'border.default': '$border-color',
+        'border.muted': '$border-color-translucent',
+
+        // Action
+        'action.primary.default': '$primary',
+        'action.primary.hover': '$primary',
+        'action.primary.active': '$primary',
+        'action.primary.disabled': '$primary',
+
+        // Status
+        'status.success': '$success',
+        'status.warning': '$warning',
+        'status.error': '$danger',
+        'status.info': '$info',
+
+        // Shape & Space
+        'radius.sm': '$border-radius-sm',
+        'radius.md': '$border-radius',
+        'space.sm': '$spacer',
+        'space.md': '$spacer',
+
+        // Typography
+        'font.size.base': '$font-size-base',
+        'font.weight.base': '$font-weight-base'
+      }
+    };
+
+    /**
+     * Retourne le nom de variable sémantique selon la librairie
+     * @param {string} semanticKey - Clé sémantique (ex: 'bg.canvas')
+     * @param {string} libType - Type de librairie ('tailwind', 'mui', 'ant', 'bootstrap')
+     * @returns {string} Nom de variable adapté
+     */
+    function getSemanticVariableName(semanticKey, libType) {
+      const mapping = SEMANTIC_NAME_MAP[libType] || SEMANTIC_NAME_MAP.tailwind;
+      return mapping[semanticKey] || semanticKey.replace(/\./g, '/');
+    }
 
     // ============================================
     // ICONS
@@ -3912,6 +4100,7 @@
     var randomBtn = document.getElementById("randomBtn");
 
     var importBtn = document.getElementById("importBtn");
+    var generateSemanticBtn = document.getElementById("generateSemanticBtn");
     var tokenTabs = document.getElementById("tokenTabs");
     var tokenPreview = document.getElementById("tokenPreview");
 
@@ -4072,6 +4261,7 @@
       currentColor = "#6366F1";
       currentNaming = "";
       currentTokens = null;
+      semanticPreview = [];
       selectedFile = null;
       activeCategory = "brand";
 
@@ -4148,7 +4338,7 @@
       }
       else if (currentStartOption === 'manage') {
         currentTokens = existingTokensData;
-        currentNaming = existingLibrary || "tailwind";
+        // currentNaming reste défini par la préférence utilisateur, pas écrasé par la détection
 
         // Aller directement à Vue 3
         updatePreview();
@@ -4209,7 +4399,16 @@
 
         // Add selected to clicked
         option.classList.add("selected");
-        currentNaming = option.getAttribute("data-library");
+        var selectedNaming = option.getAttribute("data-library");
+        currentNaming = selectedNaming;
+
+        // Save naming preference immediately
+        parent.postMessage({
+          pluginMessage: {
+            type: 'save-naming',
+            naming: selectedNaming
+          }
+        }, '*');
 
         // Enable next button
         step1Next.disabled = false;
@@ -4332,6 +4531,43 @@
         }
       };
       window.addEventListener('message', feedbackListener);
+    });
+
+    generateSemanticBtn.addEventListener("click", function () {
+      // État de chargement
+      var originalText = this.innerHTML;
+      this.classList.add('btn-loading');
+      this.disabled = true;
+      this.innerHTML = '<div class="loading-spinner"></div> Génération...';
+
+      // Envoyer le message au plugin
+      parent.postMessage({
+        pluginMessage: {
+          type: "generate-semantic"
+        }
+      }, "*");
+
+      // Écouter la réponse
+      var semanticListener = function (event) {
+        var msg = event.data.pluginMessage;
+        if (msg && msg.type === 'semantic-generated') {
+          // Mettre à jour l'affichage des tokens
+          if (currentTokens && msg.semanticTokens) {
+            currentTokens.semantic = msg.semanticTokens;
+            updatePreview();
+            updateExport();
+          }
+
+          // Feedback visuel
+          generateSemanticBtn.classList.remove('btn-loading');
+          generateSemanticBtn.disabled = false;
+          generateSemanticBtn.innerHTML = '✅ Généré !';
+          setTimeout(function () { generateSemanticBtn.innerHTML = originalText; }, 2000);
+
+          window.removeEventListener('message', semanticListener);
+        }
+      };
+      window.addEventListener('message', semanticListener);
     });
 
     // ============================================
@@ -7825,6 +8061,43 @@
 
         // --- AUTRES MESSAGES ---
 
+        if (msg.type === "init") {
+          // Pre-select the saved library
+          if (msg.naming) {
+            var libraryOption = document.querySelector('.library-option[data-library="' + msg.naming + '"]');
+            if (libraryOption) {
+              // Remove existing selection
+              document.querySelectorAll('.library-option.selected').forEach(function(el) {
+                el.classList.remove('selected');
+              });
+              // Select the saved library
+              libraryOption.classList.add('selected');
+              currentNaming = msg.naming;
+              // Enable next button since we have a selection
+              if (step1Next) step1Next.disabled = false;
+              console.log('📂 Pre-selected saved library:', msg.naming);
+            } else {
+              // If saved naming is not found, default to custom
+              currentNaming = "custom";
+              if (step1Next) step1Next.disabled = true;
+            }
+
+            // Restaurer les tokens sémantiques sauvegardés si disponibles
+            if (msg.savedSemanticTokens) {
+              console.log('📂 Restored saved semantic tokens:', Object.keys(msg.savedSemanticTokens).length, 'tokens');
+              // Assigner les tokens sémantiques à currentTokens
+              if (!currentTokens) currentTokens = {};
+              currentTokens.semantic = msg.savedSemanticTokens;
+              console.log('✅ Assigned semantic tokens to currentTokens');
+            }
+          } else {
+            // No saved naming, keep default
+            currentNaming = "custom";
+            if (step1Next) step1Next.disabled = true;
+          }
+          return;
+        }
+
         if (msg.type === "has-variables") {
           if (msg.value === true) {
             if (!designerView.classList.contains("hidden")) {
@@ -7855,7 +8128,7 @@
             if (sectionAnalyze) sectionAnalyze.style.display = '';
 
             var libraryNames = { "tailwind": "Tailwind / Shadcn", "mui": "Material UI", "ant": "Ant Design", "bootstrap": "Bootstrap", "chakra": "Chakra UI", "custom": "Custom" };
-            existingTokensInfo.textContent = "Librairie : " + (libraryNames[existingLibrary] || existingLibrary);
+            existingTokensInfo.textContent = "Lib détectée dans le fichier : " + (libraryNames[existingLibrary] || existingLibrary);
 
             // Count tokens
             var totalTokens = 0;
@@ -8027,8 +8300,36 @@
         if (msg.type === "tokens-generated") {
           console.log("🎉 Tokens générés reçus dans l'UI:", msg.tokens);
 
-          // Stocker les tokens générés pour l'affichage
+          // Stocker les tokens générés pour l'affichage, mais préserver les sémantiques existantes
+          var existingSemantic = currentTokens && currentTokens.semantic;
           currentTokens = msg.tokens;
+
+          // Restaurer les sémantiques si elles existaient et que les nouvelles n'en ont pas
+          if (existingSemantic && (!currentTokens.semantic || Object.keys(currentTokens.semantic).length === 0)) {
+            currentTokens.semantic = existingSemantic;
+            console.log('🔄 Preserved existing semantic tokens:', Object.keys(existingSemantic).length, 'tokens');
+          }
+
+          // Stocker les données de preview sémantique et le naming
+          semanticPreview = msg.semanticPreview || [];
+          currentNaming = msg.naming || currentNaming;
+
+          // Régénérer semanticPreview si nécessaire (sémantiques préservées ou restaurées)
+          if (currentTokens.semantic && (!semanticPreview || semanticPreview.length === 0 ||
+              (existingSemantic && Object.keys(existingSemantic).length > semanticPreview.length))) {
+            semanticPreview = [];
+            for (var key in currentTokens.semantic) {
+              if (!currentTokens.semantic.hasOwnProperty(key)) continue;
+
+              semanticPreview.push({
+                key: key,
+                figmaName: getSemanticVariableName(key, currentNaming),
+                type: 'COLOR',
+                value: currentTokens.semantic[key] // Maintenant directement la valeur normalisée
+              });
+            }
+            console.log('🔄 Regenerated semanticPreview from currentTokens:', semanticPreview.length, 'items');
+          }
 
           // Afficher une notification de succès
           showNotification("Tokens générés avec succès !", "success");
@@ -8128,12 +8429,14 @@
       if (!currentTokens) return;
 
       var categoryData = currentTokens[activeCategory];
-      if (!categoryData) {
+      var previewData = categoryData;
+
+      if (!previewData) {
         tokenPreview.innerHTML = "<p style='color: var(--poly-text-muted); text-align: center; padding: 20px;'>No tokens available for this category.</p>";
         return;
       }
 
-      var isColor = (activeCategory === "brand" || activeCategory === "system" || activeCategory === "gray");
+      var isColor = (activeCategory === "brand" || activeCategory === "system" || activeCategory === "gray" || activeCategory === "semantic");
 
       // Logic to Determine Lock State
       var isCustomLib = (currentNaming === "custom");
@@ -8169,35 +8472,69 @@
       }
       html += "</tr></thead><tbody>";
 
-      for (var key in categoryData) {
-        if (!categoryData.hasOwnProperty(key)) continue;
-        var value = categoryData[key];
+      // Une seule boucle pour tous les types de données
+      if (activeCategory === "semantic" && semanticPreview && semanticPreview.length > 0) {
+        // Cas spécial : semantic avec preview data du backend
+        for (var i = 0; i < semanticPreview.length; i++) {
+          var item = semanticPreview[i];
+          var key = item.key;
+          var figmaName = item.figmaName;
+          var value = item.value;
+          var tokenType = item.type;
 
-        html += "<tr>";
-        if (isColor) {
-          html += "<td><div class='color-swatch' style='background-color: " + value + ";'></div></td>";
+          html += "<tr>";
+          if (isColor) {
+          var formattedValue = formatValueForDisplay(value);
+          html += "<td><div class='color-swatch' style='background-color: " + formattedValue + ";'></div></td>";
         }
-        html += "<td class='token-name'>" + activeCategory + "-" + key + "</td>";
+        // Pour semantic preview, afficher key + figmaName
+        var displayName = key + "<br><small style='color: var(--poly-text-muted); font-weight: normal;'>" + figmaName + "</small>";
+        html += "<td class='token-name'>" + displayName + "</td>";
 
-        // Value Column (Conditional Render)
-        html += "<td>";
-        if (isLocked) {
-          // LOCKED DISPLAY (Disabled Input, no Icon)
-          // We keep the <input> tag to ensure perfect alignment with editable rows
-          html += "<input type='text' class='table-input locked' value='" + value + "' disabled />";
-        } else {
-          // EDITABLE INPUT (Standard)
-          html += "<input type='text' class='table-input' data-token-key='" + key + "' value='" + value + "' />";
+        // Value Column (toujours en lecture seule pour semantic preview)
+        html += "<td><input type='text' class='table-input locked' value='" + formattedValue + "' disabled /></td>";
+
+          // Pas d'actions pour semantic preview
+          html += "</tr>";
         }
-        html += "</td>";
+      } else {
+        // Cas normal : itération sur les propriétés de l'objet
+        for (var key in previewData) {
+          if (!previewData.hasOwnProperty(key)) continue;
+          var value = previewData[key];
+          var formattedValue = formatValueForDisplay(value);
 
-        // Action Column: ONLY if Custom
-        if (isCustomLib) {
-          html += "<td style='text-align: center;'>";
-          html += "<button class='btn-icon' onclick='deleteToken(\"" + key + "\")' title='Delete' style='color: var(--poly-error);'><svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 6h18'/><path d='M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6'/><path d='M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2'/></svg></button>";
+          html += "<tr>";
+          if (isColor) {
+            html += "<td><div class='color-swatch' style='background-color: " + formattedValue + ";'></div></td>";
+          }
+          // Pour semantic normal, afficher key + figmaName calculé côté client
+          var displayName = activeCategory + "-" + key;
+          if (activeCategory === "semantic") {
+            var figmaName = getSemanticVariableName(key, currentNaming);
+            displayName = key + "<br><small style='color: var(--poly-text-muted); font-weight: normal;'>" + figmaName + "</small>";
+          }
+          html += "<td class='token-name'>" + displayName + "</td>";
+
+          // Value Column (Conditional Render)
+          html += "<td>";
+          if (isLocked) {
+            // LOCKED DISPLAY (Disabled Input, no Icon)
+            html += "<input type='text' class='table-input locked' value='" + formattedValue + "' disabled />";
+          } else {
+            // EDITABLE INPUT (Standard) - pour l'édition, on garde la valeur originale
+            html += "<input type='text' class='table-input' data-token-key='" + key + "' value='" + formattedValue + "' />";
+          }
           html += "</td>";
+
+          // Action Column: ONLY if Custom
+          if (isCustomLib) {
+            html += "<td style='text-align: center;'>";
+            html += "<button class='btn-icon' onclick='deleteToken(\"" + key + "\")' title='Delete' style='color: var(--poly-error);'><svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 6h18'/><path d='M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6'/><path d='M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2'/></svg></button>";
+            html += "</td>";
+          }
+          html += "</tr>";
         }
-        html += "</tr>";
       }
 
       html += "<tr class='add-token-row' style='background: rgba(138, 213, 63, 0.05);'>";
@@ -8292,6 +8629,33 @@
     var rawExportContent = "";
     var codeEditor = document.getElementById("codeEditor");
 
+
+    function formatValueForDisplay(value) {
+      if (value === null || value === undefined) {
+        return "";
+      }
+
+      // Si c'est un objet RGB, convertir en hex
+      if (typeof value === 'object' && value.r !== undefined && value.g !== undefined && value.b !== undefined) {
+        // Conversion RGB vers hex (simple)
+        var r = Math.round(value.r * 255);
+        var g = Math.round(value.g * 255);
+        var b = Math.round(value.b * 255);
+        return '#' + [r, g, b].map(function(x) {
+          var hex = x.toString(16);
+          return hex.length === 1 ? '0' + hex : hex;
+        }).join('').toUpperCase();
+      }
+
+      // Pour les autres objets, afficher JSON (garde-fou)
+      if (typeof value === 'object') {
+        return JSON.stringify(value);
+      }
+
+      // Pour les valeurs primitives
+      return String(value);
+    }
+
     function updateExport() {
       if (!currentTokens) return;
 
@@ -8330,6 +8694,24 @@
             output += "$" + category + "-" + key + ": " + currentTokens[category][key] + ";\n";
           }
         }
+      } else if (format === "semantic") {
+        // Export seulement les tokens sémantiques avec les noms adaptés à la lib
+        if (currentTokens.semantic) {
+          output = ":root {\n";
+          for (var semanticKey in currentTokens.semantic) {
+            if (!currentTokens.semantic.hasOwnProperty(semanticKey)) continue;
+            var variableName = getSemanticVariableName(semanticKey, currentNaming);
+            var tokenData = currentTokens.semantic[semanticKey];
+
+            // Maintenant tokenData est directement la valeur normalisée
+            var cssValue = tokenData;
+
+            output += "  --" + variableName.replace(/\//g, "-") + ": " + cssValue + ";\n";
+          }
+          output += "}";
+        } else {
+          output = "/* Aucun token sémantique disponible. Générez-les d'abord avec le bouton 'Générer sémantique'. */";
+        }
       }
 
       rawExportContent = output;
@@ -8339,6 +8721,7 @@
       if (format === 'json') lang = 'json';
       if (format === 'tailwind') lang = 'js';
       if (format === 'scss') lang = 'scss';
+      if (format === 'semantic') lang = 'css';
 
       codeEditor.innerHTML = highlightSyntax(output, lang);
     }
