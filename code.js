@@ -14,9 +14,53 @@ function saveNamingToFile(naming) {
   }
 }
 
-function saveSemanticTokensToFile(semanticTokens) {
+// Fonction helper pour analyser les stats des tokens sémantiques
+function analyzeSemanticTokensStats(tokens, context) {
+  var total = Object.keys(tokens).length;
+  var aliasCount = 0;
+  var valueCount = 0;
+  var fallbackValues = [];
+  var fallbackKeys = [];
+
+  // Valeurs considérées comme "fallback" (noir/blanc/zéro)
+  var fallbackPatterns = ['#FFFFFF', '#000000', '#ffffff', '#000000', '0', 0];
+
+  for (var key in tokens) {
+    if (!tokens.hasOwnProperty(key)) continue;
+
+    var tokenData = tokens[key];
+    var resolvedValue = typeof tokenData === 'object' ? tokenData.resolvedValue : tokenData;
+
+    if (tokenData.aliasTo) {
+      aliasCount++;
+    } else {
+      valueCount++;
+    }
+
+    // Détecter les valeurs fallback
+    if (fallbackPatterns.includes(resolvedValue)) {
+      fallbackValues.push(`${key}=${resolvedValue}`);
+      fallbackKeys.push(key);
+      if (fallbackValues.length >= 5) break; // Top 5 seulement
+    }
+  }
+
+  return {
+    total: total,
+    aliasCount: aliasCount,
+    valueCount: valueCount,
+    fallbackKeys: fallbackKeys,
+    fallbackValues: fallbackValues,
+    context: context
+  };
+}
+
+function saveSemanticTokensToFile(semanticTokens, callsite) {
   try {
     if (semanticTokens && Object.keys(semanticTokens).length > 0) {
+      // Charger les tokens existants pour préserver aliasTo
+      var existingTokens = getSemanticTokensFromFile('MERGE_CHECK') || {};
+
       // Nouveau format: chaque token a resolvedValue, type, aliasTo optionnel, meta optionnel
       var formattedTokens = {};
       var aliasCount = 0;
@@ -30,6 +74,30 @@ function saveSemanticTokensToFile(semanticTokens) {
 
         // Si c'est déjà le nouveau format, le conserver tel quel
         if (typeof tokenData === 'object' && tokenData.resolvedValue !== undefined) {
+          // GARDE-FOU CONTRE LES FALLBACKS : empêcher l'écriture de valeurs fallback évidentes
+          var existingToken = existingTokens[key];
+          var isFallbackValue = isObviousFallback(tokenData.resolvedValue);
+          var isUIFallback = isUIFallbackValue(tokenData.resolvedValue, tokenData.type);
+          var hasFlattenProof = tokenData.flattenedFromAlias === true;
+
+          if ((isFallbackValue || isUIFallback) && !hasFlattenProof && existingToken && existingToken.resolvedValue) {
+            console.log(`[FALLBACK_BLOCKED] "${tokenData.resolvedValue}" for ${key}, keeping existing "${existingToken.resolvedValue}"`);
+            tokenData.resolvedValue = existingToken.resolvedValue;
+          }
+
+          // GARDE-FOU SUPPLÉMENTAIRE : si resolvedValue est null/undefined et qu'on a un alias, garder l'existant
+          if ((tokenData.resolvedValue === null || tokenData.resolvedValue === undefined) &&
+              tokenData.aliasTo && existingToken && existingToken.resolvedValue) {
+            console.log(`[NULL_BLOCKED] null/undefined resolvedValue for aliased ${key}, keeping existing "${existingToken.resolvedValue}"`);
+            tokenData.resolvedValue = existingToken.resolvedValue;
+          }
+
+          // PRÉSERVER aliasTo EXISTANT : si l'aliasTo entrant est null/undefined mais qu'il existe déjà, le conserver
+          if (existingToken && existingToken.aliasTo && (tokenData.aliasTo === null || tokenData.aliasTo === undefined)) {
+            console.log(`🔄 [SAVE] Preserving existing aliasTo for ${key}: ${existingToken.aliasTo}`);
+            tokenData.aliasTo = existingToken.aliasTo;
+          }
+
           formattedTokens[key] = tokenData;
           if (tokenData.aliasTo) aliasCount++;
           else valueCount++;
@@ -37,7 +105,7 @@ function saveSemanticTokensToFile(semanticTokens) {
         }
 
         // Migration depuis l'ancien format (valeur brute)
-        formattedTokens[key] = {
+        var newTokenData = {
           resolvedValue: tokenData,
           type: tokenType,
           aliasTo: null, // Pas d'alias connu lors de la génération initiale
@@ -47,19 +115,36 @@ function saveSemanticTokensToFile(semanticTokens) {
             updatedAt: Date.now()
           }
         };
-        valueCount++;
+
+        // Même ici, préserver aliasTo existant si possible
+        var existingTokenForMigration = existingTokens[key];
+        if (existingTokenForMigration && existingTokenForMigration.aliasTo) {
+          console.log(`🔄 [SAVE] Preserving existing aliasTo during migration for ${key}: ${existingTokenForMigration.aliasTo}`);
+          newTokenData.aliasTo = existingTokenForMigration.aliasTo;
+          aliasCount++;
+        } else {
+          valueCount++;
+        }
+
+        formattedTokens[key] = newTokenData;
       }
 
       var semanticData = JSON.stringify(formattedTokens);
       figma.root.setPluginData("tokenStarter.semantic", semanticData);
-      console.log(`💾 DEBUG: Saved semantic tokens to file: ${Object.keys(formattedTokens).length} tokens (${aliasCount} aliases, ${valueCount} values)`);
+
+      // Logs détaillés avec analyse
+      var stats = analyzeSemanticTokensStats(formattedTokens, callsite || 'UNKNOWN');
+      console.log(`💾 SAVE_SEMANTIC [${stats.context}]: ${stats.total} tokens (${stats.aliasCount} aliases, ${stats.valueCount} values)`);
+      if (stats.fallbackValues.length > 0) {
+        console.log(`⚠️ SAVE_SEMANTIC [${stats.context}]: Top ${stats.fallbackValues.length} fallback values: ${stats.fallbackValues.join(', ')}`);
+      }
     }
   } catch (e) {
     console.warn('Could not save semantic tokens to file:', e);
   }
 }
 
-function getSemanticTokensFromFile() {
+function getSemanticTokensFromFile(callsite) {
   try {
     var saved = figma.root.getPluginData("tokenStarter.semantic");
     if (saved) {
@@ -77,9 +162,17 @@ function getSemanticTokensFromFile() {
 
         // Si c'est déjà le nouveau format (avec resolvedValue)
         if (typeof tokenData === 'object' && tokenData.resolvedValue !== undefined) {
+          // Migration douce : normaliser aliasTo si nécessaire
+          if (tokenData.aliasTo) {
+            var normAlias = normalizeAliasTo(tokenData.aliasTo);
+            if (normAlias.isValid) {
+              tokenData.aliasTo = normAlias.variableId; // Normaliser vers string ID
+            }
+            aliasCount++;
+          } else {
+            valueCount++;
+          }
           migratedTokens[key] = tokenData;
-          if (tokenData.aliasTo) aliasCount++;
-          else valueCount++;
           continue;
         }
 
@@ -102,10 +195,16 @@ function getSemanticTokensFromFile() {
       if (migratedCount > 0) {
         console.log(`🔄 DEBUG: Migrated ${migratedCount} tokens from old format`);
         // Sauvegarder automatiquement la version migrée
-        saveSemanticTokensToFile(migratedTokens);
+        saveSemanticTokensToFile(migratedTokens, 'MIGRATION');
       }
 
-      console.log(`📂 DEBUG: Restored semantic tokens from file: ${Object.keys(migratedTokens).length} tokens (${aliasCount} aliases, ${valueCount} values)`);
+      // Logs détaillés avec analyse
+      var stats = analyzeSemanticTokensStats(migratedTokens, callsite || 'UNKNOWN');
+      console.log(`📂 LOAD_SEMANTIC [${stats.context}]: ${stats.total} tokens (${stats.aliasCount} aliases, ${stats.valueCount} values)`);
+      if (stats.fallbackValues.length > 0) {
+        console.log(`⚠️ LOAD_SEMANTIC [${stats.context}]: Top ${stats.fallbackValues.length} fallback values: ${stats.fallbackValues.join(', ')}`);
+      }
+
       return migratedTokens;
     }
   } catch (e) {
@@ -123,6 +222,54 @@ function getNamingFromFile() {
     console.warn('Could not retrieve naming from file:', e);
     return "custom";
   }
+}
+
+
+// Fonction helper pour convertir une valeur Figma en format affichable
+function convertFigmaValueToDisplay(figmaValue, tokenType) {
+  if (figmaValue === null || figmaValue === undefined) return null;
+
+  // Gérer les alias : NE PAS supprimer, retourner un objet spécial
+  if (typeof figmaValue === 'object' && figmaValue.type === 'VARIABLE_ALIAS') {
+    return {
+      __type: 'ALIAS',
+      variableId: figmaValue.id
+    };
+  }
+
+  if (tokenType === "COLOR") {
+    if (typeof figmaValue === 'object' && 'r' in figmaValue && 'g' in figmaValue && 'b' in figmaValue) {
+      // Convertir RGB en hex (valeurs déjà entre 0-1)
+      try {
+        return rgbToHex(figmaValue);
+      } catch (e) {
+        console.warn('[CONVERT] Failed to convert RGB to hex:', figmaValue, e);
+        return null;
+      }
+    }
+  } else if (tokenType === "FLOAT") {
+    if (typeof figmaValue === 'number') {
+      return figmaValue;
+    }
+  }
+
+  return null; // Ne pas changer si on ne peut pas convertir
+}
+
+// Fonction pour détecter les valeurs fallback UI qui ne doivent pas être sauvegardées
+function isUIFallbackValue(value, tokenType) {
+  if (!value) return false;
+
+  var stringValue = typeof value === 'string' ? value : String(value);
+
+  // Valeurs considérées comme des fallbacks UI
+  var uiFallbacks = {
+    'COLOR': ['#000000', '#ffffff', '#FFFFFF'],
+    'FLOAT': ['0', 0]
+  };
+
+  var fallbacks = uiFallbacks[tokenType] || [];
+  return fallbacks.includes(stringValue) || fallbacks.includes(value);
 }
 
 // Fonctions utilitaires pour extraire les métadonnées des clés sémantiques
@@ -184,8 +331,8 @@ function getKeyFromSemanticKey(semanticKey) {
     'radius.md': 'md',
     'space.sm': '8',
     'space.md': '16',
-    'font.size.base': 'base',
-    'font.weight.base': 'regular'
+    'font.size.base': 'text.base',
+    'font.weight.base': 'text.regular'
   };
   return keyMap[semanticKey] || 'unknown';
 }
@@ -889,32 +1036,89 @@ function getSemanticPreviewRows(tokens, naming) {
 
     var tokenData = tokens.semantic[key];
 
-    // Nouveau format: extraire resolvedValue et infos d'alias
-    var resolvedValue, tokenType, isAlias, aliasTo;
+    // Nouveau format: extraire resolvedValue et infos d'alias depuis la rehydratation
+    var resolvedValue, tokenType, isAlias, aliasTo, isBrokenAlias;
     if (typeof tokenData === 'object' && tokenData.resolvedValue !== undefined) {
-      // Nouveau format
+      // Nouveau format (post-rehydratation)
       resolvedValue = tokenData.resolvedValue;
       tokenType = tokenData.type || SEMANTIC_TYPE_MAP[key] || "COLOR";
-      isAlias = !!tokenData.aliasTo;
+      isAlias = tokenData.isAlias || false;
+      isBrokenAlias = tokenData.isBrokenAlias || false;
       aliasTo = tokenData.aliasTo;
     } else {
       // Ancien format ou valeur brute (fallback)
       resolvedValue = tokenData;
       tokenType = SEMANTIC_TYPE_MAP[key] || "COLOR";
       isAlias = false;
+      isBrokenAlias = false;
       aliasTo = null;
+    }
+
+    // Sanitation: s'assurer que value est toujours une string pour l'UI
+    var displayValue = sanitizeValueForUI(resolvedValue, tokenType);
+
+    // Déterminer le badge à afficher
+    var badge = null;
+    if (isBrokenAlias) {
+      badge = "Alias cassé";
+    } else if (isAlias) {
+      badge = "Alias";
     }
 
     rows.push({
       key: key,
       figmaName: getSemanticVariableName(key, naming),
       type: tokenType,
-      value: resolvedValue,
+      value: displayValue, // Valeur sanitizée pour l'UI
+      rawValue: resolvedValue, // Garder la valeur brute pour les opérations internes
       isAlias: isAlias,
-      aliasTo: aliasTo
+      isBrokenAlias: isBrokenAlias,
+      aliasTo: aliasTo,
+      badge: badge
     });
   }
   return rows;
+}
+
+// Fonction helper pour sanitiser les valeurs avant affichage en UI
+function sanitizeValueForUI(value, tokenType) {
+  if (value === null || value === undefined) {
+    return tokenType === "COLOR" ? "#000000" : "0";
+  }
+
+  // Si c'est déjà une string, la retourner telle quelle
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  // Si c'est un nombre, le convertir en string
+  if (typeof value === 'number') {
+    return value.toString();
+  }
+
+  // Si c'est un objet (comme RGB), éviter [object Object]
+  if (typeof value === 'object') {
+    if (tokenType === "COLOR" && 'r' in value && 'g' in value && 'b' in value) {
+      // Convertir RGB en hex pour affichage
+      try {
+        return ColorService.rgbToHex({
+          r: Math.round(value.r * 255),
+          g: Math.round(value.g * 255),
+          b: Math.round(value.b * 255)
+        });
+      } catch (e) {
+        console.warn('Failed to convert RGB to hex:', value);
+        return "#000000";
+      }
+    } else {
+      // Pour tout autre objet, convertir en string de manière safe
+      console.warn('Unexpected object value for UI:', value);
+      return JSON.stringify(value);
+    }
+  }
+
+  // Fallback: convertir en string
+  return String(value);
 }
 
 /**
@@ -923,6 +1127,28 @@ function getSemanticPreviewRows(tokens, naming) {
  * @param {Object} allTokens - Tous les tokens disponibles
  * @returns {Object|null} Variable Figma correspondante ou null
  */
+// Nouvelle fonction qui retourne les informations complètes de l'alias
+function resolveSemanticAliasInfo(semanticKey, allTokens, naming) {
+  var variable = tryResolveSemanticAlias(semanticKey, allTokens, naming);
+  if (!variable) return null;
+
+  // Extraire les informations de la variable primitive
+  var collectionId = variable.variableCollectionId;
+  if (!collectionId) return null;
+
+  var collection = figma.variables.getVariableCollectionById(collectionId);
+  if (!collection) return null;
+
+  var variableKey = extractVariableKey(variable, collection.name);
+
+  return {
+    variableId: variable.id,
+    collection: collection.name,
+    key: variableKey,
+    variable: variable
+  };
+}
+
 function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
   console.log(`🔍 tryResolveSemanticAlias: ${semanticKey} avec naming=${naming}`);
   try {
@@ -967,9 +1193,9 @@ function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
         'space.sm': { category: 'spacing', keys: ['4'] },
         'space.md': { category: 'spacing', keys: ['8'] },
 
-        // Typography - utiliser typo-base, etc.
-        'font.size.base': { category: 'typography', keys: ['base'] },
-        'font.weight.base': { category: 'typography', keys: ['regular'] }
+        // Typography - utiliser text.base, text.regular, etc.
+        'font.size.base': { category: 'typography', keys: ['text.base', 'base'] },
+        'font.weight.base': { category: 'typography', keys: ['text.regular', 'regular'] }
       };
     } else {
       // Mapping générique pour les autres systèmes
@@ -1010,8 +1236,8 @@ function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
         'space.md': { category: 'spacing', keys: ['16', '4'] },
 
         // Typography
-        'font.size.base': { category: 'typography', keys: ['base', '16'] },
-        'font.weight.base': { category: 'typography', keys: ['regular', '400'] }
+        'font.size.base': { category: 'typography', keys: ['text.base', 'base', '16'] },
+        'font.weight.base': { category: 'typography', keys: ['text.regular', 'regular', '400'] }
       };
     }
 
@@ -1571,7 +1797,7 @@ var Scanner = {
           continue;
         }
 
-        var modeId = collection.modes[0].modeId;
+        var modeId = (collection.modes && collection.modes.length > 0) ? collection.modes[0].modeId : 'default';
         var resolvedValue = variable.valuesByMode[modeId];
 
         if (resolvedValue !== undefined) {
@@ -2078,7 +2304,15 @@ var Fixer = {
 figma.showUI(__html__, { width: 700, height: 950, themeColors: true });
 
 // Load saved naming and semantic tokens, then send to UI
-var savedSemanticTokens = getSemanticTokensFromFile();
+var savedSemanticTokens = getSemanticTokensFromFile('PLUGIN_STARTUP');
+
+// "Flatten" les tokens sémantiques pour obtenir les valeurs actuelles depuis Figma
+var flattenedSemanticTokens = flattenSemanticTokensFromFigma('PLUGIN_STARTUP');
+
+// Sauvegarder immédiatement les tokens flattenned
+if (flattenedSemanticTokens) {
+  saveSemanticTokensToFile(flattenedSemanticTokens, 'FLATTEN_STARTUP');
+}
 
 // Charger le naming de manière asynchrone
 figma.clientStorage.getAsync("tokenStarter.naming").then(function(clientSavedNaming) {
@@ -2087,7 +2321,7 @@ figma.clientStorage.getAsync("tokenStarter.naming").then(function(clientSavedNam
   figma.ui.postMessage({
     type: "init",
     naming: savedNaming,
-    savedSemanticTokens: savedSemanticTokens
+    savedSemanticTokens: flattenedSemanticTokens
   });
 }).catch(function() {
   // Fallback vers la méthode synchrone
@@ -2096,7 +2330,7 @@ figma.clientStorage.getAsync("tokenStarter.naming").then(function(clientSavedNam
   figma.ui.postMessage({
     type: "init",
     naming: savedNaming,
-    savedSemanticTokens: savedSemanticTokens
+    savedSemanticTokens: flattenedSemanticTokens
   });
 });
 
@@ -2133,6 +2367,30 @@ figma.ui.onmessage = function (msg) {
 
       case 'import-tokens':
         console.log('🔄 Pipeline d\'import : import-tokens → FigmaService.importTokens');
+
+        // Logs de diagnostic pour comprendre ce que l'UI envoie
+        if (msg.tokens && msg.tokens.semantic) {
+          var uiSemanticStats = analyzeSemanticTokensStats(msg.tokens.semantic, 'UI_MESSAGE');
+          console.log(`📤 UI_MESSAGE [UI_MESSAGE]: semantic tokens from UI - ${uiSemanticStats.total} total (${uiSemanticStats.aliasCount} aliases, ${uiSemanticStats.valueCount} values)`);
+          if (uiSemanticStats.fallbackValues.length > 0) {
+            console.log(`⚠️ UI_MESSAGE [UI_MESSAGE]: UI sent fallback values: ${uiSemanticStats.fallbackValues.join(', ')}`);
+          }
+
+          // Vérifier la structure des tokens (objets complets ou juste strings)
+          var sampleKeys = Object.keys(msg.tokens.semantic).slice(0, 3);
+          console.log('🔍 UI_MESSAGE structure check:');
+          sampleKeys.forEach(key => {
+            var token = msg.tokens.semantic[key];
+            if (typeof token === 'object' && token.resolvedValue !== undefined) {
+              console.log(`  ${key}: object with resolvedValue="${token.resolvedValue}", aliasTo=${token.aliasTo}`);
+            } else {
+              console.log(`  ${key}: primitive value "${token}"`);
+            }
+          });
+        } else {
+          console.log('📤 UI_MESSAGE [UI_MESSAGE]: no semantic tokens in UI message');
+        }
+
         FigmaService.importTokens(msg.tokens, msg.naming, msg.overwrite);
         break;
 
@@ -2260,7 +2518,28 @@ function extractExistingTokens() {
       if (!variable) continue;
 
       var modeId = collection.modes[0].modeId;
+      var raw = variable.valuesByMode[modeId];
       var value = resolveVariableValue(variable, modeId);
+
+      // EXTRACTION SPÉCIALE POUR LES TOKENS SÉMANTIQUES
+      var aliasTo = null;
+      var resolvedValue = null;
+
+      if (category === "semantic") {
+        if (raw && typeof raw === 'object' && raw.type === 'VARIABLE_ALIAS') {
+          // ✅ VARIABLE_ALIAS détecté : conserver l'alias + normaliser la valeur résolue
+          aliasTo = raw.id; // string ID
+          resolvedValue = normalizeResolvedValue(value, variable.resolvedType);
+          console.log(`[ALIAS_LOAD] ${variable.name} → alias:${aliasTo}, resolved:${resolvedValue}`);
+        } else {
+          // Pas d'alias : juste la valeur résolue normalisée
+          aliasTo = null;
+          resolvedValue = normalizeResolvedValue(value, variable.resolvedType);
+        }
+      } else {
+        // Pour les primitives : logique existante
+        resolvedValue = value;
+      }
 
       // Debug log pour voir les valeurs extraites
       if (!value) {
@@ -2331,8 +2610,24 @@ function extractExistingTokens() {
         console.warn(`⚠️ Valeur par défaut utilisée pour ${category}/${cleanName}:`, value, '→', formattedValue);
       }
 
-      console.log(`✅ Final ${category}/${cleanName}: ${formattedValue}`);
-      tokens[category][cleanName] = formattedValue;
+      if (category === "semantic") {
+        // Pour les sémantiques : créer l'objet complet avec aliasTo et resolvedValue
+        tokens[category][cleanName] = {
+          resolvedValue: resolvedValue,
+          type: variable.resolvedType,
+          aliasTo: aliasTo,
+          meta: {
+            sourceCategory: getCategoryFromSemanticKey(cleanName),
+            sourceKey: getKeyFromSemanticKey(cleanName),
+            updatedAt: Date.now()
+          }
+        };
+        console.log(`✅ Final semantic ${cleanName}: aliasTo=${aliasTo}, resolvedValue=${resolvedValue}`);
+      } else {
+        // Pour les primitives : garder l'ancienne logique
+        console.log(`✅ Final ${category}/${cleanName}: ${formattedValue}`);
+        tokens[category][cleanName] = formattedValue;
+      }
     }
   }
 
@@ -2845,7 +3140,11 @@ function applySemanticScopes(variable, semanticKey, variableType) {
   // Appliquer
   if (scopes.length > 0) {
     try {
-      variable.setScopes(scopes);
+      if (typeof variable.setScopes === 'function') {
+        variable.setScopes(scopes);
+      } else {
+        console.warn("Unable to set semantic scopes:", semanticKey, "- setScopes is not a function");
+      }
     } catch (e) {
       console.warn("Unable to set semantic scopes:", semanticKey, e);
     }
@@ -2857,8 +3156,13 @@ function applyScopesForCategory(variable, category) {
   var scopes = scopesByCategory[category];
   if (!scopes || scopes.length === 0) return;
   try {
-    variable.setScopes(scopes);
+    if (typeof variable.setScopes === 'function') {
+      variable.setScopes(scopes);
+    } else {
+      console.warn("Unable to set scopes for category", category, "- setScopes is not a function");
+    }
   } catch (e) {
+    console.warn("Error setting scopes for category", category, e);
   }
 }
 
@@ -2885,6 +3189,123 @@ function getOrCreateCollection(name, overwrite) {
 }
 
 
+// Fonction spécialisée pour appliquer la valeur appropriée à une variable sémantique
+function applySemanticValue(variable, semanticData, semanticKey) {
+  if (!variable || !semanticData) return;
+
+  // Tâche B — ModeId safe (pas de fallback hasardeux)
+  var modeId = safeGetModeId(variable);
+  if (!modeId) {
+    console.error(`❌ [APPLY_FAIL] ${semanticKey}: no modeId available for variable ${variable.id}`);
+    return;
+  }
+
+  // Tâche A — Normalisation aliasTo
+  const norm = normalizeAliasTo(semanticData.aliasTo);
+
+  var processedValue;
+  var valueType = 'raw';
+
+  // Tâche B — Application défensive : si alias valide → VARIABLE_ALIAS, sinon garde l'existant
+  if (norm.isValid) {
+    var aliasVariable = figma.variables.getVariableById(norm.variableId);
+    if (aliasVariable) {
+      // ✅ ALIAS VALIDE : créer VARIABLE_ALIAS, jamais de fallback destructeur
+      processedValue = { type: "VARIABLE_ALIAS", id: norm.variableId };
+      valueType = 'alias';
+      console.log(`🔗 [APPLY] ${semanticKey} alias => id=${norm.variableId}`);
+    } else {
+      // ❌ ALIAS INVALIDE : NE PAS écraser avec fallback noir
+      console.warn(`⚠️ [APPLY_SKIP] ${semanticKey}: alias ${norm.variableId} not found, skipping (keeping existing value)`);
+      return; // EARLY RETURN - pas d'écrasement
+    }
+  } else {
+    // Pas d'alias valide défini : utiliser resolvedValue si elle existe
+    if (semanticData.resolvedValue != null && semanticData.resolvedValue !== undefined) {
+      processedValue = getProcessedValueFromResolved(semanticData.resolvedValue, semanticData.type);
+      valueType = 'raw';
+      console.log(`💾 [APPLY] ${semanticKey} => raw => ${semanticData.resolvedValue}`);
+    } else {
+      // ❌ Pas d'alias ET resolvedValue null/undefined : NE PAS écraser
+      console.log(`⏭️ [APPLY_SKIP] ${semanticKey}: no alias and resolvedValue is null/undefined (keeping existing value)`);
+      return; // EARLY RETURN - pas d'écrasement destructeur
+    }
+  }
+
+  try {
+    variable.setValueForMode(modeId, processedValue);
+    console.log(`✅ [APPLY] ${semanticKey} => success`);
+  } catch (e) {
+    console.error(`❌ [APPLY_FAIL] ${semanticKey}: failed to set value:`, e);
+  }
+}
+
+// Fonction helper pour normaliser resolvedValue (pour stockage uniquement)
+function normalizeResolvedValue(value, variableType) {
+  if (value === null || value === undefined) {
+    return null; // Garder null pour indiquer qu'on n'a pas pu résoudre
+  }
+
+  if (variableType === "COLOR") {
+    if (typeof value === 'object' && value && value.r !== undefined) {
+      // Convertir RGB en hex
+      try {
+        return rgbToHex(value);
+      } catch (e) {
+        console.warn(`Failed to convert RGB to hex:`, value, e);
+        return null;
+      }
+    } else if (typeof value === 'string' && value.startsWith('#')) {
+      return value; // Déjà en hex
+    } else {
+      console.warn(`Invalid color value for normalization:`, value);
+      return null; // Ne pas appliquer de fallback
+    }
+  } else if (variableType === "FLOAT") {
+    if (typeof value === 'number') {
+      return value;
+    } else if (typeof value === 'string') {
+      var parsed = parseFloat(value);
+      return isNaN(parsed) ? null : parsed;
+    } else {
+      return null;
+    }
+  } else {
+    return value;
+  }
+}
+
+// Fonction helper pour convertir resolvedValue en valeur Figma selon le type
+function getProcessedValueFromResolved(resolvedValue, variableType) {
+  if (variableType === "COLOR") {
+    if (typeof resolvedValue === 'string' && /^#[0-9A-Fa-f]{3,8}$/.test(resolvedValue)) {
+      return hexToRgb(resolvedValue);
+    } else {
+      console.warn(`Invalid color resolvedValue: ${resolvedValue}`);
+      return null; // Plus de fallback automatique
+    }
+  } else if (variableType === "FLOAT") {
+    return normalizeFloatValue(resolvedValue);
+  } else {
+    return resolvedValue;
+  }
+}
+
+// Fonction pour détecter les valeurs fallback UI (ne doivent jamais être sauvegardées)
+function isUIFallbackValue(value, tokenType) {
+  if (!value) return false;
+
+  var stringValue = typeof value === 'string' ? value : String(value);
+
+  // Valeurs considérées comme des fallbacks UI
+  var uiFallbacks = {
+    'COLOR': ['#000000', '#ffffff', '#FFFFFF', '#000', '#fff'],
+    'FLOAT': ['0', 0]
+  };
+
+  return uiFallbacks[tokenType] && uiFallbacks[tokenType].includes(value);
+}
+
 function createOrUpdateVariable(collection, name, type, value, category, overwrite, hintKey) {
   console.log('🔧 createOrUpdateVariable:', category, name, type, typeof value);
 
@@ -2903,22 +3324,35 @@ function createOrUpdateVariable(collection, name, type, value, category, overwri
     try {
       variable = figma.variables.createVariable(name, collection, type);
       console.log('✅ Variable created:', name);
+
+      // Après création, récupérer à nouveau la variable pour s'assurer que toutes les propriétés sont définies
+      if (variable && variable.id) {
+        variable = figma.variables.getVariableById(variable.id);
+        if (!variable) {
+          console.error('❌ Created variable not found by ID');
+          return null;
+        }
+        console.log('✅ Variable retrieved after creation:', variable.name, 'collection:', variable.variableCollection ? variable.variableCollection.name : 'NONE');
+      }
     } catch (e) {
       console.error('❌ Failed to create variable:', name, e);
-      return;
+      return null;
     }
   } else {
     console.log('📝 Variable exists:', name);
   }
 
-  
+
   if (variable) {
-    var modeId = collection.modes[0].modeId;
-    try {
-      variable.setValueForMode(modeId, value);
-      console.log('💾 Value set for', name + ':', typeof value, value);
-    } catch (e) {
-      console.error('❌ Failed to set value for', name + ':', e);
+    // N'appliquer la valeur que si elle est fournie (pour les sémantiques, on utilise applySemanticValue)
+    if (value !== null && value !== undefined) {
+      var modeId = collection.modes[0].modeId;
+      try {
+        variable.setValueForMode(modeId, value);
+        console.log('💾 Value set for', name + ':', typeof value, value);
+      } catch (e) {
+        console.error('❌ Failed to set value for', name + ':', e);
+      }
     }
     if (category === "semantic") {
       applySemanticScopes(variable, hintKey || name, type);
@@ -2932,6 +3366,17 @@ function createOrUpdateVariable(collection, name, type, value, category, overwri
 
 function importTokensToFigma(tokens, naming, overwrite) {
   console.log('🔄 Pipeline d\'import : importTokensToFigma appelé directement');
+
+  // Logs de diagnostic pour les tokens sémantiques
+  if (tokens && tokens.semantic) {
+    var semanticStats = analyzeSemanticTokensStats(tokens.semantic, 'IMPORT_INPUT');
+    console.log(`📥 IMPORT_FIGMA [IMPORT_INPUT]: semantic tokens found - ${semanticStats.total} total (${semanticStats.aliasCount} aliases, ${semanticStats.valueCount} values)`);
+    if (semanticStats.fallbackValues.length > 0) {
+      console.log(`⚠️ IMPORT_FIGMA [IMPORT_INPUT]: fallback values detected: ${semanticStats.fallbackValues.join(', ')}`);
+    }
+  } else {
+    console.log('📥 IMPORT_FIGMA [IMPORT_INPUT]: no semantic tokens in input');
+  }
 
   // Save the naming preference to file for persistence
   saveNamingToFile(naming);
@@ -3091,63 +3536,72 @@ function importTokensToFigma(tokens, naming, overwrite) {
     var aliasCount = 0;
     var valueCount = 0;
     var valueOnlyKeys = [];
+    var newAliasCount = 0; // Nouveaux alias créés lors de cet import
     var updatedSemanticTokens = {}; // Pour mettre à jour la sauvegarde avec les alias
 
     for (var semanticKey in tokens.semantic) {
       if (!tokens.semantic.hasOwnProperty(semanticKey)) continue;
 
-      var semanticValue = tokens.semantic[semanticKey];
+      var semanticData = tokens.semantic[semanticKey];
       var variableName = getSemanticVariableName(semanticKey, naming);
       var variableType = SEMANTIC_TYPE_MAP[semanticKey] || "COLOR";
 
-      // Extraire resolvedValue selon le nouveau format
+      // Extraire les données selon le nouveau format
       var resolvedValue, currentAliasTo;
-      if (typeof semanticValue === 'object' && semanticValue.resolvedValue !== undefined) {
-        resolvedValue = semanticValue.resolvedValue;
-        currentAliasTo = semanticValue.aliasTo;
+      if (typeof semanticData === 'object' && semanticData.resolvedValue !== undefined) {
+        resolvedValue = semanticData.resolvedValue;
+        currentAliasTo = semanticData.aliasTo;
       } else {
-        resolvedValue = semanticValue;
+        // Ancien format : migrer à la volée
+        resolvedValue = semanticData;
         currentAliasTo = null;
       }
 
-      // Convertir la valeur selon le type
-      var processedValue;
-      var aliasTo = null; // ID de la variable primitive pour la sauvegarde
-      if (variableType === "COLOR") {
-        // Essayer de résoudre comme alias vers les primitives si possible
-        var aliasVariable = tryResolveSemanticAlias(semanticKey, tokens, naming);
-        if (aliasVariable) {
-          console.log(`✅ Alias créé pour ${semanticKey}: ${aliasVariable.name}`);
-          processedValue = { type: "VARIABLE_ALIAS", id: aliasVariable.id };
-          aliasTo = aliasVariable.id; // Conserver l'ID pour la sauvegarde
-          aliasCount++;
-        } else if (typeof resolvedValue === 'string' && /^#[0-9A-Fa-f]{3,8}$/.test(resolvedValue)) {
-          // Fallback vers hexToRgb uniquement si resolvedValue est un hex valide
-          console.log(`❌ Fallback pour ${semanticKey}: ${resolvedValue}`);
-          processedValue = hexToRgb(resolvedValue);
-          valueCount++;
-          valueOnlyKeys.push(semanticKey);
-        } else {
-          console.warn(`Import tokens: Invalid color value "${resolvedValue}" for semantic token "${semanticKey}", skipping import`);
-          continue; // Skip this token
+      // Créer ou récupérer la variable Figma (sans valeur pour l'instant)
+      var variable = createOrUpdateVariable(semanticCollection, variableName, variableType, null, "semantic", overwrite, semanticKey);
+      if (!variable) {
+        console.warn(`⚠️ Skipping ${semanticKey}: failed to create/update variable`);
+        continue;
+      }
+
+      // Si pas d'alias existant, essayer d'en créer un nouveau
+      var finalAliasTo = currentAliasTo;
+      if (!finalAliasTo) {
+        var aliasInfo = resolveSemanticAliasInfo(semanticKey, tokens, naming);
+        if (aliasInfo) {
+          finalAliasTo = {
+            variableId: aliasInfo.variableId,
+            collection: aliasInfo.collection,
+            key: aliasInfo.key
+          };
+          newAliasCount++;
+          console.log(`✅ New alias created for ${semanticKey}: ${aliasInfo.collection}/${aliasInfo.key} (${aliasInfo.variable.name})`);
         }
-      } else if (variableType === "FLOAT") {
-        processedValue = normalizeFloatValue(resolvedValue);
-        if (processedValue === null) {
-          console.warn(`Import tokens: Invalid FLOAT value for semantic token "${semanticKey}", skipping import`);
-          return; // Skip this token
-        }
+      }
+
+      // Préparer les données pour applySemanticValue
+      var semanticValueData = {
+        resolvedValue: resolvedValue,
+        type: variableType,
+        aliasTo: finalAliasTo
+      };
+
+      // Appliquer la valeur appropriée (alias ou resolvedValue)
+      applySemanticValue(variable, semanticValueData, semanticKey);
+
+      // Compter pour les statistiques
+      if (finalAliasTo) {
+        aliasCount++;
+      } else {
         valueCount++;
         valueOnlyKeys.push(semanticKey);
       }
-
-      createOrUpdateVariable(semanticCollection, variableName, variableType, processedValue, "semantic", overwrite, semanticKey);
 
       // Mettre à jour les tokens sauvegardés avec l'info d'alias
       updatedSemanticTokens[semanticKey] = {
         resolvedValue: resolvedValue,
         type: variableType,
-        aliasTo: aliasTo,
+        aliasTo: finalAliasTo,
         meta: {
           sourceCategory: getCategoryFromSemanticKey(semanticKey),
           sourceKey: getKeyFromSemanticKey(semanticKey),
@@ -3158,12 +3612,15 @@ function importTokensToFigma(tokens, naming, overwrite) {
 
     // Sauvegarder les tokens mis à jour avec les infos d'alias
     if (Object.keys(updatedSemanticTokens).length > 0) {
-      saveSemanticTokensToFile(updatedSemanticTokens);
-      console.log(`💾 DEBUG: Updated semantic tokens with alias info: ${aliasCount} aliases detected`);
+      saveSemanticTokensToFile(updatedSemanticTokens, 'IMPORT_FIGMA_UPDATE');
+      console.log(`💾 DEBUG: Updated semantic tokens with alias info: ${aliasCount} total aliases (${newAliasCount} new), ${valueCount} values`);
     }
 
     // Rapport après import sémantique
     var reportMessage = "Semantic: " + aliasCount + " alias, " + valueCount + " values";
+    if (newAliasCount > 0) {
+      reportMessage += " (" + newAliasCount + " new)";
+    }
     figma.notify(reportMessage);
     if (valueOnlyKeys.length > 0) {
       console.log("Semantic tokens imported as values (no alias found):", valueOnlyKeys.join(", "));
@@ -3187,41 +3644,86 @@ var lastScanResults = null;
 
 
 function resolveVariableValue(variable, modeId, visitedVariables) {
-  
-  if (!visitedVariables) {
-    visitedVariables = new Set();
-  }
-
-  if (visitedVariables.has(variable.id)) {
-    return null;
-  }
-
+  if (!visitedVariables) visitedVariables = new Set();
+  if (visitedVariables.has(variable.id)) return null;
   visitedVariables.add(variable.id);
 
   try {
     var value = variable.valuesByMode[modeId];
 
-    
     if (value && typeof value === 'object' && value.type === 'VARIABLE_ALIAS') {
-
       var parentVar = figma.variables.getVariableById(value.id);
-      if (!parentVar) {
-        return null;
+      if (!parentVar) return null;
+
+      // ✅ MODE MAPPING by name (collection A -> collection B)
+      var parentModeId = modeId;
+
+      try {
+        var currentCollection = figma.variables.getVariableCollectionById(variable.variableCollectionId);
+        var parentCollection = figma.variables.getVariableCollectionById(parentVar.variableCollectionId);
+
+        if (currentCollection && parentCollection) {
+          // Find current mode name
+          var currentMode = currentCollection.modes.find(m => m.modeId === modeId);
+          var currentModeName = currentMode ? currentMode.name : null;
+
+          // Find matching mode by name in parent collection
+          var matchingParentMode = currentModeName
+            ? parentCollection.modes.find(m => m.name === currentModeName)
+            : null;
+
+          if (matchingParentMode) {
+            parentModeId = matchingParentMode.modeId;
+          } else if (parentCollection.modes && parentCollection.modes.length > 0) {
+            // fallback: first mode in parent collection
+            parentModeId = parentCollection.modes[0].modeId;
+          }
+        }
+      } catch (e) {
+        // ignore mapping errors, keep parentModeId fallback
       }
 
-      
-      var parentModeId = modeId; 
       return resolveVariableValue(parentVar, parentModeId, visitedVariables);
     }
 
-    
     return value;
-
   } catch (error) {
     return null;
   } finally {
     visitedVariables.delete(variable.id);
   }
+}
+
+
+// Tâche A — Normaliser le format aliasTo (string OU objet)
+function normalizeAliasTo(aliasTo) {
+  // returns { variableId: string|null, raw: any, isValid: boolean }
+
+  if (!aliasTo) {
+    return { variableId: null, raw: aliasTo, isValid: false };
+  }
+
+  // Si aliasTo est un string
+  if (typeof aliasTo === 'string') {
+    // Si ça ressemble à un ID Figma ("VariableID:...") => variableId = aliasTo
+    if (aliasTo.startsWith('VariableID:') || /^[a-zA-Z0-9_-]+:/.test(aliasTo)) {
+      return { variableId: aliasTo, raw: aliasTo, isValid: true };
+    } else {
+      return { variableId: null, raw: aliasTo, isValid: false };
+    }
+  }
+
+  // Si aliasTo est un objet
+  if (typeof aliasTo === 'object') {
+    if (aliasTo.variableId && typeof aliasTo.variableId === 'string') {
+      return { variableId: aliasTo.variableId, raw: aliasTo, isValid: true };
+    } else {
+      return { variableId: null, raw: aliasTo, isValid: false };
+    }
+  }
+
+  // Type inattendu
+  return { variableId: null, raw: aliasTo, isValid: false };
 }
 
 function createValueToVariableMap() {
@@ -3550,7 +4052,7 @@ function enrichSuggestionsWithRealValues(suggestions) {
       }
 
       if (collection && collection.modes.length > 0) {
-        var modeId = collection.modes[0].modeId;
+        var modeId = (collection.modes && collection.modes.length > 0) ? collection.modes[0].modeId : 'default';
         var rawValue = variable.valuesByMode[modeId];
 
         
@@ -5375,12 +5877,15 @@ figma.ui.onmessage = function (msg) {
       console.log(`🎨 Génération automatique des sémantiques pour ${naming}`);
       console.log(`🔍 Primitives disponibles:`, Object.keys(tokens).filter(k => tokens[k] && Object.keys(tokens[k]).length > 0));
       try {
-        tokens.semantic = generateSemanticTokens(tokens);
-        console.log(`✅ Sémantiques générées:`, tokens.semantic ? Object.keys(tokens.semantic).length : 0, 'tokens');
-        if (tokens.semantic) {
-          console.log(`📋 Exemples:`, Object.entries(tokens.semantic).slice(0, 3).map(([k,v]) => `${k}=${JSON.stringify(v)}`).join(', '));
-          // Sauvegarder les sémantiques générées
-          saveSemanticTokensToFile(tokens.semantic);
+        var generated = generateSemanticTokens(tokens);
+        var existing = getSemanticTokensFromFile('MERGE_EXISTING') || {};
+        var merged = mergeSemanticWithExistingAliases(generated, existing);
+
+        console.log(`✅ Sémantiques générées:`, generated ? Object.keys(generated).length : 0, 'tokens');
+        if (merged) {
+          console.log(`📋 Exemples:`, Object.entries(merged).slice(0, 3).map(([k,v]) => `${k}=${JSON.stringify(v)}`).join(', '));
+          // Sauvegarder les sémantiques fusionnées (avec alias préservés)
+          saveSemanticTokensToFile(merged, 'AUTO_GENERATE_MERGED');
         }
       } catch (error) {
         console.error('❌ Erreur génération sémantiques:', error);
@@ -5388,7 +5893,7 @@ figma.ui.onmessage = function (msg) {
       }
     } else {
       // Restaurer les tokens sémantiques sauvegardés si disponibles
-      var savedSemantic = getSemanticTokensFromFile();
+      var savedSemantic = getSemanticTokensFromFile('SYNC_RESTORE_SAVED');
       if (savedSemantic) {
         tokens.semantic = savedSemantic;
         console.log(`📂 Sémantiques restaurées depuis la sauvegarde:`, Object.keys(savedSemantic).length, 'tokens');
@@ -5400,7 +5905,7 @@ figma.ui.onmessage = function (msg) {
     // Pour tous les cas, si on a des sémantiques sauvegardées et qu'on régénère,
     // on les restaure automatiquement (sauf si on vient de les régénérer)
     if (!tokens.semantic) {
-      var savedSemantic = getSemanticTokensFromFile();
+      var savedSemantic = getSemanticTokensFromFile('SYNC_AUTO_RESTORE');
       if (savedSemantic) {
         tokens.semantic = savedSemantic;
         console.log(`📂 Sémantiques restaurées automatiquement:`, Object.keys(savedSemantic).length, 'tokens');
@@ -5531,40 +6036,7 @@ figma.ui.onmessage = function (msg) {
     checkAndNotifySelection();
   }
 
-  if (msg.type === "generate-semantic") {
-    try {
-      // Récupérer les tokens primitifs depuis les collections Figma
-      var extractedData = extractExistingTokens();
-      var primitiveTokens = extractedData.tokens;
 
-      if (!primitiveTokens || Object.keys(primitiveTokens).length === 0) {
-        figma.notify("⚠️ Aucun token primitif trouvé. Générez d'abord les tokens primitifs.");
-        return;
-      }
-
-      // Générer les tokens sémantiques
-      var semanticTokens = generateSemanticTokens(primitiveTokens);
-
-      // Ajouter les tokens sémantiques au cache
-      cachedTokens = cachedTokens || {};
-      cachedTokens.semantic = semanticTokens;
-
-      // Sauvegarder les sémantiques générées
-      saveSemanticTokensToFile(semanticTokens);
-
-      // Notifier l'UI
-      figma.ui.postMessage({
-        type: "semantic-generated",
-        semanticTokens: semanticTokens
-      });
-
-      figma.notify("✅ Tokens sémantiques générés depuis les primitives");
-
-    } catch (error) {
-      console.error("Erreur lors de la génération sémantique:", error);
-      figma.notify("❌ Erreur lors de la génération des tokens sémantiques");
-    }
-  }
 
   if (msg.type === "resize") {
     var MIN_WIDTH = 400;
@@ -5826,3 +6298,247 @@ figma.ui.onmessage = function (msg) {
     return successCount;
   }
 };
+
+// Fonction utilitaire pour obtenir un modeId de manière sûre (sans crash)
+function safeGetModeId(variable) {
+  // Si variable est falsy
+  if (!variable) return null;
+
+  // Essayer d'abord via la collection
+  if (variable.variableCollectionId) {
+    try {
+      var collection = figma.variables.getVariableCollectionById(variable.variableCollectionId);
+      if (collection && collection.modes && collection.modes.length > 0) {
+        return collection.modes[0].modeId;
+      }
+      console.log(`⚠️ [SAFE_MODE] No collection modes for var=${variable.name} id=${variable.id} collectionId=${variable.variableCollectionId}`);
+    } catch (e) {
+      console.warn(`⚠️ [SAFE_MODE] Error getting collection for var=${variable.name} id=${variable.id} collectionId=${variable.variableCollectionId}:`, e);
+    }
+  }
+
+  // Fallback : utiliser les clés de valuesByMode
+  if (variable.valuesByMode && typeof variable.valuesByMode === 'object') {
+    var modeKeys = Object.keys(variable.valuesByMode);
+    if (modeKeys.length > 0) {
+      console.log(`🔄 [SAFE_MODE] Using fallback mode "${modeKeys[0]}" for var=${variable.name} id=${variable.id} (no collection)`);
+      return modeKeys[0];
+    }
+    console.log(`⚠️ [SAFE_MODE] No valuesByMode for var=${variable.name} id=${variable.id}`);
+  }
+
+  console.log(`❌ [SAFE_MODE] Cannot determine modeId for var=${variable.name || 'unknown'} id=${variable.id || 'unknown'}`);
+  return null;
+}
+
+// Fonction pour fusionner les tokens générés avec les alias existants
+function mergeSemanticWithExistingAliases(generated, existing) {
+  if (!generated) return existing || {};
+  if (!existing) return generated;
+
+  var merged = {};
+  var preservedAliases = 0;
+
+  // Parcourir toutes les clés générées
+  for (var key in generated) {
+    if (!generated.hasOwnProperty(key)) continue;
+
+    var generatedToken = generated[key];
+    var existingToken = existing[key];
+
+    // Si un token existant avec aliasTo existe, préserver l'alias
+    if (existingToken && existingToken.aliasTo) {
+      merged[key] = {
+        resolvedValue: generatedToken, // Nouvelle valeur générée
+        aliasTo: existingToken.aliasTo, // ALIAS PRÉSERVÉ
+        type: existingToken.type || 'COLOR',
+        meta: existingToken.meta // Conserver les métadonnées existantes
+      };
+      preservedAliases++;
+      console.log(`🔐 [ALIAS PRESERVED] ${key} → ${existingToken.aliasTo}`);
+    } else {
+      // Token value-only classique
+      merged[key] = generatedToken;
+    }
+  }
+
+  console.log(`🔄 [MERGE] Completed: ${Object.keys(merged).length} tokens, ${preservedAliases} aliases preserved`);
+  return merged;
+}
+
+// Fonction helper pour détecter les valeurs fallback évidentes
+function isObviousFallback(value) {
+  if (typeof value === 'string') {
+    // Couleurs fallback communes
+    if (value === '#000000' || value === '#FFFFFF' || value === '#000' || value === '#FFF') {
+      return true;
+    }
+  } else if (typeof value === 'number') {
+    // Valeurs numériques fallback communes
+    if (value === 0 || value === 4 || value === 8 || value === 16) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Fonction pour "flatten" les tokens sémantiques depuis Figma au démarrage
+// Fonction helper pour obtenir un modeId de manière safe
+function safeGetModeId(variable) {
+  try {
+    if (!variable || !variable.variableCollectionId) {
+      return null;
+    }
+
+    var collection = figma.variables.getVariableCollectionById(variable.variableCollectionId);
+    if (!collection || !collection.modes || collection.modes.length === 0) {
+      return null;
+    }
+
+    return collection.modes[0].modeId;
+  } catch (e) {
+    console.warn(`safeGetModeId failed for variable ${variable ? variable.id : 'unknown'}:`, e);
+    return null;
+  }
+}
+
+function flattenSemanticTokensFromFigma(callsite) {
+  var savedSemanticTokens = getSemanticTokensFromFile('FLATTEN_LOAD');
+  if (!savedSemanticTokens) {
+    console.log(`🔄 [FLATTEN] ${callsite}: no saved tokens to flatten`);
+    return null;
+  }
+
+  console.log(`🔄 [FLATTEN] ${callsite}: starting flatten for ${Object.keys(savedSemanticTokens).length} tokens`);
+
+  // Trouver la collection Semantic
+  var semanticCollection = null;
+  var collections = figma.variables.getLocalVariableCollections();
+  for (var i = 0; i < collections.length; i++) {
+    if (collections[i].name === "Semantic") {
+      semanticCollection = collections[i];
+      break;
+    }
+  }
+
+  if (!semanticCollection) {
+    console.log(`⚠️ [FLATTEN] ${callsite}: no Semantic collection found`);
+    return savedSemanticTokens; // Retourner les tokens tels quels
+  }
+
+  console.log(`🔄 [FLATTEN] ${callsite}: using Semantic collection "${semanticCollection.name}" with ${semanticCollection.variableIds.length} variables`);
+
+  // Créer un mapping nom -> variable pour la recherche rapide
+  var nameToVariable = {};
+  for (var v = 0; v < semanticCollection.variableIds.length; v++) {
+    var variable = figma.variables.getVariableById(semanticCollection.variableIds[v]);
+    if (variable) {
+      nameToVariable[variable.name] = variable;
+    }
+  }
+
+  var flattenedTokens = {};
+  var flattenedCount = 0;
+  var unresolvedCount = 0;
+
+  // Traiter chaque token sauvegardé
+  for (var semanticKey in savedSemanticTokens) {
+    if (!savedSemanticTokens.hasOwnProperty(semanticKey)) continue;
+
+    // DÉCLARATION ET RESET AU DÉBUT DE CHAQUE ITÉRATION - INTERDICTION DE RÉUTILISATION
+    var semanticVar = null;
+    var modeId = null;
+    var raw = null;
+    var resolved = null;
+
+    var savedToken = savedSemanticTokens[semanticKey];
+    var flattenedToken = {
+      resolvedValue: savedToken.resolvedValue, // Conserver par défaut
+      type: savedToken.type,
+      aliasTo: null, // Sera défini si c'est un alias
+      meta: savedToken.meta || {},
+      flattenedFromAlias: true // Marquer comme flattenned
+    };
+
+    // LOOKUP VARIABLE FIGMA - CONSTRUIRE UNIQUEMENT À PARTIR DE semanticKey
+    var variableName = getSemanticVariableName(semanticKey, 'custom');
+    semanticVar = nameToVariable[variableName];
+
+    if (!semanticVar) {
+      console.log(`[REHYDRATE][NOT_FOUND] semanticKey=${semanticKey} variableName=${variableName} → keep stored value`);
+      flattenedTokens[semanticKey] = flattenedToken;
+      unresolvedCount++;
+      continue;
+    }
+
+    // MODEID SAFE - NE JAMAIS FAIRE collection.modes[0] SANS VÉRIFIER
+    modeId = safeGetModeId(semanticVar);
+    if (modeId === null) {
+      console.log(`[REHYDRATE][NO_MODE] semanticKey=${semanticKey} var=${semanticVar.name} id=${semanticVar.id} → keep stored value`);
+      flattenedTokens[semanticKey] = flattenedToken;
+      unresolvedCount++;
+      continue;
+    }
+
+    // LECTURE VALEUR
+    raw = semanticVar.valuesByMode[modeId];
+
+    // DÉTECTER SI C'EST UN ALIAS ET EXTRAIRE LES INFOS
+    if (raw && typeof raw === 'object' && raw.type === 'VARIABLE_ALIAS') {
+      // Cette variable sémantique pointe vers une autre variable
+      var targetVariable = figma.variables.getVariableById(raw.id);
+      if (targetVariable) {
+        // Extraire les informations de la variable cible
+        var targetCollectionId = targetVariable.variableCollectionId;
+        if (targetCollectionId) {
+          var targetCollection = figma.variables.getVariableCollectionById(targetCollectionId);
+          if (targetCollection) {
+            var targetKey = extractVariableKey(targetVariable, targetCollection.name);
+            flattenedToken.aliasTo = {
+              variableId: raw.id,
+              collection: targetCollection.name,
+              key: targetKey
+            };
+            console.log(`🔗 [REHYDRATE] ${semanticKey} is alias to ${targetCollection.name}/${targetKey}`);
+          }
+        }
+      }
+
+      resolved = resolveVariableValue(semanticVar, modeId);
+
+      // IMPORTANT : si resolved == null || resolved === undefined
+      if (resolved == null || resolved === undefined) {
+        console.log(`[REHYDRATE][SKIP_UNRESOLVED] key=${semanticKey} keepStored=${savedToken.resolvedValue}`);
+        // ne PAS appliquer de fallback, ne PAS écraser resolvedValue
+        flattenedTokens[semanticKey] = flattenedToken;
+        unresolvedCount++;
+        continue;
+      }
+    } else {
+      resolved = raw;
+    }
+
+    // CONVERSION DISPLAY - resolvedValue doit être STRICTEMENT string/number
+    var displayValue = convertFigmaValueToDisplay(resolved, savedToken.type);
+
+    // Si le résultat est un objet ou null : log et conserver la valeur stockée
+    if (displayValue === null || typeof displayValue === 'object') {
+      console.log(`[REHYDRATE][SKIP_CONVERT] key=${semanticKey} resolvedType=${typeof resolved} displayType=${typeof displayValue} → keep stored value`);
+      flattenedTokens[semanticKey] = flattenedToken;
+      unresolvedCount++;
+      continue;
+    }
+
+    // MISE À JOUR RÉUSSIE
+    flattenedToken.resolvedValue = displayValue;
+    flattenedCount++;
+    console.log(`✅ [REHYDRATE] ${semanticKey}: "${savedToken.resolvedValue}" → "${displayValue}"`);
+
+    flattenedTokens[semanticKey] = flattenedToken;
+  }
+
+  console.log(`🔄 [FLATTEN] ${callsite}: complete - ${flattenedCount} flattened, ${unresolvedCount} kept as-is`);
+
+  return flattenedTokens;
+}
+

@@ -1107,6 +1107,73 @@
       border: 1px solid transparent;
     }
 
+    /* Harmonisation Brand/Semantic */
+    .token-row {
+      display: table-row;
+    }
+
+    .token-name {
+      font-weight: 500;
+      color: var(--poly-text);
+    }
+
+    .token-subtitle {
+      display: block;
+      margin-top: 2px;
+      font-size: 10px;
+      opacity: 0.7;
+    }
+
+    .token-value-cell {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .token-value-input {
+      flex: 1;
+      border: 1px solid transparent;
+      background: transparent;
+      padding: 4px 8px;
+      font-family: 'Monaco', 'Courier New', monospace;
+      font-size: 11px;
+      border-radius: 4px;
+      color: inherit;
+      min-width: 0; /* Permet la réduction */
+    }
+
+    .token-value-input:focus {
+      outline: none;
+      border-color: var(--poly-accent);
+      background: rgba(138, 213, 63, 0.05);
+    }
+
+    .token-value-input.locked {
+      cursor: default;
+      pointer-events: none;
+      opacity: 1;
+      color: var(--poly-text-muted);
+      border: 1px solid transparent;
+    }
+
+    .alias-badge {
+      background: var(--poly-accent);
+      color: white;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-size: 9px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .alias-badge:hover {
+      background: var(--poly-accent-hover);
+    }
+
     /* Animations */
     @keyframes fadeInUp {
       0% {
@@ -3731,7 +3798,6 @@
           <!-- Footer Content: Designer View -->
           <div id="footerDesignerOps" class="sticky-footer-content" style="gap: 10px; width: 100%;">
             <button class="btn-secondary" id="backToLibBtn" style="flex: 1;">← Retour</button>
-            <button class="btn-outline" id="generateSemanticBtn" style="flex: 1.5;" title="Générer les tokens sémantiques depuis les primitives">Générer sémantique</button>
             <button class="btn-primary" id="importBtn" style="flex: 2;">Synchroniser avec Figma</button>
           </div>
 
@@ -3889,7 +3955,7 @@
     var currentColor = "#6366F1";
     var currentNaming = "custom"; // Valeur par défaut
     var currentTokens = null;
-    var semanticPreview = []; // Données de preview sémantique depuis le backend
+    // semanticPreview supprimé - les sémantiques sont maintenant affichées comme les primitives
     var selectedFile = null;
     var activeCategory = "brand";
     var currentStep = 0;
@@ -4100,7 +4166,6 @@
     var randomBtn = document.getElementById("randomBtn");
 
     var importBtn = document.getElementById("importBtn");
-    var generateSemanticBtn = document.getElementById("generateSemanticBtn");
     var tokenTabs = document.getElementById("tokenTabs");
     var tokenPreview = document.getElementById("tokenPreview");
 
@@ -4261,7 +4326,6 @@
       currentColor = "#6366F1";
       currentNaming = "";
       currentTokens = null;
-      semanticPreview = [];
       selectedFile = null;
       activeCategory = "brand";
 
@@ -4531,43 +4595,6 @@
         }
       };
       window.addEventListener('message', feedbackListener);
-    });
-
-    generateSemanticBtn.addEventListener("click", function () {
-      // État de chargement
-      var originalText = this.innerHTML;
-      this.classList.add('btn-loading');
-      this.disabled = true;
-      this.innerHTML = '<div class="loading-spinner"></div> Génération...';
-
-      // Envoyer le message au plugin
-      parent.postMessage({
-        pluginMessage: {
-          type: "generate-semantic"
-        }
-      }, "*");
-
-      // Écouter la réponse
-      var semanticListener = function (event) {
-        var msg = event.data.pluginMessage;
-        if (msg && msg.type === 'semantic-generated') {
-          // Mettre à jour l'affichage des tokens
-          if (currentTokens && msg.semanticTokens) {
-            currentTokens.semantic = msg.semanticTokens;
-            updatePreview();
-            updateExport();
-          }
-
-          // Feedback visuel
-          generateSemanticBtn.classList.remove('btn-loading');
-          generateSemanticBtn.disabled = false;
-          generateSemanticBtn.innerHTML = '✅ Généré !';
-          setTimeout(function () { generateSemanticBtn.innerHTML = originalText; }, 2000);
-
-          window.removeEventListener('message', semanticListener);
-        }
-      };
-      window.addEventListener('message', semanticListener);
     });
 
     // ============================================
@@ -8310,26 +8337,8 @@
             console.log('🔄 Preserved existing semantic tokens:', Object.keys(existingSemantic).length, 'tokens');
           }
 
-          // Stocker les données de preview sémantique et le naming
-          semanticPreview = msg.semanticPreview || [];
+          // Stocker le naming (semanticPreview supprimé - affichage unifié)
           currentNaming = msg.naming || currentNaming;
-
-          // Régénérer semanticPreview si nécessaire (sémantiques préservées ou restaurées)
-          if (currentTokens.semantic && (!semanticPreview || semanticPreview.length === 0 ||
-              (existingSemantic && Object.keys(existingSemantic).length > semanticPreview.length))) {
-            semanticPreview = [];
-            for (var key in currentTokens.semantic) {
-              if (!currentTokens.semantic.hasOwnProperty(key)) continue;
-
-              semanticPreview.push({
-                key: key,
-                figmaName: getSemanticVariableName(key, currentNaming),
-                type: 'COLOR',
-                value: currentTokens.semantic[key] // Maintenant directement la valeur normalisée
-              });
-            }
-            console.log('🔄 Regenerated semanticPreview from currentTokens:', semanticPreview.length, 'items');
-          }
 
           // Afficher une notification de succès
           showNotification("Tokens générés avec succès !", "success");
@@ -8431,6 +8440,37 @@
       var categoryData = currentTokens[activeCategory];
       var previewData = categoryData;
 
+      // Mélanger primitives + sémantiques selon la catégorie
+      if (currentTokens.semantic) {
+        if (activeCategory === "semantic") {
+          // Onglet Semantic : afficher tous les sémantiques
+          previewData = currentTokens.semantic;
+        } else {
+          // Autres onglets : mélanger primitives + sémantiques de cette catégorie
+          previewData = {};
+
+          // Copier les primitives existantes
+          if (categoryData) {
+            for (var key in categoryData) {
+              if (categoryData.hasOwnProperty(key)) {
+                previewData[key] = categoryData[key];
+              }
+            }
+          }
+
+          // Ajouter les sémantiques qui appartiennent à cette catégorie
+          for (var semanticKey in currentTokens.semantic) {
+            if (!currentTokens.semantic.hasOwnProperty(semanticKey)) continue;
+
+            var semanticCategory = getCategoryFromSemanticKey(semanticKey);
+            if (semanticCategory === activeCategory) {
+              // Utiliser la clé sémantique (ex: "bg.canvas")
+              previewData[semanticKey] = currentTokens.semantic[semanticKey];
+            }
+          }
+        }
+      }
+
       if (!previewData) {
         tokenPreview.innerHTML = "<p style='color: var(--poly-text-muted); text-align: center; padding: 20px;'>No tokens available for this category.</p>";
         return;
@@ -8456,104 +8496,159 @@
         html += "</div>";
       }
 
-      html += "<table class='token-table'>";
-      html += "<thead><tr>";
+      // Créer le tableau avec DOM API (plus propre, pas d'innerHTML)
+      var table = document.createElement('table');
+      table.className = 'token-table';
+
+      // Header
+      var thead = document.createElement('thead');
+      var headerRow = document.createElement('tr');
+
       if (isColor) {
-        html += "<th style='width: 60px;'>Color</th>";
-        html += "<th style='width: 120px;'>Name</th>"; // Fixed width
-      } else {
-        html += "<th style='width: 180px;'>Name</th>"; // Wider name if no color
-      }
-      html += "<th>Value</th>"; // Flexible width
+        var colorHeader = document.createElement('th');
+        colorHeader.style.width = '60px';
+        colorHeader.textContent = 'Color';
+        headerRow.appendChild(colorHeader);
 
-      // ONLY show Actions header if Custom
+        var nameHeader = document.createElement('th');
+        nameHeader.style.width = '120px';
+        nameHeader.textContent = 'Name';
+        headerRow.appendChild(nameHeader);
+      } else {
+        var nameHeader = document.createElement('th');
+        nameHeader.style.width = '180px';
+        nameHeader.textContent = 'Name';
+        headerRow.appendChild(nameHeader);
+      }
+
+      var valueHeader = document.createElement('th');
+      valueHeader.textContent = 'Value';
+      headerRow.appendChild(valueHeader);
+
+      // Actions header seulement si custom
       if (isCustomLib) {
-        html += "<th style='width: 60px;'>Actions</th>";
-      }
-      html += "</tr></thead><tbody>";
-
-      // Une seule boucle pour tous les types de données
-      if (activeCategory === "semantic" && semanticPreview && semanticPreview.length > 0) {
-        // Cas spécial : semantic avec preview data du backend
-        for (var i = 0; i < semanticPreview.length; i++) {
-          var item = semanticPreview[i];
-          var key = item.key;
-          var figmaName = item.figmaName;
-          var value = item.value;
-          var tokenType = item.type;
-
-          html += "<tr>";
-          if (isColor) {
-          var formattedValue = formatValueForDisplay(value);
-          html += "<td><div class='color-swatch' style='background-color: " + formattedValue + ";'></div></td>";
-        }
-        // Pour semantic preview, afficher key + figmaName
-        var displayName = key + "<br><small style='color: var(--poly-text-muted); font-weight: normal;'>" + figmaName + "</small>";
-        html += "<td class='token-name'>" + displayName + "</td>";
-
-        // Value Column (toujours en lecture seule pour semantic preview)
-        html += "<td><input type='text' class='table-input locked' value='" + formattedValue + "' disabled /></td>";
-
-          // Pas d'actions pour semantic preview
-          html += "</tr>";
-        }
-      } else {
-        // Cas normal : itération sur les propriétés de l'objet
-        for (var key in previewData) {
-          if (!previewData.hasOwnProperty(key)) continue;
-          var value = previewData[key];
-          var formattedValue = formatValueForDisplay(value);
-
-          html += "<tr>";
-          if (isColor) {
-            html += "<td><div class='color-swatch' style='background-color: " + formattedValue + ";'></div></td>";
-          }
-          // Pour semantic normal, afficher key + figmaName calculé côté client
-          var displayName = activeCategory + "-" + key;
-          if (activeCategory === "semantic") {
-            var figmaName = getSemanticVariableName(key, currentNaming);
-            displayName = key + "<br><small style='color: var(--poly-text-muted); font-weight: normal;'>" + figmaName + "</small>";
-          }
-          html += "<td class='token-name'>" + displayName + "</td>";
-
-          // Value Column (Conditional Render)
-          html += "<td>";
-          if (isLocked) {
-            // LOCKED DISPLAY (Disabled Input, no Icon)
-            html += "<input type='text' class='table-input locked' value='" + formattedValue + "' disabled />";
-          } else {
-            // EDITABLE INPUT (Standard) - pour l'édition, on garde la valeur originale
-            html += "<input type='text' class='table-input' data-token-key='" + key + "' value='" + formattedValue + "' />";
-          }
-          html += "</td>";
-
-          // Action Column: ONLY if Custom
-          if (isCustomLib) {
-            html += "<td style='text-align: center;'>";
-            html += "<button class='btn-icon' onclick='deleteToken(\"" + key + "\")' title='Delete' style='color: var(--poly-error);'><svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M3 6h18'/><path d='M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6'/><path d='M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2'/></svg></button>";
-            html += "</td>";
-          }
-          html += "</tr>";
-        }
+        var actionsHeader = document.createElement('th');
+        actionsHeader.style.width = '60px';
+        actionsHeader.textContent = 'Actions';
+        headerRow.appendChild(actionsHeader);
       }
 
-      html += "<tr class='add-token-row' style='background: rgba(138, 213, 63, 0.05);'>";
+      thead.appendChild(headerRow);
+      table.appendChild(thead);
+
+      // Body avec les rows de tokens
+      var tbody = document.createElement('tbody');
+
+      // Affichage uniforme pour tous les types de tokens (primitives et sémantiques)
+      for (var key in previewData) {
+        if (!previewData.hasOwnProperty(key)) continue;
+
+        var isSemanticToken = key.indexOf('.') !== -1;
+        var row = renderTokenRow({
+          key: key,
+          value: previewData[key],
+          isColorCategory: isColor,
+          isSemanticToken: isSemanticToken,
+          isLocked: isLocked,
+          isCustomLib: isCustomLib,
+          activeCategory: activeCategory
+        });
+
+        tbody.appendChild(row);
+      }
+
+      // Row d'ajout de nouveau token
+      var addRow = document.createElement('tr');
+      addRow.className = 'add-token-row';
+      addRow.style.background = 'rgba(138, 213, 63, 0.05)';
+
       if (isColor) {
-        html += "<td><div class='color-swatch' style='border: 1px dashed var(--poly-border-subtle); background: transparent;'></div></td>";
+        var addColorCell = document.createElement('td');
+        var addSwatch = document.createElement('div');
+        addSwatch.className = 'color-swatch';
+        addSwatch.style.border = '1px dashed var(--poly-border-subtle)';
+        addSwatch.style.background = 'transparent';
+        addColorCell.appendChild(addSwatch);
+        addRow.appendChild(addColorCell);
       }
-      html += "<td><input type='text' id='newTokenKey' class='table-input' placeholder='Nom (ex: 500)' /></td>";
-      html += "<td><input type='text' id='newTokenValue' class='table-input' placeholder='Valeur' /></td>";
+
+      var addKeyCell = document.createElement('td');
+      var keyInput = document.createElement('input');
+      keyInput.id = 'newTokenKey';
+      keyInput.className = 'table-input';
+      keyInput.type = 'text';
+      keyInput.placeholder = 'Nom (ex: 500)';
+      addKeyCell.appendChild(keyInput);
+      addRow.appendChild(addKeyCell);
+
+      var addValueCell = document.createElement('td');
+      var valueInput = document.createElement('input');
+      valueInput.id = 'newTokenValue';
+      valueInput.className = 'table-input';
+      valueInput.type = 'text';
+      valueInput.placeholder = 'Valeur';
+      addValueCell.appendChild(valueInput);
+      addRow.appendChild(addValueCell);
 
       if (isCustomLib) {
-        html += "<td style='text-align: center;'>";
-        html += "<button class='btn-icon' onclick='quickAddToken()' title='Ajouter'><span class='icon' style='color: var(--poly-accent); font-weight: bold; font-size: 18px;'>+</span></button>";
-        html += "</td>";
+        var addActionCell = document.createElement('td');
+        addActionCell.style.textAlign = 'center';
+        var addBtn = document.createElement('button');
+        addBtn.className = 'btn-icon';
+        addBtn.onclick = quickAddToken;
+        addBtn.title = 'Ajouter';
+        var addIcon = document.createElement('span');
+        addIcon.className = 'icon';
+        addIcon.style.color = 'var(--poly-accent)';
+        addIcon.style.fontWeight = 'bold';
+        addIcon.style.fontSize = '18px';
+        addIcon.textContent = '+';
+        addBtn.appendChild(addIcon);
+        addActionCell.appendChild(addBtn);
+        addRow.appendChild(addActionCell);
       }
-      html += "</tr>";
 
-      html += "</tbody></table>";
+      tbody.appendChild(addRow);
+      table.appendChild(tbody);
 
-      tokenPreview.innerHTML = html;
+      // Remplacer le contenu
+      tokenPreview.innerHTML = '';
+      tokenPreview.appendChild(table);
+
+      // Attacher les event listeners pour l'édition inline
+      attachTokenEventListeners();
+
+      // Listeners pour l'ajout rapide
+      setTimeout(function () {
+        var nk = document.getElementById('newTokenKey');
+        var nv = document.getElementById('newTokenValue');
+        if (nk && nv) {
+          var handler = function (e) { if (e.key === 'Enter') quickAddToken(); };
+          nk.addEventListener('keypress', handler);
+          nv.addEventListener('keypress', handler);
+        }
+      }, 0);
+
+    }
+
+    // Fonction pour attacher les event listeners aux inputs de tokens
+    function attachTokenEventListeners() {
+      // Add event listeners to all editable inputs for inline editing
+      var inputs = tokenPreview.querySelectorAll('.token-value-input:not(.locked)');
+      inputs.forEach(function (input) {
+        input.addEventListener('change', function () {
+          var tokenKey = input.getAttribute('data-token-key');
+          var newValue = input.value.trim();
+          if (newValue && currentTokens[activeCategory][tokenKey]) {
+            currentTokens[activeCategory][tokenKey] = newValue;
+            updateExport();
+            // Refresh preview to update color swatch if it's a color
+            if (isColor) {
+              updatePreview();
+            }
+          }
+        });
+      });
 
       // Listeners pour l'ajout rapide
       setTimeout(function () {
@@ -8630,30 +8725,233 @@
     var codeEditor = document.getElementById("codeEditor");
 
 
+    // IMPORTANT:
+    // L'UI ne doit jamais dépendre de la structure interne de aliasTo.
+    // Elle affiche uniquement un label calculé par getAliasLabel().
+
+    // Fonction pour déterminer la catégorie d'un token sémantique
+    function getCategoryFromSemanticKey(semanticKey) {
+      var categoryMap = {
+        'bg.canvas': 'gray',
+        'bg.surface': 'gray',
+        'bg.elevated': 'gray',
+        'bg.muted': 'gray',
+        'bg.inverse': 'gray',
+        'text.primary': 'gray',
+        'text.secondary': 'gray',
+        'text.muted': 'gray',
+        'text.inverse': 'gray',
+        'text.disabled': 'gray',
+        'border.default': 'gray',
+        'border.muted': 'gray',
+        'action.primary.default': 'brand',
+        'action.primary.hover': 'brand',
+        'action.primary.active': 'brand',
+        'action.primary.disabled': 'gray',
+        'status.success': 'system',
+        'status.warning': 'system',
+        'status.error': 'system',
+        'status.info': 'system',
+        'radius.sm': 'radius',
+        'radius.md': 'radius',
+        'space.sm': 'spacing',
+        'space.md': 'spacing',
+        'font.size.base': 'typography',
+        'font.weight.base': 'typography'
+      };
+      return categoryMap[semanticKey] || 'unknown';
+    }
+
+    // Helpers pour harmoniser l'affichage de tous les types de tokens
+    function getTokenDisplayValue(token) {
+      // Pour les tokens sémantiques modernes (objets avec resolvedValue)
+      if (typeof token === 'object' && token.resolvedValue !== undefined) {
+        return token.resolvedValue;
+      }
+      // Pour les tokens primitifs (valeurs directes)
+      return token;
+    }
+
+    function getTokenColorValue(token) {
+      // Pour les tokens sémantiques modernes
+      if (typeof token === 'object' && token.resolvedValue !== undefined) {
+        return token.resolvedValue;
+      }
+      // Pour les tokens primitifs
+      return token;
+    }
+
+    // Helpers pour les badges d'alias (propres, sans HTML)
+    function formatAliasLabel(aliasTo) {
+      return 'ALIAS';
+    }
+
+    function formatAliasTooltip(aliasTo) {
+      if (typeof aliasTo === 'string') return aliasTo;
+      if (aliasTo?.variableId) return aliasTo.variableId;
+      if (aliasTo?.collection && aliasTo?.key) return `${aliasTo.collection}/${aliasTo.key}`;
+      return 'unknown';
+    }
+
+    // Renderer unifié pour toutes les rows de tokens
+    function renderTokenRow({ key, value, isColorCategory, isSemanticToken, isLocked, isCustomLib, activeCategory }) {
+      // Créer la row
+      var row = document.createElement('tr');
+      row.className = 'token-row';
+
+      // Colonne couleur (si applicable)
+      if (isColorCategory) {
+        var colorCell = document.createElement('td');
+        var colorValue = getTokenColorValue(value);
+        var swatch = document.createElement('div');
+        swatch.className = 'color-swatch';
+        swatch.style.backgroundColor = colorValue;
+        colorCell.appendChild(swatch);
+        row.appendChild(colorCell);
+      }
+
+      // Colonne nom
+      var nameCell = document.createElement('td');
+      nameCell.className = 'token-name';
+
+      var displayName = activeCategory + "-" + key;
+      if (activeCategory === "semantic" || isSemanticToken) {
+        var figmaName = getSemanticVariableName(key, currentNaming);
+        displayName = key;
+        var subtitle = document.createElement('small');
+        subtitle.className = 'token-subtitle';
+        subtitle.style.color = 'var(--poly-text-muted)';
+        subtitle.style.fontWeight = 'normal';
+        subtitle.textContent = figmaName;
+        nameCell.innerHTML = displayName + '<br>';
+        nameCell.appendChild(subtitle);
+      } else {
+        nameCell.textContent = displayName;
+      }
+      row.appendChild(nameCell);
+
+      // Colonne valeur
+      var valueCell = document.createElement('td');
+      valueCell.className = 'token-value-cell';
+
+      // Input pour la valeur
+      var input = document.createElement('input');
+      input.className = 'token-value-input';
+      input.type = 'text';
+      input.readOnly = true;
+
+      // Valeur propre (jamais de HTML)
+      var resolvedValue = getTokenDisplayValue(value);
+      input.value = resolvedValue || '';
+
+      // Gestion de l'édition
+      if (isSemanticToken || activeCategory === "semantic" || isLocked) {
+        input.classList.add('locked');
+        input.disabled = true;
+      } else {
+        input.classList.add('editable');
+        input.setAttribute('data-token-key', key);
+        input.readOnly = false;
+      }
+
+      valueCell.appendChild(input);
+
+      // Badge d'alias si applicable
+      if (typeof value === 'object' && value.aliasTo) {
+        var badge = document.createElement('span');
+        badge.className = 'alias-badge';
+        badge.textContent = formatAliasLabel(value.aliasTo);
+        badge.title = formatAliasTooltip(value.aliasTo);
+        valueCell.appendChild(badge);
+      }
+
+      row.appendChild(valueCell);
+
+      // Colonne actions (si applicable)
+      if (isCustomLib && !isSemanticToken && activeCategory !== "semantic") {
+        var actionCell = document.createElement('td');
+        actionCell.style.textAlign = 'center';
+
+        var deleteBtn = document.createElement('button');
+        deleteBtn.className = 'btn-icon';
+        deleteBtn.onclick = function() { deleteToken(key); };
+        deleteBtn.title = 'Delete';
+        deleteBtn.style.color = 'var(--poly-error)';
+        deleteBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>';
+
+        actionCell.appendChild(deleteBtn);
+        row.appendChild(actionCell);
+      }
+
+      return row;
+    }
+
+    function getAliasLabel(aliasTo) {
+      if (!aliasTo) return null;
+
+      // Cas principal : aliasTo est un ID Figma (string)
+      if (typeof aliasTo === 'string') {
+        return `ALIAS → ${aliasTo}`;
+      }
+
+      // Cas legacy / migration
+      if (typeof aliasTo === 'object') {
+        if (aliasTo.variableId) {
+          return `ALIAS → ${aliasTo.variableId}`;
+        }
+        if (aliasTo.collection && aliasTo.key) {
+          return `ALIAS → ${aliasTo.collection}/${aliasTo.key}`;
+        }
+      }
+
+      return 'ALIAS → unknown';
+    }
+
     function formatValueForDisplay(value) {
       if (value === null || value === undefined) {
         return "";
       }
 
+      // Extraire la valeur d'affichage (harmonisé pour tous les types de tokens)
+      var displayValue = getTokenDisplayValue(value);
+
+      // Gestion des alias pour les tokens sémantiques
+      var aliasBadge = "";
+      if (typeof value === 'object' && value.aliasTo) {
+        var aliasLabel = getAliasLabel(value.aliasTo);
+        if (aliasLabel) {
+          // Log propre pour debug
+          console.log('[UI_ALIAS]', {
+            token: value,
+            aliasTo: value.aliasTo,
+            aliasLabel: aliasLabel
+          });
+
+          // Échapper le contenu pour éviter tout problème HTML
+          var escapedLabel = aliasLabel.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          aliasBadge = " <span class='alias-badge' style='background: var(--poly-accent); color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600;'>" + escapedLabel + "</span>";
+        }
+      }
+
       // Si c'est un objet RGB, convertir en hex
-      if (typeof value === 'object' && value.r !== undefined && value.g !== undefined && value.b !== undefined) {
+      if (typeof displayValue === 'object' && displayValue.r !== undefined && displayValue.g !== undefined && displayValue.b !== undefined) {
         // Conversion RGB vers hex (simple)
-        var r = Math.round(value.r * 255);
-        var g = Math.round(value.g * 255);
-        var b = Math.round(value.b * 255);
-        return '#' + [r, g, b].map(function(x) {
+        var r = Math.round(displayValue.r * 255);
+        var g = Math.round(displayValue.g * 255);
+        var b = Math.round(displayValue.b * 255);
+        displayValue = '#' + [r, g, b].map(function(x) {
           var hex = x.toString(16);
           return hex.length === 1 ? '0' + hex : hex;
         }).join('').toUpperCase();
       }
 
       // Pour les autres objets, afficher JSON (garde-fou)
-      if (typeof value === 'object') {
-        return JSON.stringify(value);
+      if (typeof displayValue === 'object') {
+        return JSON.stringify(displayValue) + aliasBadge;
       }
 
       // Pour les valeurs primitives
-      return String(value);
+      return String(displayValue) + aliasBadge;
     }
 
     function updateExport() {
@@ -8703,8 +9001,8 @@
             var variableName = getSemanticVariableName(semanticKey, currentNaming);
             var tokenData = currentTokens.semantic[semanticKey];
 
-            // Maintenant tokenData est directement la valeur normalisée
-            var cssValue = tokenData;
+            // Maintenant tokenData est directement la valeur normalisée (resolvedValue)
+            var cssValue = tokenData.resolvedValue || tokenData;
 
             output += "  --" + variableName.replace(/\//g, "-") + ": " + cssValue + ";\n";
           }
