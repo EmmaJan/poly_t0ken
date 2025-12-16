@@ -3803,10 +3803,10 @@
           
           <div id="scanEmptyState" class="empty-state-enhanced">
             <div class="empty-icon">🎯</div>
-            <h3>Aucune sélection pour l'audit</h3>
+            <h3>Sélectionnez une frame.</h3>
             <p
               style="text-align: left; color: var(--poly-text-muted); font-size: 13px; margin: 16px auto; max-width: 320px; line-height: 1.6;">
-              Sélectionnez une zone à auditer. PolyToken détectera automatiquement les incohérences de design.
+              Les écarts avec votre système de tokens seront automatiquement détectés.
             </p>
             <div class="empty-actions">
               
@@ -3834,7 +3834,7 @@
                   
                   <div class="title-group">
                     <h5 id="scanInfoTitle">Corrections automatiques</h5>
-                    <p id="scanInfoDescription">Ces problèmes peuvent être corrigés automatiquement par le système.</p>
+                    <p id="scanInfoDescription">Ces problèmes peuvent être corrigés automatiquement.<br>PolyToken remplacera les valeurs détectées par les variables correspondantes de votre système.</p>
                   </div>
 
                   
@@ -6230,7 +6230,7 @@
 
       if (filterType === 'auto') {
         titleElement.textContent = 'Corrections automatiques';
-        descriptionElement.textContent = 'Ces problèmes peuvent être corrigés automatiquement par le système.';
+        descriptionElement.textContent = 'Ces problèmes peuvent être corrigés automatiquement. PolyToken remplacera les valeurs détectées par les variables correspondantes de votre système.';
       } else if (filterType === 'manual') {
         titleElement.textContent = 'Corrections manuelles';
         descriptionElement.textContent = 'Ces problèmes nécessitent une intervention manuelle pour être résolus.';
@@ -8073,7 +8073,7 @@
                 scanEmptyState.style.display = 'block';
                 // Reset content if needed
                 if (!scanEmptyState.innerHTML.includes('Sélectionnez une zone')) {
-                  scanEmptyState.innerHTML = '<div style="text-align: center; padding: 60px 20px;"><div class="empty-icon">🎯</div><h3>Sélectionnez une zone à auditer</h3><p style="text-align: left; color: var(--poly-text-muted); font-size: 13px; margin: 16px auto; max-width: 320px; line-height: 1.6;">Cliquez sur un calque ou une frame dans Figma.<br>L\'analyse démarrera automatiquement.</p></div>';
+                  scanEmptyState.innerHTML = '<div style="text-align: center; padding: 60px 20px;"><div class="empty-icon">🎯</div><h3>Sélectionnez une frame.</h3><p style="text-align: center; color: var(--poly-text-muted); font-size: 13px; margin: 16px auto; max-width: 320px; line-height: 1.6;">Les écarts avec votre système de tokens seront automatiquement détectés.</p></div>';
                 }
               }
 

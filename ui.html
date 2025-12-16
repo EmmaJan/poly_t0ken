@@ -3874,8 +3874,7 @@
           <!-- Footer Content: Designer View -->
           <div id="footerDesignerOps" class="sticky-footer-content" style="gap: 10px; width: 100%;">
             <button class="btn-secondary" id="backToLibBtn" style="flex: 1;">← Retour</button>
-            <button class="btn-secondary" id="diagnoseBtn" style="flex: 1;" title="Diagnostiquer les alias cassés">🔍 Diagnostic</button>
-            <button class="btn-primary" id="importBtn" style="flex: 1;">Synchroniser avec Figma</button>
+            <button class="btn-primary" id="importBtn" style="flex: 2;">Synchroniser avec Figma</button>
           </div>
 
           <!-- Footer Content: Developer View -->
@@ -3905,10 +3904,10 @@
           <!-- État vide amélioré -->
           <div id="scanEmptyState" class="empty-state-enhanced">
             <div class="empty-icon">🎯</div>
-            <h3>Aucune sélection pour l'audit</h3>
+            <h3>Sélectionnez une frame.</h3>
             <p
               style="text-align: left; color: var(--poly-text-muted); font-size: 13px; margin: 16px auto; max-width: 320px; line-height: 1.6;">
-              Sélectionnez une zone à auditer. PolyToken détectera automatiquement les incohérences de design.
+              Les écarts avec votre système de tokens seront automatiquement détectés.
             </p>
             <div class="empty-actions">
               <!-- Button removed -->
@@ -3936,11 +3935,11 @@
                   <!-- Left Column: Title + Description -->
                   <div class="title-group">
                     <h5 id="scanInfoTitle">Corrections automatiques</h5>
-                    <p id="scanInfoDescription">Ces problèmes peuvent être corrigés automatiquement par le système.</p>
+                    <p id="scanInfoDescription">Ces problèmes peuvent être corrigés automatiquement.<br>PolyToken remplacera les valeurs détectées par les variables correspondantes de votre système.</p>
                   </div>
 
                   <!-- Right Column: Auto Fix Button -->
-                  <button class="btn-soft-primary" id="applyAllAutoBtn" style="display: none; width: fit-content; border-radius: 50px;">
+                  <button class="btn-soft-primary" id="applyAllAutoBtn" style="display: none; width: fit-content; border-radius: 6px; padding: 8px 16px; height: 36px; font-size: 13px;" title="Uniquement sur la sélection">
                     ✨ Appliquer les corrections
                   </button>
                 </div>
@@ -4664,111 +4663,6 @@
       window.addEventListener('message', feedbackListener);
     });
 
-    // Bouton de diagnostic des alias cassés
-    var diagnoseBtn = document.getElementById("diagnoseBtn");
-    diagnoseBtn.addEventListener("click", function () {
-      // État de chargement
-      var originalText = this.innerHTML;
-      this.classList.add('btn-loading');
-      this.disabled = true;
-      this.innerHTML = '<div class="loading-spinner"></div> Analyse...';
-
-      parent.postMessage({
-        pluginMessage: {
-          type: "diagnose-broken-aliases"
-        }
-      }, "*");
-
-      // Écouter la réponse
-      var diagnosticListener = function (event) {
-        var msg = event.data.pluginMessage;
-        if (msg && msg.type === 'diagnostic-result') {
-          diagnoseBtn.classList.remove('btn-loading');
-          diagnoseBtn.disabled = false;
-          diagnoseBtn.innerHTML = originalText;
-          window.removeEventListener('message', diagnosticListener);
-
-          // Afficher les résultats
-          showDiagnosticResults(msg.result || msg.error);
-        }
-      };
-      window.addEventListener('message', diagnosticListener);
-    });
-
-
-    // ============================================
-    // DIAGNOSTIC FUNCTIONS
-    // ============================================
-
-    function showDiagnosticResults(result) {
-      if (typeof result === 'string') {
-        // Erreur
-        showModal('Erreur de diagnostic', '<p style="color: var(--poly-error);">' + result + '</p>');
-        return;
-      }
-
-      var html = '<div style="max-height: 400px; overflow-y: auto;">';
-      html += '<h4 style="margin-top: 0; color: var(--poly-text);">Résumé du diagnostic</h4>';
-      html += '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px;">';
-      html += '<div style="background: var(--poly-surface); padding: 12px; border-radius: 8px;">';
-      html += '<div style="font-size: 24px; font-weight: bold; color: var(--poly-accent);">' + result.totalSemantic + '</div>';
-      html += '<div style="font-size: 12px; color: var(--poly-text-muted);">Tokens sémantiques</div>';
-      html += '</div>';
-      html += '<div style="background: var(--poly-surface); padding: 12px; border-radius: 8px;">';
-      html += '<div style="font-size: 24px; font-weight: bold; color: var(--poly-error);">' + result.brokenAliases.length + '</div>';
-      html += '<div style="font-size: 12px; color: var(--poly-text-muted);">Aliases cassés</div>';
-      html += '</div>';
-      html += '</div>';
-
-      if (result.brokenAliases.length > 0) {
-        html += '<h4 style="color: var(--poly-error);">🔴 Aliases cassés (' + result.brokenAliases.length + ')</h4>';
-        html += '<div style="background: var(--poly-error-light); border: 1px solid var(--poly-error); border-radius: 8px; padding: 12px; margin-bottom: 16px;">';
-        result.brokenAliases.forEach(function(alias) {
-          html += '<div style="font-family: monospace; font-size: 12px; margin-bottom: 4px;">• ' + alias.semanticName + '</div>';
-        });
-        html += '</div>';
-        html += '<p style="color: var(--poly-text-muted); font-size: 12px;">Ces tokens sémantiques pointent vers des primitives qui n\'existent plus. Vous devez les recréer ou les relier manuellement.</p>';
-      } else {
-        html += '<h4 style="color: var(--poly-success);">✅ Aucun alias cassé détecté</h4>';
-        html += '<p style="color: var(--poly-text-muted);">Tous vos tokens sémantiques sont correctement liés à leurs primitives.</p>';
-      }
-
-      if (result.workingAliases.length > 0) {
-        html += '<h4 style="color: var(--poly-success);">✅ Aliases fonctionnels (' + result.workingAliases.length + ')</h4>';
-        html += '<details style="margin-bottom: 16px;">';
-        html += '<summary style="cursor: pointer; color: var(--poly-text-muted);">Voir les détails</summary>';
-        html += '<div style="background: var(--poly-surface); border-radius: 8px; padding: 12px; margin-top: 8px; max-height: 200px; overflow-y: auto;">';
-        result.workingAliases.forEach(function(alias) {
-          html += '<div style="font-family: monospace; font-size: 12px; margin-bottom: 4px;">• ' + alias.semanticName + ' → ' + alias.targetCollection + '/' + alias.targetName + '</div>';
-        });
-        html += '</div>';
-        html += '</details>';
-      }
-
-      if (result.primitiveCollections.length > 0) {
-        html += '<h4>📊 Collections de primitives</h4>';
-        result.primitiveCollections.forEach(function(collection) {
-          html += '<div style="background: var(--poly-surface); padding: 12px; border-radius: 8px; margin-bottom: 8px;">';
-          html += '<div style="font-weight: bold; color: var(--poly-text);">' + collection.name + '</div>';
-          html += '<div style="font-size: 12px; color: var(--poly-text-muted);">' + collection.variableCount + ' variables</div>';
-          if (collection.variables.length > 0) {
-            html += '<details>';
-            html += '<summary style="cursor: pointer; font-size: 12px; color: var(--poly-text-muted);">Voir les variables</summary>';
-            html += '<div style="margin-top: 8px; max-height: 100px; overflow-y: auto;">';
-            collection.variables.forEach(function(varName) {
-              html += '<div style="font-family: monospace; font-size: 11px; margin-bottom: 2px;">• ' + varName + '</div>';
-            });
-            html += '</div>';
-            html += '</details>';
-          }
-          html += '</div>';
-        });
-      }
-
-      html += '</div>';
-
-      showModal('Diagnostic des tokens', html);
-    }
 
     // ============================================
     // HELPER FUNCTIONS
@@ -5142,7 +5036,7 @@
             applyBtn.disabled = false;
             applyBtn.style.opacity = '1';
             applyBtn.style.cursor = 'pointer';
-            applyBtn.textContent = '✨ Appliquer les corrections';
+            updateApplyButtonText();
           }
 
           // Animation ultra-fluide : les vraies cartes apparaissent en cascade élégante
@@ -5257,6 +5151,23 @@
         manualCount.style.display = manualValue > 0 ? 'inline-flex' : 'none';
       }
 
+      // Mettre à jour le texte du bouton après avoir mis à jour les compteurs
+      updateApplyButtonText();
+
+    }
+
+    // Mettre à jour le texte dynamique du bouton "Appliquer les corrections"
+    function updateApplyButtonText() {
+      var applyBtn = document.getElementById('applyAllAutoBtn');
+      var autoCount = document.getElementById('autoCount');
+      if (applyBtn && autoCount) {
+        var count = parseInt(autoCount.textContent) || 0;
+        if (count > 0) {
+          applyBtn.textContent = 'Appliquer ' + count + ' correction' + (count > 1 ? 's' : '');
+        } else {
+          applyBtn.textContent = 'Appliquer les corrections';
+        }
+      }
     }
 
     // Recalculer dynamiquement les compteurs des onglets après corrections
@@ -6680,7 +6591,7 @@
 
       if (filterType === 'auto') {
         titleElement.textContent = 'Corrections automatiques';
-        descriptionElement.textContent = 'Ces problèmes peuvent être corrigés automatiquement par le système.';
+        descriptionElement.textContent = 'Ces problèmes peuvent être corrigés automatiquement. PolyToken remplacera les valeurs détectées par les variables correspondantes de votre système.';
       } else if (filterType === 'manual') {
         titleElement.textContent = 'Corrections manuelles';
         descriptionElement.textContent = 'Ces problèmes nécessitent une intervention manuelle pour être résolus.';
@@ -7767,10 +7678,10 @@
       processNextCard();
 
       function finishAnimation() {
-        // Réactiver le bouton avec son emoji original
+        // Réactiver le bouton avec son texte dynamique
         if (applyBtn) {
           applyBtn.disabled = false;
-          applyBtn.textContent = '✨ Appliquer les corrections';
+          updateApplyButtonText();
         }
 
         // Notification de succès
@@ -8431,7 +8342,7 @@
                 scanEmptyState.style.display = 'block';
                 // Reset content if needed
                 if (!scanEmptyState.innerHTML.includes('Sélectionnez une zone')) {
-                  scanEmptyState.innerHTML = '<div style="text-align: center; padding: 60px 20px;"><div class="empty-icon">🎯</div><h3>Sélectionnez une zone à auditer</h3><p style="text-align: left; color: var(--poly-text-muted); font-size: 13px; margin: 16px auto; max-width: 320px; line-height: 1.6;">Cliquez sur un calque ou une frame dans Figma.<br>L\'analyse démarrera automatiquement.</p></div>';
+                  scanEmptyState.innerHTML = '<div style="text-align: center; padding: 60px 20px;"><div class="empty-icon">🎯</div><h3>Sélectionnez une frame.</h3><p style="text-align: center; color: var(--poly-text-muted); font-size: 13px; margin: 16px auto; max-width: 320px; line-height: 1.6;">Les écarts avec votre système de tokens seront automatiquement détectés.</p></div>';
                 }
               }
 
@@ -8492,7 +8403,7 @@
 
             if (applyAllAutoBtn) {
               applyAllAutoBtn.disabled = false;
-              applyAllAutoBtn.textContent = '✨ Appliquer les corrections';
+              updateApplyButtonText();
             }
             if (step4ApplyAll) {
               step4ApplyAll.disabled = false;

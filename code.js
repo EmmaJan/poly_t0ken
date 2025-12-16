@@ -76,6 +76,16 @@ function saveSemanticTokensToFile(semanticTokens, callsite) {
         if (typeof tokenData === 'object' && tokenData.resolvedValue !== undefined) {
           // GARDE-FOU CONTRE LES FALLBACKS : empêcher l'écriture de valeurs fallback évidentes
           var existingToken = existingTokens[key];
+
+          // PROTECTION ANTI-ÉCRASement d'alias : si l'existant est aliased, on le protège contre les fallbacks
+          if (shouldPreserveExistingSemantic(existingToken, tokenData)) {
+            console.log(`[PRESERVE_ALIAS] Keeping existing aliased token for ${key}, ignoring incoming fallback/value`);
+            formattedTokens[key] = existingToken;
+            aliasCount += existingToken.aliasTo ? 1 : 0;
+            valueCount += existingToken.aliasTo ? 0 : 1;
+            continue;
+          }
+
           var isFallbackValue = isObviousFallback(tokenData.resolvedValue);
           var isUIFallback = isUIFallbackValue(tokenData.resolvedValue, tokenData.type);
           var hasFlattenProof = tokenData.flattenedFromAlias === true;
@@ -118,6 +128,16 @@ function saveSemanticTokensToFile(semanticTokens, callsite) {
 
         // Même ici, préserver aliasTo existant si possible
         var existingTokenForMigration = existingTokens[key];
+
+        // PROTECTION ANTI-ÉCRASement d'alias : si l'existant est aliased, on le protège contre les valeurs brutes fallback
+        if (shouldPreserveExistingSemantic(existingTokenForMigration, tokenData)) {
+          console.log(`[PRESERVE_ALIAS] Keeping existing aliased token for ${key} during migration, ignoring incoming raw value`);
+          formattedTokens[key] = existingTokenForMigration;
+          aliasCount += existingTokenForMigration.aliasTo ? 1 : 0;
+          valueCount += existingTokenForMigration.aliasTo ? 0 : 1;
+          continue;
+        }
+
         if (existingTokenForMigration && existingTokenForMigration.aliasTo) {
           console.log(`🔄 [SAVE] Preserving existing aliasTo during migration for ${key}: ${existingTokenForMigration.aliasTo}`);
           newTokenData.aliasTo = existingTokenForMigration.aliasTo;
@@ -724,6 +744,11 @@ var SEMANTIC_NAME_MAP = {
  */
 function generateSemanticTokens(primitives, options = {}) {
   console.log(`🔄 generateSemanticTokens appelée avec primitives:`, Object.keys(primitives || {}).filter(k => primitives[k]));
+
+  // Charger les tokens existants pour préserver les alias
+  const existing = getSemanticTokensFromFile('GEN') || {};
+  const naming = options.naming;
+
   const semanticTokens = {};
 
   // Fonctions utilitaires pour les fallbacks
@@ -836,7 +861,44 @@ function generateSemanticTokens(primitives, options = {}) {
     }
   }
 
-  return semanticTokens;
+  // Transformation en format avec alias : { resolvedValue, type, aliasTo, meta }
+  const formattedTokens = {};
+  for (const semanticKey in semanticTokens) {
+    if (!semanticTokens.hasOwnProperty(semanticKey)) continue;
+
+    const computedResolvedValue = semanticTokens[semanticKey];
+    const existingToken = existing[semanticKey];
+
+    // Tenter de trouver un alias vers les primitives
+    let aliasTo = (existingToken && existingToken.aliasTo) || null;
+    if (!aliasTo && naming) {
+      try {
+        const aliasInfo = resolveSemanticAliasInfo(semanticKey, primitives, naming);
+        if (aliasInfo) {
+          aliasTo = {
+            variableId: aliasInfo.variableId,
+            collection: aliasInfo.collection,
+            key: aliasInfo.key
+          };
+        }
+      } catch (error) {
+        console.warn(`Could not resolve alias for ${semanticKey}:`, error);
+      }
+    }
+
+    formattedTokens[semanticKey] = {
+      resolvedValue: computedResolvedValue,
+      type: SEMANTIC_TYPE_MAP[semanticKey] || "COLOR",
+      aliasTo,
+      meta: {
+        updatedAt: Date.now(),
+        sourceCategory: getCategoryFromSemanticKey(semanticKey),
+        sourceKey: getKeyFromSemanticKey(semanticKey)
+      }
+    };
+  }
+
+  return formattedTokens;
 }
 
 /**
@@ -2342,9 +2404,6 @@ figma.ui.onmessage = function (msg) {
 
   try {
     switch (msg.type) {
-      case 'diagnose-broken-aliases':
-        diagnoseBrokenAliases();
-        break;
       case 'scan-selection':
         Scanner.scanSelection(msg.ignoreHiddenLayers);
         break;
@@ -3449,6 +3508,31 @@ function isUIFallbackValue(value, tokenType) {
   return uiFallbacks[tokenType] && uiFallbacks[tokenType].includes(value);
 }
 
+// Fonction helper pour déterminer si on doit protéger un token sémantique existant
+function shouldPreserveExistingSemantic(existingToken, incomingToken) {
+  if (!existingToken) return false;
+
+  // Si l'existant a un alias, on le protège
+  const existingHasAlias = !!existingToken.aliasTo;
+
+  // Incoming peut être brut ou formaté
+  const incomingResolved = (incomingToken && typeof incomingToken === 'object' && incomingToken.resolvedValue !== undefined)
+    ? incomingToken.resolvedValue
+    : incomingToken;
+
+  const incomingHasAlias = !!(incomingToken && typeof incomingToken === 'object' && incomingToken.aliasTo);
+
+  // Si l'incoming n'a pas d'alias ET qu'il ressemble à un fallback -> on garde l'existant
+  const looksFallback =
+    isObviousFallback(incomingResolved) ||
+    isUIFallbackValue(incomingResolved, (incomingToken && incomingToken.type) || (existingToken && existingToken.type));
+
+  // Règle d'or : ne jamais remplacer un alias existant par une valeur fallback
+  if (existingHasAlias && !incomingHasAlias && looksFallback) return true;
+
+  return false;
+}
+
 function createOrUpdateVariable(collection, name, type, value, category, overwrite, hintKey) {
   console.log('🔧 createOrUpdateVariable:', category, name, type, typeof value);
 
@@ -3526,6 +3610,9 @@ function importTokensToFigma(tokens, naming, overwrite) {
 
   // Save the naming preference to file for persistence
   saveNamingToFile(naming);
+
+  // Créer une map globale des variables existantes pour la résolution des alias sémantiques
+  var globalVariableMap = buildGlobalVariableMap();
 
 
 
@@ -3710,19 +3797,11 @@ function importTokensToFigma(tokens, naming, overwrite) {
         continue;
       }
 
-      // Si pas d'alias existant, essayer d'en créer un nouveau
-      var finalAliasTo = currentAliasTo;
-      if (!finalAliasTo) {
-        var aliasInfo = resolveSemanticAliasInfo(semanticKey, tokens, naming);
-        if (aliasInfo) {
-          finalAliasTo = {
-            variableId: aliasInfo.variableId,
-            collection: aliasInfo.collection,
-            key: aliasInfo.key
-          };
-          newAliasCount++;
-          console.log(`✅ New alias created for ${semanticKey}: ${aliasInfo.collection}/${aliasInfo.key} (${aliasInfo.variable.name})`);
-        }
+      // Résoudre l'alias en utilisant la map globale des variables existantes
+      var finalAliasTo = resolveSemanticAliasFromMap(semanticKey, tokens, naming, globalVariableMap);
+      if (finalAliasTo && !currentAliasTo) {
+        newAliasCount++;
+        console.log(`✅ New alias resolved for ${semanticKey}: ${finalAliasTo.collection}/${finalAliasTo.key}`);
       }
 
       // Préparer les données pour applySemanticValue
@@ -3780,6 +3859,63 @@ function importTokensToFigma(tokens, naming, overwrite) {
 
 
 
+
+// Fonction pour construire une map globale des variables existantes pour la résolution des alias
+function buildGlobalVariableMap() {
+  console.log('🔍 Building global variable map for semantic alias resolution');
+
+  var vars = figma.variables.getLocalVariables();
+  var byName = new Map();
+
+  for (var i = 0; i < vars.length; i++) {
+    var variable = vars[i];
+    var collection = figma.variables.getVariableCollectionById(variable.variableCollectionId);
+    if (!collection) continue;
+
+    // Créer une clé stable : collectionName/variableName (comme dans les alias sémantiques)
+    var key = collection.name + '/' + variable.name;
+    byName.set(key, variable.id);
+
+    // Aussi ajouter juste variable.name au cas où (pour compatibilité)
+    if (!byName.has(variable.name)) {
+      byName.set(variable.name, variable.id);
+    }
+  }
+
+  console.log(`✅ Global variable map built: ${byName.size} variables mapped`);
+  return byName;
+}
+
+// Fonction pour résoudre les alias sémantiques en utilisant la map globale des variables
+function resolveSemanticAliasFromMap(semanticKey, allTokens, naming, globalVariableMap) {
+  // Utiliser la logique existante pour déterminer quelle primitive cibler
+  var aliasInfo = resolveSemanticAliasInfo(semanticKey, allTokens, naming);
+  if (!aliasInfo) {
+    return null; // Pas d'alias possible pour cette clé sémantique
+  }
+
+  // Construire la clé dans le même format que la map globale
+  var targetKey = aliasInfo.collection + '/' + aliasInfo.key;
+
+  // Chercher dans la map globale
+  var targetVariableId = globalVariableMap.get(targetKey);
+  if (!targetVariableId) {
+    // Essayer juste le nom de la variable (sans collection)
+    targetVariableId = globalVariableMap.get(aliasInfo.key);
+  }
+
+  if (targetVariableId) {
+    return {
+      variableId: targetVariableId,
+      collection: aliasInfo.collection,
+      key: aliasInfo.key
+    };
+  }
+
+  // Si la primitive n'existe pas encore, on ne crée pas d'alias cassé
+  console.warn(`⚠️ [resolveSemanticAliasFromMap] Primitive not found for semantic ${semanticKey}: ${targetKey}`);
+  return null;
+}
 
 var cachedTokens = null;
 var lastScanResults = null; 
@@ -5115,7 +5251,7 @@ function checkSpecificPropertyIssue(node, result) {
 
 
 
-function applyAndVerifyFix(result, variableId) {
+async function applyAndVerifyFix(result, variableId) {
 
   var startTime = Date.now();
   var verificationResult = {
@@ -5193,7 +5329,7 @@ function applyAndVerifyFix(result, variableId) {
 
     
 
-    var applied = applyVariableToProperty(node, variable, result);
+    var applied = await applyVariableToProperty(node, variable, result);
 
     if (!applied) {
       throw new Error('Échec de l\'application de la variable');
@@ -5201,7 +5337,24 @@ function applyAndVerifyFix(result, variableId) {
 
     verificationResult.applied = true;
 
-    
+    // Vérification spéciale non-bloquante pour fontSize (pour debug uniquement)
+    if (result.property === 'Font Size') {
+      // Re-lire le node pour vérifier que la variable est bien bindée (non-bloquant)
+      var refreshedNode = figma.getNodeById(result.nodeId);
+      if (refreshedNode && (!refreshedNode.boundVariables || !refreshedNode.boundVariables.fontSize || refreshedNode.boundVariables.fontSize.id !== variable.id)) {
+        console.warn('⚠️ [applyAndVerifyFix] FontSize binding check failed (non-critical):', {
+          nodeId: result.nodeId,
+          fontName: refreshedNode.fontName,
+          variableName: variable.name,
+          boundId: (refreshedNode.boundVariables && refreshedNode.boundVariables.fontSize) ? refreshedNode.boundVariables.fontSize.id : undefined,
+          expectedId: variable.id
+        });
+        // Note: Ne pas throw d'erreur ici car verifyVariableApplication devrait suffire
+      } else if (refreshedNode) {
+        console.log('✅ [applyAndVerifyFix] FontSize bound verification passed:', result.nodeId, variable.name);
+      }
+    }
+
     var stateAfter = captureNodeState(node, result);
 
     var verified = verifyVariableApplication(node, variable, result, stateBefore, stateAfter);
@@ -5235,8 +5388,8 @@ function applyAndVerifyFix(result, variableId) {
 }
 
 
-function applySingleFix(result, selectedVariableId) {
-  var verificationResult = applyAndVerifyFix(result, selectedVariableId);
+async function applySingleFix(result, selectedVariableId) {
+  var verificationResult = await applyAndVerifyFix(result, selectedVariableId);
   return verificationResult.success ? 1 : 0;
 }
 
@@ -5579,7 +5732,7 @@ function validatePropertyExists(node, result) {
         return typeof node[result.figmaProperty] === 'number';
 
       case "Font Size":
-        return typeof node.fontSize === 'number';
+        return node.type === "TEXT" && typeof node.fontSize === 'number';
 
       default:
         return false;
@@ -5626,7 +5779,7 @@ function validateVariableCanBeApplied(variable, result) {
 }
 
 
-function applyVariableToProperty(node, variable, result) {
+async function applyVariableToProperty(node, variable, result) {
   try {
     var success = false;
 
@@ -5652,7 +5805,7 @@ function applyVariableToProperty(node, variable, result) {
       case "Top Right Radius":
       case "Bottom Left Radius":
       case "Bottom Right Radius":
-        success = applyNumericVariable(node, variable, result.figmaProperty, result.property);
+        success = await applyNumericVariable(node, variable, result.figmaProperty, result.property);
         break;
 
       case "Item Spacing":
@@ -5660,11 +5813,11 @@ function applyVariableToProperty(node, variable, result) {
       case "Padding Right":
       case "Padding Top":
       case "Padding Bottom":
-        success = applyNumericVariable(node, variable, result.figmaProperty, result.property);
+        success = await applyNumericVariable(node, variable, result.figmaProperty, result.property);
         break;
 
       case "Font Size":
-        success = applyNumericVariable(node, variable, result.figmaProperty, result.property);
+        success = await applyNumericVariable(node, variable, result.figmaProperty, result.property);
         break;
 
       default:
@@ -5864,13 +6017,37 @@ function applyColorVariableToStroke(node, variable, strokeIndex) {
 }
 
 
-function applyNumericVariable(node, variable, figmaProperty, displayProperty) {
+async function applyNumericVariable(node, variable, figmaProperty, displayProperty) {
   try {
 
     if (figmaProperty === 'itemSpacing' && node.primaryAxisAlignItems === 'SPACE_BETWEEN') {
       return false;
     }
 
+    // Gestion spéciale pour fontSize : vérifier les prérequis et charger la font
+    if (figmaProperty === 'fontSize') {
+      if (node.type !== 'TEXT') {
+        console.warn('❌ [applyNumericVariable] Font Size ne peut être appliqué qu\'aux TextNodes, node type:', node.type);
+        return false;
+      }
+
+      // Vérifier si la font est mixte (non supporté)
+      if (node.fontName === figma.mixed) {
+        console.warn('❌ [applyNumericVariable] Font mixte détectée pour node', node.id, '- correction impossible');
+        return false;
+      }
+
+      console.log('✅ [applyNumericVariable] Application Font Size sur TextNode', node.id, 'avec font:', node.fontName.family, node.fontName.style);
+
+      // Charger la font de manière asynchrone avant d'appliquer la variable
+      try {
+        await figma.loadFontAsync(node.fontName);
+        console.log('✅ [applyNumericVariable] Font chargée avec succès:', node.fontName.family, node.fontName.style);
+      } catch (fontError) {
+        console.warn('❌ [applyNumericVariable] Échec chargement font pour node', node.id, ':', fontError.message);
+        return false;
+      }
+    }
 
     node.setBoundVariable(figmaProperty, variable);
     return true;
@@ -5885,13 +6062,13 @@ function applyNumericVariable(node, variable, figmaProperty, displayProperty) {
 
 
 
-function applyFixToNode(nodeId, variableId, property, result) {
+async function applyFixToNode(nodeId, variableId, property, result) {
   
   
   
   
 
-  var verification = applyAndVerifyFix(result, variableId);
+  var verification = await applyAndVerifyFix(result, variableId);
 
   if (verification.success) {
     return 1;
@@ -5900,7 +6077,7 @@ function applyFixToNode(nodeId, variableId, property, result) {
   }
 }
 
-function applyAllFixes() {
+async function applyAllFixes() {
   var appliedCount = 0;
   var failedCount = 0;
   var results = [];
@@ -5910,13 +6087,13 @@ function applyAllFixes() {
   }
 
 
-  
+
   for (var i = 0; i < lastScanResults.length; i++) {
     var result = lastScanResults[i];
 
     try {
-      
-      var verificationResult = applyAndVerifyFix(result, result.suggestedVariableId);
+
+      var verificationResult = await applyAndVerifyFix(result, result.suggestedVariableId);
 
       results.push({
         index: i,
@@ -6034,7 +6211,7 @@ figma.ui.onmessage = function (msg) {
       console.log(`🎨 Génération automatique des sémantiques pour ${naming}`);
       console.log(`🔍 Primitives disponibles:`, Object.keys(tokens).filter(k => tokens[k] && Object.keys(tokens[k]).length > 0));
       try {
-        var generated = generateSemanticTokens(tokens);
+        var generated = generateSemanticTokens(tokens, { naming: naming });
         var existing = getSemanticTokensFromFile('MERGE_EXISTING') || {};
         var merged = mergeSemanticWithExistingAliases(generated, existing);
 
@@ -6124,53 +6301,51 @@ figma.ui.onmessage = function (msg) {
   }
 
   if (msg.type === "apply-all-fixes") {
-    var appliedCount = 0;
-    var applicationError = null;
+    (async function() {
+      var appliedCount = 0;
+      var applicationError = null;
 
-    try {
-      appliedCount = applyAllFixes();
-      
-    } catch (e) {
-      applicationError = e;
-    }
+      try {
+        appliedCount = await applyAllFixes();
+      } catch (e) {
+        applicationError = e;
+      }
 
-    try {
-      figma.ui.postMessage({
-        type: "all-fixes-applied",
-        appliedCount: appliedCount,
-        error: applicationError ? applicationError.message : null
-      });
-
-      
-    } catch (uiError) {
-    }
+      try {
+        figma.ui.postMessage({
+          type: "all-fixes-applied",
+          appliedCount: appliedCount,
+          error: applicationError ? applicationError.message : null
+        });
+      } catch (uiError) {
+      }
+    })();
   }
 
   if (msg.type === "apply-single-fix") {
-    var appliedCount = 0;
-    var applicationError = null;
-    var index = msg.index;
-    var selectedVariableId = msg.selectedVariableId;
+    (async function() {
+      var appliedCount = 0;
+      var applicationError = null;
+      var index = msg.index;
+      var selectedVariableId = msg.selectedVariableId;
 
-    try {
-      var result = lastScanResults ? lastScanResults[index] : null;
-      appliedCount = applySingleFix(result, selectedVariableId);
-    } catch (e) {
-      applicationError = e;
-    }
+      try {
+        var result = lastScanResults ? lastScanResults[index] : null;
+        appliedCount = await applySingleFix(result, selectedVariableId);
+      } catch (e) {
+        applicationError = e;
+      }
 
-    try {
-      figma.ui.postMessage({
-        type: "single-fix-applied",
-        appliedCount: appliedCount,
-        error: applicationError ? applicationError.message : null,
-        index: index
-      });
-
-      
-      
-    } catch (uiError) {
-    }
+      try {
+        figma.ui.postMessage({
+          type: "single-fix-applied",
+          appliedCount: appliedCount,
+          error: applicationError ? applicationError.message : null,
+          index: index
+        });
+      } catch (uiError) {
+      }
+    })();
   }
 
   
@@ -6241,48 +6416,51 @@ figma.ui.onmessage = function (msg) {
   }
 
   if (msg.type === "apply-group-fix") {
-    console.log('Received apply-group-fix message:', msg);
-    var appliedCount = 0;
-    var applicationError = null;
-    var indices = msg.indices || [];
-    var variableId = msg.variableId;
-    console.log('Processing indices:', indices, 'variableId:', variableId);
+    (async function() {
+      console.log('Received apply-group-fix message:', msg);
+      var appliedCount = 0;
+      var applicationError = null;
+      var indices = msg.indices || [];
+      var variableId = msg.variableId;
+      console.log('Processing indices:', indices, 'variableId:', variableId);
 
-    if (!variableId || indices.length === 0 || !lastScanResults) {
-      figma.ui.postMessage({
-        type: "group-fix-applied",
-        appliedCount: 0,
-        error: "Paramètres manquants ou résultats de scan indisponibles"
-      });
-      return;
-    }
+      if (!variableId || indices.length === 0 || !lastScanResults) {
+        figma.ui.postMessage({
+          type: "group-fix-applied",
+          appliedCount: 0,
+          error: "Paramètres manquants ou résultats de scan indisponibles"
+        });
+        return;
+      }
 
-    try {
-      
-      indices.forEach(function (index) {
-        if (index >= 0 && index < lastScanResults.length) {
-          var result = lastScanResults[index];
-          if (result) {
-            appliedCount += applyFixToNode(result.nodeId, variableId, result.property, result);
+      try {
+
+        for (var i = 0; i < indices.length; i++) {
+          var index = indices[i];
+          if (index >= 0 && index < lastScanResults.length) {
+            var result = lastScanResults[index];
+            if (result) {
+              appliedCount += await applyFixToNode(result.nodeId, variableId, result.property, result);
+            }
           }
         }
-      });
 
-      // ❌ COMMENTÉ : Évite le rechargement brutal qui tue les animations UI
-      // scanSelection(true); 
+        // ❌ COMMENTÉ : Évite le rechargement brutal qui tue les animations UI
+        // scanSelection(true);
 
-    } catch (e) {
-      applicationError = e;
-    }
+      } catch (e) {
+        applicationError = e;
+      }
 
-    try {
-      figma.ui.postMessage({
-        type: "group-fix-applied",
-        appliedCount: appliedCount,
-        error: applicationError ? applicationError.message : null
-      });
-    } catch (uiError) {
-    }
+      try {
+        figma.ui.postMessage({
+          type: "group-fix-applied",
+          appliedCount: appliedCount,
+          error: applicationError ? applicationError.message : null
+        });
+      } catch (uiError) {
+      }
+    })();
   }
 
   if (msg.type === "preview-fix") {
@@ -6697,101 +6875,5 @@ function flattenSemanticTokensFromFigma(callsite) {
   console.log(`🔄 [FLATTEN] ${callsite}: complete - ${flattenedCount} flattened, ${unresolvedCount} kept as-is`);
 
   return flattenedTokens;
-}
-
-// Fonction de diagnostic pour les alias cassés
-function diagnoseBrokenAliases() {
-  console.log('🔍 DIAGNOSING BROKEN ALIASES');
-
-  var collections = figma.variables.getLocalVariableCollections();
-  var semanticCollection = null;
-  var primitiveCollections = [];
-
-  // Identifier les collections
-  for (var i = 0; i < collections.length; i++) {
-    var collection = collections[i];
-    if (collection.name === "Semantic") {
-      semanticCollection = collection;
-    } else if (["Primitives", "Brand", "Gray", "System", "Spacing", "Radius", "Typography"].includes(collection.name)) {
-      primitiveCollections.push(collection);
-    }
-  }
-
-  console.log(`📊 Collections trouvées:`);
-  console.log(`  - Semantic: ${semanticCollection ? semanticCollection.variableIds.length + ' variables' : 'NON TROUVÉE'}`);
-  console.log(`  - Primitives: ${primitiveCollections.map(c => c.name + '(' + c.variableIds.length + ')').join(', ')}`);
-
-  if (!semanticCollection) {
-    figma.ui.postMessage({
-      type: 'diagnostic-result',
-      error: 'Aucune collection Semantic trouvée'
-    });
-    return;
-  }
-
-  // Analyser les variables sémantiques
-  var brokenAliases = [];
-  var workingAliases = [];
-  var directValues = [];
-
-  for (var v = 0; v < semanticCollection.variableIds.length; v++) {
-    var variable = figma.variables.getVariableById(semanticCollection.variableIds[v]);
-    if (!variable) continue;
-
-    var modeId = safeGetModeId(variable);
-    if (modeId === null) continue;
-
-    var value = variable.valuesByMode[modeId];
-
-    if (value && typeof value === 'object' && value.type === 'VARIABLE_ALIAS') {
-      // C'est un alias
-      var targetVariable = figma.variables.getVariableById(value.id);
-      if (targetVariable) {
-        workingAliases.push({
-          semanticName: variable.name,
-          targetName: targetVariable.name,
-          targetCollection: figma.variables.getVariableCollectionById(targetVariable.variableCollectionId)?.name || 'unknown'
-        });
-      } else {
-        brokenAliases.push({
-          semanticName: variable.name,
-          brokenAliasId: value.id
-        });
-      }
-    } else {
-      // Valeur directe
-      directValues.push(variable.name);
-    }
-  }
-
-  var result = {
-    totalSemantic: semanticCollection.variableIds.length,
-    brokenAliases: brokenAliases,
-    workingAliases: workingAliases,
-    directValues: directValues,
-    primitiveCollections: primitiveCollections.map(c => ({
-      name: c.name,
-      variableCount: c.variableIds.length,
-      variables: c.variableIds.map(id => figma.variables.getVariableById(id)?.name).filter(Boolean)
-    }))
-  };
-
-  console.log('🔍 RÉSULTATS DU DIAGNOSTIC:');
-  console.log(`  - Total sémantiques: ${result.totalSemantic}`);
-  console.log(`  - Aliases cassés: ${brokenAliases.length}`);
-  console.log(`  - Aliases fonctionnels: ${workingAliases.length}`);
-  console.log(`  - Valeurs directes: ${directValues.length}`);
-
-  if (brokenAliases.length > 0) {
-    console.log('❌ ALIASES CASSÉS:');
-    brokenAliases.forEach(alias => {
-      console.log(`  - ${alias.semanticName} → alias ID cassé: ${alias.brokenAliasId}`);
-    });
-  }
-
-  figma.ui.postMessage({
-    type: 'diagnostic-result',
-    result: result
-  });
 }
 
