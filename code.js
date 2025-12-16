@@ -417,19 +417,19 @@ var CONFIG = {
 
   
   scopes: {
-    Fill: ['ALL_FILLS', 'FRAME_FILL', 'SHAPE_FILL', 'TEXT_FILL', 'ALL_SCOPES'],
-    Stroke: ['STROKE_COLOR', 'ALL_SCOPES'],
-    'CORNER RADIUS': ['CORNER_RADIUS', 'ALL_SCOPES'],
-    'TOP LEFT RADIUS': ['CORNER_RADIUS', 'ALL_SCOPES'],
-    'TOP RIGHT RADIUS': ['CORNER_RADIUS', 'ALL_SCOPES'],
-    'BOTTOM LEFT RADIUS': ['CORNER_RADIUS', 'ALL_SCOPES'],
-    'BOTTOM RIGHT RADIUS': ['CORNER_RADIUS', 'ALL_SCOPES'],
-    'Item Spacing': ['GAP', 'ALL_SCOPES'],
-    'Padding Left': ['FILL', 'ALL_SCOPES'],
-    'Padding Right': ['FILL', 'ALL_SCOPES'],
-    'Padding Top': ['FILL', 'ALL_SCOPES'],
-    'Padding Bottom': ['FILL', 'ALL_SCOPES'],
-    'Font Size': ['FONT_SIZE', 'ALL_SCOPES']
+    Fill: ['ALL_FILLS', 'FRAME_FILL', 'SHAPE_FILL', 'TEXT_FILL'],
+    Stroke: ['STROKE_COLOR'],
+    'CORNER RADIUS': ['CORNER_RADIUS'],
+    'TOP LEFT RADIUS': ['CORNER_RADIUS'],
+    'TOP RIGHT RADIUS': ['CORNER_RADIUS'],
+    'BOTTOM LEFT RADIUS': ['CORNER_RADIUS'],
+    'BOTTOM RIGHT RADIUS': ['CORNER_RADIUS'],
+    'Item Spacing': ['GAP'],
+    'Padding Left': ['FILL'],
+    'Padding Right': ['FILL'],
+    'Padding Top': ['FILL'],
+    'Padding Bottom': ['FILL'],
+    'Font Size': ['FONT_SIZE']
   },
 
   
@@ -2301,7 +2301,7 @@ var Fixer = {
 
 
 
-figma.showUI(__html__, { width: 700, height: 950, themeColors: true });
+figma.showUI(__html__, { width: 800, height: 950, themeColors: true });
 
 // Load saved naming and semantic tokens, then send to UI
 var savedSemanticTokens = getSemanticTokensFromFile('PLUGIN_STARTUP');
@@ -2342,6 +2342,9 @@ figma.ui.onmessage = function (msg) {
 
   try {
     switch (msg.type) {
+      case 'diagnose-broken-aliases':
+        diagnoseBrokenAliases();
+        break;
       case 'scan-selection':
         Scanner.scanSelection(msg.ignoreHiddenLayers);
         break;
@@ -2410,6 +2413,7 @@ figma.ui.onmessage = function (msg) {
       case 'save-naming':
         saveNamingToFile(msg.naming);
         break;
+
 
       default:
     }
@@ -3078,93 +3082,232 @@ function generateBorder() {
 
 
 
-var scopesByCategory = {
+// Nouvelle fonction pour inférer la famille sémantique de manière robuste
+function inferSemanticFamily(semanticKey) {
+  if (!semanticKey) return '';
+
+  // Normaliser : remplacer / et . par -, mettre en lowercase
+  var normalized = semanticKey.replace(/[\/\.]/g, '-').toLowerCase();
+
+  // Détection des familles principales avec support étendu
+  if (normalized.startsWith('text-') || normalized.includes('text-') || normalized.startsWith('text.') || normalized.includes('text.')) {
+    return 'textColor';
+  } else if (normalized.startsWith('background-') || normalized.startsWith('bg-') || normalized.includes('background-') || normalized.includes('bg-')) {
+    return 'backgroundColor';
+  } else if (normalized.startsWith('border-') || normalized.includes('border-') || normalized.startsWith('border.') || normalized.includes('border.')) {
+    return 'borderColor';
+  } else if (normalized.startsWith('radius-') || normalized.includes('radius-') || normalized.startsWith('radius.') || normalized.includes('radius.')) {
+    return 'radius';
+  } else if (normalized.startsWith('space-') || normalized.includes('space-') || normalized.startsWith('space.') || normalized.includes('space.')) {
+    return 'space';
+  } else if (normalized.startsWith('font-size-') || normalized.includes('font-size-') || normalized.startsWith('fontsize-') || normalized.includes('fontsize-')) {
+    return 'fontSize';
+  } else if (normalized.startsWith('font-weight-') || normalized.includes('font-weight-') || normalized.startsWith('fontweight-') || normalized.includes('fontweight-')) {
+    return 'fontWeight';
+  }
+
+  // Détection des tokens "brand/action/status" (primary, success, warning, destructive, info)
+  if (normalized === 'primary' || normalized.startsWith('primary-') || normalized.includes('primary-')) {
+    return 'accentColor';
+  }
+  if (['success', 'warning', 'destructive', 'info'].includes(normalized) ||
+      normalized.includes('success') || normalized.includes('warning') ||
+      normalized.includes('destructive') || normalized.includes('info')) {
+    return 'accentColor';
+  }
+
+  return ''; // Famille inconnue
+}
+
+// Mapping explicite des scopes par famille sémantique
+var semanticScopesMapping = {
+  textColor: ["TEXT_FILL"],
+  backgroundColor: ["FRAME_FILL", "SHAPE_FILL"],
+  borderColor: ["STROKE_COLOR"],
+  accentColor: ["FRAME_FILL", "SHAPE_FILL", "STROKE_COLOR"],
+  radius: ["CORNER_RADIUS"],
+  space: ["GAP"],
+  fontSize: ["FONT_SIZE"],
+  fontWeight: []
+};
+
+
+// ===== SCOPE ENGINE =====
+// Engine de scope unifié pour variables primitives et sémantiques
+function normalizeKey(key) {
+  if (!key) return '';
+  return key
+    .trim()
+    .toLowerCase()
+    .replace(/[\/\.]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+function inferSemanticFamily(normalizedKey) {
+  if (!normalizedKey) return '';
+
+  // Familles principales
+  if (normalizedKey.startsWith('text-') || normalizedKey.includes('text-')) {
+    return 'text';
+  } else if (normalizedKey.startsWith('background-') || normalizedKey.startsWith('bg-') ||
+             normalizedKey.includes('background-') || normalizedKey.includes('bg-')) {
+    return 'background';
+  } else if (normalizedKey.startsWith('border-') || normalizedKey.includes('border-')) {
+    return 'border';
+  } else if (normalizedKey.startsWith('radius-') || normalizedKey.includes('radius-')) {
+    return 'radius';
+  } else if (normalizedKey.startsWith('space-') || normalizedKey.includes('space-')) {
+    return 'space';
+  } else if (normalizedKey.startsWith('font-size-') || normalizedKey.includes('font-size-') ||
+             normalizedKey.startsWith('fontsize-') || normalizedKey.includes('fontsize-')) {
+    return 'fontSize';
+  } else if (normalizedKey.startsWith('font-weight-') || normalizedKey.includes('font-weight-') ||
+             normalizedKey.startsWith('fontweight-') || normalizedKey.includes('fontweight-')) {
+    return 'fontWeight';
+  }
+
+  // Tokens "brand/action/status" (primary, success, warning, destructive, info)
+  if (normalizedKey === 'primary' || normalizedKey.startsWith('primary-') || normalizedKey.includes('primary-')) {
+    return 'accent';
+  }
+  if (['success', 'warning', 'destructive', 'info'].some(status =>
+    normalizedKey === status || normalizedKey.startsWith(status + '-') || normalizedKey.includes(status + '-')
+  )) {
+    return 'accent';
+  }
+
+  return ''; // Famille inconnue
+}
+
+function createScopeContext(figmaVar, tokenKey, category) {
+  return {
+    kind: category === "semantic" ? "semantic" : "primitive",
+    key: tokenKey || figmaVar.name,
+    category: category,
+    type: figmaVar.resolvedType || "COLOR", // fallback safe
+    normalizedKey: normalizeKey(tokenKey || figmaVar.name),
+    family: category === "semantic" ? inferSemanticFamily(normalizeKey(tokenKey || figmaVar.name)) : category
+  };
+}
+
+// NOTE:
+// - WIDTH_HEIGHT volontairement retiré : width/height non gérés dans l'outil
+// - Typography limitée à FONT_SIZE tant que line-height / letter-spacing ne sont pas supportés
+// - ALL_SCOPES supprimé pour éviter des scopes trop permissifs
+
+var primitiveScopesMapping = {
   brand: ["ALL_FILLS", "STROKE_COLOR", "EFFECT_COLOR"],
   gray: ["ALL_FILLS", "STROKE_COLOR", "EFFECT_COLOR"],
   system: ["ALL_FILLS", "STROKE_COLOR", "EFFECT_COLOR"],
-  border: ["STROKE_FLOAT"],
+  border: ["STROKE"], // Scope border limité à STROKE uniquement
   radius: ["CORNER_RADIUS"],
-  spacing: ["GAP", "WIDTH_HEIGHT"],
-  typography: ["FONT_SIZE", "LINE_HEIGHT", "LETTER_SPACING", "TEXT_CONTENT"]
+  spacing: ["GAP"],
+  typography: ["FONT_SIZE"]
 };
 
-function applySemanticScopes(variable, semanticKey, variableType) {
-  if (!variable || !semanticKey) return;
+var semanticScopesMapping = {
+  // Pour COLOR
+  text: ["TEXT_FILL"],
+  background: ["FRAME_FILL", "SHAPE_FILL"],
+  border: ["STROKE"],
+  accent: ["FRAME_FILL", "SHAPE_FILL", "STROKE_COLOR"],
+  // Pour FLOAT
+  radius: ["CORNER_RADIUS"],
+  space: ["GAP"],
+  fontSize: ["FONT_SIZE"],
+  fontWeight: [] // Ne pas scoper les font-weight
+};
 
-  // Normaliser la clé (supporter clé en bg.canvas OU nom Figma background/canvas)
-  var normalizedKey = semanticKey.replace(/\//g, '.').toLowerCase();
+function inferPrimitiveScopes(context) {
+  if (context.kind !== "primitive") return [];
+  return primitiveScopesMapping[context.category] || [];
+}
 
-  // Déterminer la famille
-  var family = '';
-  if (normalizedKey.startsWith('bg.') || normalizedKey.startsWith('text.') ||
-      normalizedKey.startsWith('action.') || normalizedKey.startsWith('status.')) {
-    family = 'color';
-  } else if (normalizedKey.startsWith('border.')) {
-    family = 'borderColor';
-  } else if (normalizedKey.startsWith('radius.')) {
-    family = 'radius';
-  } else if (normalizedKey.startsWith('space.')) {
-    family = 'space';
-  } else if (normalizedKey.startsWith('font.size.')) {
-    family = 'fontSize';
-  } else if (normalizedKey.startsWith('font.weight.')) {
-    family = 'fontWeight';
+function inferSemanticScopes(context) {
+  if (context.kind !== "semantic") return [];
+
+  var scopes = semanticScopesMapping[context.family] || [];
+
+  return scopes;
+}
+
+function inferScopes(context) {
+  // LOGIQUE SPÉCIALE: tout token border-* de type FLOAT -> STROKE uniquement
+  var normalizedKey = context.normalizedKey || context.key;
+  if (normalizedKey && normalizedKey.startsWith('border-') && context.type === "FLOAT") {
+    return ["STROKE"]; // Scope STROKE pour les épaisseurs de stroke
   }
 
-  // Scopes à appliquer
-  var scopes = [];
-  switch (family) {
-    case 'color':
-      // Utiliser les scopes déjà présents dans scopesByCategory quand possible
-      scopes = scopesByCategory.brand; // ["ALL_FILLS", "STROKE_COLOR", "EFFECT_COLOR"]
-      break;
-    case 'borderColor':
-      // Au minimum ["STROKE_COLOR"]
-      scopes = ["STROKE_COLOR"];
-      break;
-    case 'radius':
-      scopes = ["CORNER_RADIUS"];
-      break;
-    case 'space':
-      scopes = scopesByCategory.spacing; // ["GAP", "WIDTH_HEIGHT"]
-      break;
-    case 'fontSize':
-      scopes = scopesByCategory.typography; // ["FONT_SIZE", "LINE_HEIGHT", "LETTER_SPACING", "TEXT_CONTENT"]
-      break;
-    case 'fontWeight':
-      // Ne rien mettre ([])
-      scopes = [];
-      break;
+  // Délégation selon le kind
+  var scopes;
+  if (context.kind === "primitive") {
+    scopes = inferPrimitiveScopes(context);
+  } else if (context.kind === "semantic") {
+    scopes = inferSemanticScopes(context);
+  } else {
+    return [];
   }
+
+  // SÉCURITÉ: ne jamais appliquer des scopes de couleur à un FLOAT (primitive + semantic)
+  if (context.type !== "COLOR" && scopes.some(scope =>
+    ["TEXT_FILL", "FRAME_FILL", "SHAPE_FILL", "STROKE_COLOR", "EFFECT_COLOR"].includes(scope)
+  )) {
+    scopes = scopes.filter(scope =>
+      !["TEXT_FILL", "FRAME_FILL", "SHAPE_FILL", "STROKE_COLOR", "EFFECT_COLOR"].includes(scope)
+    );
+  }
+
+  return scopes;
+}
+
+function applyScopes(figmaVar, scopes, debugLabel) {
+  // Guard: vérifier que c'est bien une vraie Variable Figma
+  if (!figmaVar || !figmaVar.id || typeof figmaVar.name !== 'string') {
+    return;
+  }
+
+  // Déterminer capabilities
+  var hasSetScopes = typeof figmaVar.setScopes === 'function';
+  var hasScopesProp = 'scopes' in figmaVar;
+
+  // Appliquer dans l'ordre de priorité
+  try {
+    if (hasSetScopes) {
+      figmaVar.setScopes(scopes);
+      // Log pour debug
+      console.log(`🔧 Scopes applied to ${figmaVar.name}:`, scopes);
+    } else if (hasScopesProp) {
+      figmaVar.scopes = scopes;
+      // Log pour debug
+      console.log(`🔧 Scopes set to ${figmaVar.name}:`, scopes);
+    }
+  } catch (error) {
+    console.warn(`⚠️ Failed to apply scopes to ${figmaVar.name}:`, error);
+    // Silent fail - scopes non critiques
+  }
+}
+
+function applyVariableScopes(figmaVar, context) {
+  // Créer le contexte si pas fourni
+  if (!context) {
+    // Inférence basique depuis le nom de la variable
+    var inferredCategory = figmaVar.name.includes('semantic') || figmaVar.name.includes('primary') || figmaVar.name.includes('success') ?
+      "semantic" : "primitive";
+    context = createScopeContext(figmaVar, figmaVar.name, inferredCategory);
+  }
+
+  // Calculer les scopes (pas d'appel Figma ici)
+  var scopes = inferScopes(context);
+
+  // Debug label
+  var debugLabel = `${context.kind}:${context.category}/${context.family}:${context.key}`;
 
   // Appliquer
-  if (scopes.length > 0) {
-    try {
-      if (typeof variable.setScopes === 'function') {
-        variable.setScopes(scopes);
-      } else {
-        console.warn("Unable to set semantic scopes:", semanticKey, "- setScopes is not a function");
-      }
-    } catch (e) {
-      console.warn("Unable to set semantic scopes:", semanticKey, e);
-    }
-  }
+  applyScopes(figmaVar, scopes, debugLabel);
 }
 
-function applyScopesForCategory(variable, category) {
-  if (!variable || !category) return;
-  var scopes = scopesByCategory[category];
-  if (!scopes || scopes.length === 0) return;
-  try {
-    if (typeof variable.setScopes === 'function') {
-      variable.setScopes(scopes);
-    } else {
-      console.warn("Unable to set scopes for category", category, "- setScopes is not a function");
-    }
-  } catch (e) {
-    console.warn("Error setting scopes for category", category, e);
-  }
-}
+
 
 
 
@@ -3325,6 +3468,10 @@ function createOrUpdateVariable(collection, name, type, value, category, overwri
       variable = figma.variables.createVariable(name, collection, type);
       console.log('✅ Variable created:', name);
 
+      // Appliquer les scopes IMMÉDIATEMENT après création (avant valeur)
+      var context = createScopeContext(variable, hintKey || name, category);
+      applyVariableScopes(variable, context);
+
       // Après création, récupérer à nouveau la variable pour s'assurer que toutes les propriétés sont définies
       if (variable && variable.id) {
         variable = figma.variables.getVariableById(variable.id);
@@ -3354,11 +3501,10 @@ function createOrUpdateVariable(collection, name, type, value, category, overwri
         console.error('❌ Failed to set value for', name + ':', e);
       }
     }
-    if (category === "semantic") {
-      applySemanticScopes(variable, hintKey || name, type);
-    } else {
-      applyScopesForCategory(variable, category);
-    }
+
+    // Réappliquer les scopes après définition de la valeur (au cas où)
+    var context = createScopeContext(variable, hintKey || name, category);
+    applyVariableScopes(variable, context);
   }
 
   return variable;
@@ -3818,28 +3964,28 @@ function getColorDistance(hex1, hex2) {
 
 function getScopesForProperty(propertyType) {
   var propertyScopes = {
-    
-    "Fill": ["ALL_FILLS", "FRAME_FILL", "SHAPE_FILL", "TEXT_FILL", "ALL_SCOPES"],
 
-    
-    "Stroke": ["STROKE_COLOR", "ALL_SCOPES"],
+    "Fill": ["ALL_FILLS", "FRAME_FILL", "SHAPE_FILL", "TEXT_FILL"],
 
-    
-    "CORNER RADIUS": ["CORNER_RADIUS", "ALL_SCOPES"],
-    "TOP LEFT RADIUS": ["CORNER_RADIUS", "ALL_SCOPES"],
-    "TOP RIGHT RADIUS": ["CORNER_RADIUS", "ALL_SCOPES"],
-    "BOTTOM LEFT RADIUS": ["CORNER_RADIUS", "ALL_SCOPES"],
-    "BOTTOM RIGHT RADIUS": ["CORNER_RADIUS", "ALL_SCOPES"],
 
-    
-    "Item Spacing": ["GAP", "ALL_SCOPES"],
-    "Padding Left": ["GAP", "ALL_SCOPES"],
-    "Padding Right": ["GAP", "ALL_SCOPES"],
-    "Padding Top": ["GAP", "ALL_SCOPES"],
-    "Padding Bottom": ["GAP", "ALL_SCOPES"],
+    "Stroke": ["STROKE_COLOR"],
 
-    
-    "Font Size": ["FONT_SIZE", "ALL_SCOPES"]
+
+    "CORNER RADIUS": ["CORNER_RADIUS"],
+    "TOP LEFT RADIUS": ["CORNER_RADIUS"],
+    "TOP RIGHT RADIUS": ["CORNER_RADIUS"],
+    "BOTTOM LEFT RADIUS": ["CORNER_RADIUS"],
+    "BOTTOM RIGHT RADIUS": ["CORNER_RADIUS"],
+
+
+    "Item Spacing": ["GAP"],
+    "Padding Left": ["GAP"],
+    "Padding Right": ["GAP"],
+    "Padding Top": ["GAP"],
+    "Padding Bottom": ["GAP"],
+
+
+    "Font Size": ["FONT_SIZE"]
   };
 
   return propertyScopes[propertyType] || [];
@@ -5432,6 +5578,9 @@ function validatePropertyExists(node, result) {
       case "Padding Bottom":
         return typeof node[result.figmaProperty] === 'number';
 
+      case "Font Size":
+        return typeof node.fontSize === 'number';
+
       default:
         return false;
     }
@@ -5463,6 +5612,9 @@ function validateVariableCanBeApplied(variable, result) {
       case "Padding Right":
       case "Padding Top":
       case "Padding Bottom":
+        return variableType === "FLOAT";
+
+      case "Font Size":
         return variableType === "FLOAT";
 
       default:
@@ -5508,6 +5660,10 @@ function applyVariableToProperty(node, variable, result) {
       case "Padding Right":
       case "Padding Top":
       case "Padding Bottom":
+        success = applyNumericVariable(node, variable, result.figmaProperty, result.property);
+        break;
+
+      case "Font Size":
         success = applyNumericVariable(node, variable, result.figmaProperty, result.property);
         break;
 
@@ -5710,16 +5866,17 @@ function applyColorVariableToStroke(node, variable, strokeIndex) {
 
 function applyNumericVariable(node, variable, figmaProperty, displayProperty) {
   try {
-    
+
     if (figmaProperty === 'itemSpacing' && node.primaryAxisAlignItems === 'SPACE_BETWEEN') {
       return false;
     }
 
-    
+
     node.setBoundVariable(figmaProperty, variable);
     return true;
 
   } catch (error) {
+    console.warn('❌ [applyNumericVariable] Échec application variable sur', displayProperty, 'pour node', node.id, ':', error.message);
     return false;
   }
 }
@@ -6540,5 +6697,101 @@ function flattenSemanticTokensFromFigma(callsite) {
   console.log(`🔄 [FLATTEN] ${callsite}: complete - ${flattenedCount} flattened, ${unresolvedCount} kept as-is`);
 
   return flattenedTokens;
+}
+
+// Fonction de diagnostic pour les alias cassés
+function diagnoseBrokenAliases() {
+  console.log('🔍 DIAGNOSING BROKEN ALIASES');
+
+  var collections = figma.variables.getLocalVariableCollections();
+  var semanticCollection = null;
+  var primitiveCollections = [];
+
+  // Identifier les collections
+  for (var i = 0; i < collections.length; i++) {
+    var collection = collections[i];
+    if (collection.name === "Semantic") {
+      semanticCollection = collection;
+    } else if (["Primitives", "Brand", "Gray", "System", "Spacing", "Radius", "Typography"].includes(collection.name)) {
+      primitiveCollections.push(collection);
+    }
+  }
+
+  console.log(`📊 Collections trouvées:`);
+  console.log(`  - Semantic: ${semanticCollection ? semanticCollection.variableIds.length + ' variables' : 'NON TROUVÉE'}`);
+  console.log(`  - Primitives: ${primitiveCollections.map(c => c.name + '(' + c.variableIds.length + ')').join(', ')}`);
+
+  if (!semanticCollection) {
+    figma.ui.postMessage({
+      type: 'diagnostic-result',
+      error: 'Aucune collection Semantic trouvée'
+    });
+    return;
+  }
+
+  // Analyser les variables sémantiques
+  var brokenAliases = [];
+  var workingAliases = [];
+  var directValues = [];
+
+  for (var v = 0; v < semanticCollection.variableIds.length; v++) {
+    var variable = figma.variables.getVariableById(semanticCollection.variableIds[v]);
+    if (!variable) continue;
+
+    var modeId = safeGetModeId(variable);
+    if (modeId === null) continue;
+
+    var value = variable.valuesByMode[modeId];
+
+    if (value && typeof value === 'object' && value.type === 'VARIABLE_ALIAS') {
+      // C'est un alias
+      var targetVariable = figma.variables.getVariableById(value.id);
+      if (targetVariable) {
+        workingAliases.push({
+          semanticName: variable.name,
+          targetName: targetVariable.name,
+          targetCollection: figma.variables.getVariableCollectionById(targetVariable.variableCollectionId)?.name || 'unknown'
+        });
+      } else {
+        brokenAliases.push({
+          semanticName: variable.name,
+          brokenAliasId: value.id
+        });
+      }
+    } else {
+      // Valeur directe
+      directValues.push(variable.name);
+    }
+  }
+
+  var result = {
+    totalSemantic: semanticCollection.variableIds.length,
+    brokenAliases: brokenAliases,
+    workingAliases: workingAliases,
+    directValues: directValues,
+    primitiveCollections: primitiveCollections.map(c => ({
+      name: c.name,
+      variableCount: c.variableIds.length,
+      variables: c.variableIds.map(id => figma.variables.getVariableById(id)?.name).filter(Boolean)
+    }))
+  };
+
+  console.log('🔍 RÉSULTATS DU DIAGNOSTIC:');
+  console.log(`  - Total sémantiques: ${result.totalSemantic}`);
+  console.log(`  - Aliases cassés: ${brokenAliases.length}`);
+  console.log(`  - Aliases fonctionnels: ${workingAliases.length}`);
+  console.log(`  - Valeurs directes: ${directValues.length}`);
+
+  if (brokenAliases.length > 0) {
+    console.log('❌ ALIASES CASSÉS:');
+    brokenAliases.forEach(alias => {
+      console.log(`  - ${alias.semanticName} → alias ID cassé: ${alias.brokenAliasId}`);
+    });
+  }
+
+  figma.ui.postMessage({
+    type: 'diagnostic-result',
+    result: result
+  });
 }
 
