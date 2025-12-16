@@ -3392,6 +3392,11 @@ function getOrCreateCollection(name, overwrite) {
 
 
 // Fonction spécialisée pour appliquer la valeur appropriée à une variable sémantique
+// Helper pour détecter si une valeur Figma est un alias de variable
+function isFigmaAliasValue(value) {
+  return value && typeof value === 'object' && value.type === 'VARIABLE_ALIAS' && value.id;
+}
+
 function applySemanticValue(variable, semanticData, semanticKey) {
   if (!variable || !semanticData) return;
 
@@ -3422,6 +3427,14 @@ function applySemanticValue(variable, semanticData, semanticKey) {
       return; // EARLY RETURN - pas d'écrasement
     }
   } else {
+    // ANTI-ÉCRASMENT : vérifier si la variable Figma est déjà en alias
+    var currentValue = variable.valuesByMode[modeId];
+    if (isFigmaAliasValue(currentValue)) {
+      // ✅ VARIABLE DÉJÀ EN ALIAS : préserver l'alias existant
+      console.log(`🛡️ [ALIAS_PRESERVED] ${semanticKey} kept existing alias in Figma (not overwriting with raw value)`);
+      return; // EARLY RETURN - pas d'écrasement
+    }
+
     // Pas d'alias valide défini : utiliser resolvedValue si elle existe
     if (semanticData.resolvedValue != null && semanticData.resolvedValue !== undefined) {
       processedValue = getProcessedValueFromResolved(semanticData.resolvedValue, semanticData.type);
@@ -3584,6 +3597,29 @@ function createOrUpdateVariable(collection, name, type, value, category, overwri
       } catch (e) {
         console.error('❌ Failed to set value for', name + ':', e);
       }
+    } else if (category === 'semantic' && hintKey) {
+      // Pour les variables sémantiques créées sans valeur, essayer automatiquement de créer un alias
+      console.log(`🔍 [AUTO_ALIAS] Trying to create automatic alias for semantic variable: ${hintKey}`);
+
+      // Construire une map globale des variables existantes pour la résolution d'alias
+      var globalVariableMap = buildGlobalVariableMap();
+
+      // Essayer de résoudre un alias pour cette clé sémantique
+      var finalAliasTo = resolveSemanticAliasFromMap(hintKey, {}, getNamingFromFile(), globalVariableMap);
+
+      if (finalAliasTo) {
+        // Appliquer l'alias automatiquement
+        var semanticValueData = {
+          resolvedValue: null, // Pas de valeur de fallback
+          type: variable.type,
+          aliasTo: finalAliasTo
+        };
+
+        applySemanticValue(variable, semanticValueData, hintKey);
+        console.log(`✅ [AUTO_ALIAS] Successfully created alias for ${hintKey}: ${finalAliasTo.collection}/${finalAliasTo.key}`);
+      } else {
+        console.log(`⚠️ [AUTO_ALIAS] No alias found for semantic variable: ${hintKey}`);
+      }
     }
 
     // Réappliquer les scopes après définition de la valeur (au cas où)
@@ -3610,9 +3646,6 @@ function importTokensToFigma(tokens, naming, overwrite) {
 
   // Save the naming preference to file for persistence
   saveNamingToFile(naming);
-
-  // Créer une map globale des variables existantes pour la résolution des alias sémantiques
-  var globalVariableMap = buildGlobalVariableMap();
 
 
 
@@ -3763,6 +3796,10 @@ function importTokensToFigma(tokens, naming, overwrite) {
   // Rafraîchir le cache des collections après avoir importé les primitives
   initializeCollectionCache();
 
+  // Rafraîchir le cache des alias et créer une map globale des variables existantes
+  tryResolveSemanticAlias.collectionCache = null; // Reset cache
+  var globalVariableMap = buildGlobalVariableMap();
+
   // Import Semantic Tokens
   if (tokens.semantic) {
     var semanticCollection = getOrCreateCollection("Semantic", overwrite);
@@ -3798,10 +3835,29 @@ function importTokensToFigma(tokens, naming, overwrite) {
       }
 
       // Résoudre l'alias en utilisant la map globale des variables existantes
-      var finalAliasTo = resolveSemanticAliasFromMap(semanticKey, tokens, naming, globalVariableMap);
-      if (finalAliasTo && !currentAliasTo) {
-        newAliasCount++;
-        console.log(`✅ New alias resolved for ${semanticKey}: ${finalAliasTo.collection}/${finalAliasTo.key}`);
+      var resolvedAliasTo = resolveSemanticAliasFromMap(semanticKey, tokens, naming, globalVariableMap);
+
+      // Vérifier si currentAliasTo est encore valide (variable existe)
+      var currentAliasValid = false;
+      if (currentAliasTo) {
+        var normCurrent = normalizeAliasTo(currentAliasTo);
+        currentAliasValid = normCurrent.isValid && figma.variables.getVariableById(normCurrent.variableId) !== null;
+      }
+
+      // Priorité : nouvel alias résolu, sinon alias existant valide, sinon null
+      var finalAliasTo = resolvedAliasTo || (currentAliasValid ? currentAliasTo : null);
+
+      if (finalAliasTo) {
+        if (resolvedAliasTo && !currentAliasTo) {
+          newAliasCount++;
+          console.log(`✅ New alias resolved for ${semanticKey}: ${finalAliasTo.collection}/${finalAliasTo.key}`);
+        } else if (resolvedAliasTo && currentAliasTo) {
+          console.log(`🔄 [ALIAS_UPDATED] ${semanticKey} updated alias to new primitive: ${finalAliasTo.collection}/${finalAliasTo.key}`);
+        } else if (!resolvedAliasTo && currentAliasValid) {
+          console.log(`🔄 [ALIAS_PRESERVED] ${semanticKey} kept existing valid alias from saved tokens`);
+        }
+      } else if (currentAliasTo && !currentAliasValid) {
+        console.log(`⚠️ [ALIAS_INVALID] ${semanticKey} discarded invalid alias (primitive no longer exists)`);
       }
 
       // Préparer les données pour applySemanticValue
@@ -3876,6 +3932,13 @@ function buildGlobalVariableMap() {
     var key = collection.name + '/' + variable.name;
     byName.set(key, variable.id);
 
+    // Aussi ajouter la clé extraite (ex: Grayscale/50 pour gray-50)
+    var extractedKey = extractVariableKey(variable, collection.name);
+    if (extractedKey && extractedKey !== variable.name) {
+      var extractedFullKey = collection.name + '/' + extractedKey;
+      byName.set(extractedFullKey, variable.id);
+    }
+
     // Aussi ajouter juste variable.name au cas où (pour compatibilité)
     if (!byName.has(variable.name)) {
       byName.set(variable.name, variable.id);
@@ -3883,6 +3946,9 @@ function buildGlobalVariableMap() {
   }
 
   console.log(`✅ Global variable map built: ${byName.size} variables mapped`);
+  // Debug: montrer quelques clés
+  var keys = Array.from(byName.keys()).slice(0, 5);
+  console.log(`🔍 Sample keys: ${keys.join(', ')}`);
   return byName;
 }
 
@@ -3891,6 +3957,7 @@ function resolveSemanticAliasFromMap(semanticKey, allTokens, naming, globalVaria
   // Utiliser la logique existante pour déterminer quelle primitive cibler
   var aliasInfo = resolveSemanticAliasInfo(semanticKey, allTokens, naming);
   if (!aliasInfo) {
+    console.warn(`⚠️ [resolveSemanticAliasFromMap] No alias info found for semantic ${semanticKey}`);
     return null; // Pas d'alias possible pour cette clé sémantique
   }
 
@@ -3913,7 +3980,7 @@ function resolveSemanticAliasFromMap(semanticKey, allTokens, naming, globalVaria
   }
 
   // Si la primitive n'existe pas encore, on ne crée pas d'alias cassé
-  console.warn(`⚠️ [resolveSemanticAliasFromMap] Primitive not found for semantic ${semanticKey}: ${targetKey}`);
+  console.warn(`⚠️ [resolveSemanticAliasFromMap] Primitive not found for semantic ${semanticKey}: tried "${targetKey}" and "${aliasInfo.key}" (map has ${globalVariableMap.size} entries)`);
   return null;
 }
 
