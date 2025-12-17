@@ -74,6 +74,12 @@ function saveSemanticTokensToFile(semanticTokens, callsite) {
 
         // Si c'est déjà le nouveau format, le conserver tel quel
         if (typeof tokenData === 'object' && tokenData.resolvedValue !== undefined) {
+          // GARDE-FOU ANTI-OBJET : resolvedValue DOIT être scalaire, jamais un objet
+          if (typeof tokenData.resolvedValue === 'object') {
+            console.error(`🚨 CRITICAL: resolvedValue for ${key} is an object - this will cause [object Object] in exports:`, tokenData.resolvedValue);
+            throw new Error(`Cannot save semantic token ${key}: resolvedValue must be scalar, got object`);
+          }
+
           // GARDE-FOU CONTRE LES FALLBACKS : empêcher l'écriture de valeurs fallback évidentes
           var existingToken = existingTokens[key];
 
@@ -126,6 +132,13 @@ function saveSemanticTokensToFile(semanticTokens, callsite) {
           }
         };
 
+        // GARDE-FOU ANTI-OBJET : resolvedValue DOIT être scalaire même lors de la migration
+        if (typeof newTokenData.resolvedValue === 'object') {
+          console.error(`🚨 CRITICAL: resolvedValue for migrated ${key} is an object - this will cause [object Object] in exports:`, newTokenData.resolvedValue);
+          newTokenData.resolvedValue = getFallbackValue(tokenType, 'semantic');
+          console.warn(`[MIGRATION_FIX] Fixed ${key} resolvedValue to fallback: ${newTokenData.resolvedValue}`);
+        }
+
         // Même ici, préserver aliasTo existant si possible
         var existingTokenForMigration = existingTokens[key];
 
@@ -164,6 +177,109 @@ function saveSemanticTokensToFile(semanticTokens, callsite) {
   }
 }
 
+/**
+ * Normalise aliasTo vers le format standard exploitable par l'UI/export
+ * @param {string|object} aliasTo - aliasTo existant (string ID ou objet normalisé)
+ * @param {object} collections - Collections de variables Figma pour résolution
+ * @returns {object|null} Objet normalisé {variableId, collection, key, cssName} ou null
+ */
+function normalizeAliasTo(aliasTo, collections) {
+  if (!aliasTo) return null;
+
+  // Si déjà normalisé, retourner tel quel
+  if (typeof aliasTo === 'object' && aliasTo.variableId && aliasTo.collection && aliasTo.key && aliasTo.cssName) {
+    return aliasTo;
+  }
+
+  // Si c'est un string (ancien format), résoudre vers l'objet normalisé
+  if (typeof aliasTo === 'string') {
+    return resolveVariableIdToAliasDescriptor(aliasTo, collections);
+  }
+
+  console.warn('⚠️ normalizeAliasTo: aliasTo format non reconnu:', aliasTo);
+  return null;
+}
+
+/**
+ * Résout un variableId vers un descripteur d'alias complet
+ * @param {string} variableId - ID de la variable Figma
+ * @param {object} collections - Collections de variables Figma
+ * @returns {object|null} {variableId, collection, key, cssName} ou null si non trouvé
+ */
+function resolveVariableIdToAliasDescriptor(variableId, collections) {
+  if (!variableId || !collections) return null;
+
+  // Scanner toutes les collections pour trouver la variable
+  for (var collectionName in collections) {
+    if (!collections.hasOwnProperty(collectionName)) continue;
+
+    var collection = collections[collectionName];
+    if (!collection.variables) continue;
+
+    for (var varId in collection.variables) {
+      if (!collection.variables.hasOwnProperty(varId)) continue;
+
+      if (varId === variableId) {
+        var variable = collection.variables[varId];
+        var key = variable.name;
+
+        // Appliquer les conventions de nommage CSS (même logique que existante)
+        var cssName = generateCssName(collectionName, key);
+
+        return {
+          variableId: variableId,
+          collection: collectionName,
+          key: key,
+          cssName: cssName
+        };
+      }
+    }
+  }
+
+  console.warn('⚠️ resolveVariableIdToAliasDescriptor: variableId non trouvé dans les collections:', variableId);
+  return null;
+}
+
+/**
+ * Génère un nom CSS depuis collection et key (conventions existantes)
+ * @param {string} collection - Nom de la collection
+ * @param {string} key - Clé de la variable
+ * @returns {string} Nom CSS
+ */
+function generateCssName(collection, key) {
+  // Mapping collection -> prefix CSS (même que dans getSemanticScalar)
+  var collectionPrefix = {
+    "Brand": "brand",
+    "System": "system",
+    "Gray": "gray",
+    "Grey": "gray", // alias
+    "Spacing": "spacing",
+    "Radius": "radius",
+    "Typography": "typography"
+  }[collection] || collection.toLowerCase();
+
+  // Pour les clés avec tirets, garder tel quel, sinon normaliser
+  var normalizedKey = key.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+
+  return collectionPrefix + "-" + normalizedKey;
+}
+
+/**
+ * Retourne une valeur fallback safe selon le type et la catégorie
+ * @param {string} type - Type Figma (COLOR, FLOAT, etc.)
+ * @param {string} category - Catégorie (semantic, etc.)
+ * @returns {*} Valeur scalaire fallback
+ */
+function getFallbackValue(type, category) {
+  if (type === 'COLOR') {
+    return category === 'semantic' ? '#000000' : '#FFFFFF';
+  } else if (type === 'FLOAT') {
+    return 0;
+  } else {
+    return '';
+  }
+}
+
 function getSemanticTokensFromFile(callsite) {
   try {
     var saved = figma.root.getPluginData("tokenStarter.semantic");
@@ -182,12 +298,22 @@ function getSemanticTokensFromFile(callsite) {
 
         // Si c'est déjà le nouveau format (avec resolvedValue)
         if (typeof tokenData === 'object' && tokenData.resolvedValue !== undefined) {
-          // Migration douce : normaliser aliasTo si nécessaire
+          // MIGRATION AUTOMATIQUE : convertir anciens aliasTo string vers nouvelle structure
           if (tokenData.aliasTo) {
-            var normAlias = normalizeAliasTo(tokenData.aliasTo);
-            if (normAlias.isValid) {
-              tokenData.aliasTo = normAlias.variableId; // Normaliser vers string ID
+            // Si aliasTo est un string (ancien format), le migrer vers objet normalisé
+            if (typeof tokenData.aliasTo === 'string') {
+              console.log(`🔄 [MIGRATION] Migrating legacy aliasTo string for ${key}: ${tokenData.aliasTo}`);
+              var collections = figma.variables.getLocalVariableCollections();
+              var migratedAliasTo = normalizeAliasTo(tokenData.aliasTo, collections);
+              if (migratedAliasTo) {
+                tokenData.aliasTo = migratedAliasTo;
+                migratedCount++;
+                console.log(`✅ [MIGRATION] Migrated ${key} aliasTo to:`, migratedAliasTo);
+              } else {
+                console.warn(`⚠️ [MIGRATION] Could not resolve aliasTo for ${key}, keeping as string`);
+              }
             }
+            // Sinon aliasTo est déjà normalisé, le garder tel quel
             aliasCount++;
           } else {
             valueCount++;
@@ -231,6 +357,99 @@ function getSemanticTokensFromFile(callsite) {
     console.warn('Could not retrieve semantic tokens from file:', e);
   }
   return null;
+}
+
+/**
+ * Charge les tokens primitifs depuis le stockage persistant
+ * @param {string} callsite - Contexte d'appel pour les logs
+ * @returns {object|null} Objet { gray:{}, brand:{}, system:{}, spacing:{}, radius:{}, typography:{} } ou null
+ */
+function getPrimitivesTokensFromFile(callsite) {
+  try {
+    var saved = figma.root.getPluginData("tokenStarter.primitives");
+    if (saved) {
+      var primitivesTokens = JSON.parse(saved);
+
+      // Statistiques et logs
+      var totalCategories = Object.keys(primitivesTokens).length;
+      var totalTokens = 0;
+      var categoryStats = [];
+
+      for (var category in primitivesTokens) {
+        if (!primitivesTokens.hasOwnProperty(category)) continue;
+        var categoryTokens = primitivesTokens[category];
+        var tokenCount = Object.keys(categoryTokens).length;
+        totalTokens += tokenCount;
+
+        // Top 5 keys par catégorie pour debug
+        var keys = Object.keys(categoryTokens).slice(0, 5);
+        categoryStats.push(`${category}: ${tokenCount} tokens (${keys.join(', ')}${Object.keys(categoryTokens).length > 5 ? '...' : ''})`);
+      }
+
+      console.log(`📖 LOAD_PRIMITIVES [${callsite}]: ${totalCategories} categories, ${totalTokens} total tokens`);
+      if (categoryStats.length > 0) {
+        console.log(`📖 LOAD_PRIMITIVES [${callsite}]: Details - ${categoryStats.join(' | ')}`);
+      }
+
+      return primitivesTokens;
+    }
+  } catch (e) {
+    console.warn('Could not retrieve primitives tokens from file:', e);
+  }
+  return null;
+}
+
+/**
+ * Sauvegarde les tokens primitifs dans le stockage persistant
+ * @param {object} primitivesTokens - Objet { gray:{}, brand:{}, system:{}, spacing:{}, radius:{}, typography:{} }
+ * @param {string} callsite - Contexte d'appel pour les logs
+ */
+function savePrimitivesTokensToFile(primitivesTokens, callsite) {
+  try {
+    if (primitivesTokens && Object.keys(primitivesTokens).length > 0) {
+      // GARDE-FOU ANTI-OBJET : vérifier que toutes les valeurs sont scalaires
+      for (var category in primitivesTokens) {
+        if (!primitivesTokens.hasOwnProperty(category)) continue;
+        var categoryTokens = primitivesTokens[category];
+
+        for (var key in categoryTokens) {
+          if (!categoryTokens.hasOwnProperty(key)) continue;
+          var value = categoryTokens[key];
+
+          if (typeof value === 'object' || value === null || value === undefined) {
+            throw new Error(`Cannot save primitive token ${category}/${key}: value must be scalar (string/number), got ${typeof value}`);
+          }
+        }
+      }
+
+      // Statistiques et logs
+      var totalCategories = Object.keys(primitivesTokens).length;
+      var totalTokens = 0;
+      var categoryStats = [];
+
+      for (var category in primitivesTokens) {
+        if (!primitivesTokens.hasOwnProperty(category)) continue;
+        var categoryTokens = primitivesTokens[category];
+        var tokenCount = Object.keys(categoryTokens).length;
+        totalTokens += tokenCount;
+
+        // Top 5 keys par catégorie pour debug
+        var keys = Object.keys(categoryTokens).slice(0, 5);
+        categoryStats.push(`${category}: ${tokenCount} (${keys.join(', ')}${Object.keys(categoryTokens).length > 5 ? '...' : ''})`);
+      }
+
+      var primitivesData = JSON.stringify(primitivesTokens);
+      figma.root.setPluginData("tokenStarter.primitives", primitivesData);
+
+      console.log(`💾 SAVE_PRIMITIVES [${callsite}]: ${totalCategories} categories, ${totalTokens} total tokens`);
+      if (categoryStats.length > 0) {
+        console.log(`💾 SAVE_PRIMITIVES [${callsite}]: Details - ${categoryStats.join(' | ')}`);
+      }
+    }
+  } catch (e) {
+    console.warn('Could not save primitives tokens to file:', e);
+    throw e; // Re-throw pour signaler l'erreur critique
+  }
 }
 
 function getNamingFromFile() {
@@ -2490,7 +2709,23 @@ if (existingCollections.length > 0) {
   try {
     var existingTokens = extractExistingTokens();
 
-    
+    // Sauvegarder les primitives extraites (toutes catégories sauf semantic)
+    var primitivesOnly = {};
+    var hasPrimitives = false;
+    for (var cat in existingTokens.tokens) {
+      if (existingTokens.tokens.hasOwnProperty(cat) && cat !== 'semantic') {
+        var categoryTokens = existingTokens.tokens[cat];
+        if (Object.keys(categoryTokens).length > 0) {
+          primitivesOnly[cat] = categoryTokens;
+          hasPrimitives = true;
+        }
+      }
+    }
+
+    if (hasPrimitives) {
+      savePrimitivesTokensToFile(primitivesOnly, 'EXTRACT_STARTUP');
+    }
+
     var hasTokens = false;
     for (var cat in existingTokens.tokens) {
       if (existingTokens.tokens.hasOwnProperty(cat) && Object.keys(existingTokens.tokens[cat]).length > 0) {
@@ -2590,14 +2825,28 @@ function extractExistingTokens() {
 
       if (category === "semantic") {
         if (raw && typeof raw === 'object' && raw.type === 'VARIABLE_ALIAS') {
-          // ✅ VARIABLE_ALIAS détecté : conserver l'alias + normaliser la valeur résolue
-          aliasTo = raw.id; // string ID
+          // ✅ VARIABLE_ALIAS détecté : normaliser l'alias + garantir valeur scalaire résolue
+          var rawAliasTo = raw.id; // string ID brut
+          aliasTo = normalizeAliasTo(rawAliasTo, tokens); // normalisé vers objet complet
           resolvedValue = normalizeResolvedValue(value, variable.resolvedType);
-          console.log(`[ALIAS_LOAD] ${variable.name} → alias:${aliasTo}, resolved:${resolvedValue}`);
+
+          // GARDE-FOU : resolvedValue DOIT être scalaire, jamais objet
+          if (typeof resolvedValue === 'object' || resolvedValue === null || resolvedValue === undefined) {
+            console.warn(`🚨 CRITICAL: resolvedValue for aliased semantic ${variable.name} is not scalar:`, resolvedValue);
+            resolvedValue = getFallbackValue(variable.resolvedType, category);
+          }
+
+          console.log(`[ALIAS_LOAD] ${variable.name} → alias:${JSON.stringify(aliasTo)}, resolved:${resolvedValue}`);
         } else {
           // Pas d'alias : juste la valeur résolue normalisée
           aliasTo = null;
           resolvedValue = normalizeResolvedValue(value, variable.resolvedType);
+
+          // GARDE-FOU : resolvedValue DOIT être scalaire
+          if (typeof resolvedValue === 'object' || resolvedValue === null || resolvedValue === undefined) {
+            console.warn(`🚨 CRITICAL: resolvedValue for non-aliased semantic ${variable.name} is not scalar:`, resolvedValue);
+            resolvedValue = getFallbackValue(variable.resolvedType, category);
+          }
         }
       } else {
         // Pour les primitives : logique existante
@@ -6300,6 +6549,29 @@ figma.ui.onmessage = function (msg) {
         console.log(`📂 Sémantiques restaurées depuis la sauvegarde:`, Object.keys(savedSemantic).length, 'tokens');
       } else if (cachedTokens && cachedTokens.semantic) {
         tokens.semantic = cachedTokens.semantic;
+      }
+    }
+
+    // Pour tous les cas, si on a des primitives sauvegardées et qu'on régénère,
+    // on les restaure automatiquement (sauf si on vient de les régénérer)
+    var hasPrimitives = false;
+    for (var cat in tokens) {
+      if (cat !== 'semantic' && tokens[cat] && Object.keys(tokens[cat]).length > 0) {
+        hasPrimitives = true;
+        break;
+      }
+    }
+
+    if (!hasPrimitives) {
+      var savedPrimitives = getPrimitivesTokensFromFile('SYNC_AUTO_RESTORE');
+      if (savedPrimitives) {
+        // Fusionner les primitives sauvegardées avec celles générées (priorité aux générées)
+        for (var cat in savedPrimitives) {
+          if (savedPrimitives.hasOwnProperty(cat) && (!tokens[cat] || Object.keys(tokens[cat]).length === 0)) {
+            tokens[cat] = savedPrimitives[cat];
+          }
+        }
+        console.log(`📂 Primitives restaurées automatiquement depuis stockage`);
       }
     }
 

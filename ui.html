@@ -9091,6 +9091,87 @@
     }
 
     /**
+     * Normalise la valeur d'une ExportEntry pour l'export développeur
+     * Préserve les alias var(--...) et ajoute les unités CSS correctes pour les FLOAT
+     * @param {Object} entry - ExportEntry avec key, value, type, category, etc.
+     * @returns {*} Valeur normalisée
+     */
+    function normalizeExportEntryValue(entry) {
+      // entry: { key, value, type, category, group, ... }
+      // type peut être "COLOR" ou "FLOAT" (notamment pour semantic via SEMANTIC_TYPE_MAP)
+      var v = entry.value;
+
+      // 1) Ne jamais casser les alias var(--...) si déjà présents
+      if (typeof v === "string" && v.trim().startsWith("var(--")) {
+        return v;
+      }
+
+      // 2) Normaliser les FLOAT numériques (ou strings numériques) en unités CSS selon le domaine
+      //    - spacing -> px
+      //    - radius -> px
+      //    - font.size -> rem (base 16)
+      //    - font.weight -> number (pas d'unité)
+      var isNumeric = (typeof v === "number") || (typeof v === "string" && /^-?\d+(\.\d+)?$/.test(v.trim()));
+      if (entry.type === "FLOAT" && isNumeric) {
+        var n = typeof v === "number" ? v : parseFloat(v.trim());
+
+        // Heuristique basée sur la catégorie OU la key
+        var k = (entry.key || "").toLowerCase();
+        var c = (entry.category || "").toLowerCase();
+
+        var isFontSize = c === "typography" || k.includes("font-size") || k.includes("font.size");
+        var isFontWeight = k.includes("font-weight") || k.includes("font.weight");
+        var isRadius = c === "radius" || k.includes("radius");
+        var isSpacing = c === "spacing" || k.includes("space") || k.includes("spacing");
+
+        if (isFontWeight) return n;               // ex: 400
+        if (isFontSize) return (n / 16) + "rem";  // ex: 16 -> 1rem, 14 -> 0.875rem
+        if (isRadius || isSpacing) return n + "px";
+        // fallback safe:
+        return n;
+      }
+
+      // 3) Pour les COLOR, garder tel quel (hex/rgb/var())
+      return v;
+    }
+
+    /**
+     * Convertit un aliasTo en référence string stable pour l'export
+     * @param {object|string} aliasTo - Objet aliasTo ou string legacy
+     * @returns {string} Référence CSS comme "var(--primitive-css-name)" ou null
+     */
+    function aliasToStringRef(aliasTo) {
+      if (!aliasTo) return null;
+
+      var targetName = null;
+
+      // Format normalisé actuel : { cssName, collection, key, variableId }
+      if (typeof aliasTo === 'object' && aliasTo.cssName) {
+        targetName = aliasTo.cssName;
+      }
+      // Format intermédiaire : { collection, key }
+      else if (typeof aliasTo === 'object' && aliasTo.collection && aliasTo.key) {
+        var collectionPrefix = {
+          "Brand": "brand", "System": "system", "Gray": "gray", "Grey": "gray",
+          "Spacing": "spacing", "Radius": "radius", "Typography": "typography"
+        }[aliasTo.collection] || aliasTo.collection.toLowerCase();
+
+        targetName = collectionPrefix + "-" + aliasTo.key.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+      }
+      // Alias vers semantic : --semantic-<semantic-key>
+      else if (typeof aliasTo === 'object' && aliasTo.semanticKey) {
+        targetName = "semantic-" + aliasTo.semanticKey.toLowerCase().replace(/[^a-z0-9-]/g, '-');
+      }
+
+      if (targetName) {
+        return `var(--${targetName})`;
+      }
+
+      console.warn('⚠️ aliasToStringRef: could not generate reference from:', aliasTo);
+      return null;
+    }
+
+    /**
      * Résout une valeur sémantique en scalaire
      * @param {Object} semanticToken - Token sémantique (avec resolvedValue, aliasTo, etc.)
      * @param {Object} options - Options d'export
@@ -9106,35 +9187,17 @@
         }
       };
 
-      // Si aliasTo existe ET options.preferAliasVar === true
-      if (semanticToken.aliasTo && options.preferAliasVar === true) {
-        // Tenter de convertir aliasTo en nom de variable CSS
-        var targetName = null;
-
-        // Si aliasTo est un objet avec collection et key
-        if (typeof semanticToken.aliasTo === 'object' && semanticToken.aliasTo.collection && semanticToken.aliasTo.key) {
-          // Mapping collection -> prefix CSS
-          var collectionPrefix = {
-            "Brand": "brand",
-            "System": "system",
-            "Gray": "gray",
-            "Spacing": "spacing",
-            "Radius": "radius"
-          }[semanticToken.aliasTo.collection] || semanticToken.aliasTo.collection.toLowerCase();
-
-          targetName = collectionPrefix + "-" + semanticToken.aliasTo.key;
-        }
-        // Si aliasTo est un string (VariableID)
-        else if (typeof semanticToken.aliasTo === 'string') {
-          // Essayer de trouver le nom depuis le mapping des variables existantes
-          // Pour l'instant, fallback vers resolvedValue
-          targetName = null;
-        }
-
-        if (targetName) {
-          result.value = `var(--${targetName})`;
-          result.valueKind = "css-var";
+      // RÈGLE D'OR : Si aliasTo existe, retourner une référence string stable
+      if (semanticToken.aliasTo) {
+        var stringRef = aliasToStringRef(semanticToken.aliasTo);
+        if (stringRef) {
+          result.value = stringRef;
+          result.valueKind = "alias";
+          result.meta.aliasTo = semanticToken.aliasTo; // Conserver les métadonnées
           return result;
+        } else {
+          console.warn(`⚠️ Could not generate string reference for aliasTo:`, semanticToken.aliasTo);
+          // Fallback vers resolvedValue
         }
       }
 
@@ -9233,11 +9296,14 @@
         }
       }
 
-      // 3. Validation HARD: aucun "[object Object]" autorisé
+      // 3. Validation HARD: aucun "[object Object]" ET aucun objet dans les valeurs autorisé
       for (var i = 0; i < entries.length; i++) {
         var entry = entries[i];
         if (typeof entry.value === "string" && entry.value.includes("[object Object]")) {
           throw new Error(`🚨 CRITICAL: Entry ${entry.key} contains "[object Object]" - normalization failed`);
+        }
+        if (typeof entry.value === "object") {
+          throw new Error(`🚨 CRITICAL: Entry ${entry.key} has object value - exports must be scalar only: ${JSON.stringify(entry.value)}`);
         }
       }
 
@@ -9315,9 +9381,13 @@
           }
           result.primitives[entry.category][entry.key.replace(entry.category + "-", "")] = entry.value;
         } else if (entry.group === "semantic") {
-          // Pour les sémantiques, clé simple (sans prefix)
+          // Pour les sémantiques, structure complète avec value, type, alias
           var semanticKey = entry.key.replace(/^semantic-/, "");
-          result.semantic[semanticKey] = entry.value;
+          result.semantic[semanticKey] = {
+            value: entry.value,
+            type: entry.type,
+            alias: entry.meta && entry.meta.aliasTo ? entry.meta.aliasTo : null
+          };
         }
       }
 
@@ -9462,8 +9532,184 @@
       return formatCSS(semanticEntries, options);
     }
 
+    /**
+     * Fonction de test rapide pour valider les exports (appelée manuellement)
+     * Teste la nouvelle logique d'alias et garantit l'absence de [object Object]
+     */
+    function runExportTests() {
+      console.log("🧪 RUNNING EXPORT TESTS...");
+
+      // Construire un jeu de test représentatif
+      var testTokens = {
+        primitives: {
+          gray: {
+            50: "#F9FAFB",
+            600: "#4B5563"
+          },
+          spacing: {
+            4: 16
+          }
+        },
+        semantic: {
+          "bg.canvas": {
+            resolvedValue: "#F9FAFB",
+            type: "COLOR",
+            aliasTo: { cssName: "gray-50", collection: "Gray", key: "50", variableId: "test-id" }
+          },
+          "text.primary": {
+            resolvedValue: "#030712",
+            type: "COLOR"
+          },
+          "space.small": {
+            resolvedValue: 12,
+            type: "FLOAT"
+          }
+        }
+      };
+
+      try {
+        // Tester buildExportEntries
+        var exportEntries = buildExportEntries(testTokens, { preferAliasVar: true });
+        console.log("✅ buildExportEntries succeeded:", exportEntries.length, "entries");
+
+        // Tester chaque format
+        var css = formatCSS(exportEntries);
+        var scss = formatSCSS(exportEntries);
+        var json = formatJSON(exportEntries, { pretty: false });
+        var tailwind = formatTailwindConfig(exportEntries);
+
+        // Vérifications
+        var tests = [
+          { name: "CSS contains aliased var", check: css.includes('--semantic-bg.canvas: var(--gray-50);') },
+          { name: "SCSS contains aliased var", check: scss.includes('$semantic-bg.canvas: var(--gray-50);') },
+          { name: "JSON contains aliased var", check: json.includes('"bg.canvas": "var(--gray-50)"') },
+          { name: "Tailwind contains aliased var", check: tailwind.includes('"bg.canvas": "var(--gray-50)"') },
+          { name: "No [object Object] in CSS", check: !css.includes('[object Object]') },
+          { name: "No [object Object] in SCSS", check: !scss.includes('[object Object]') },
+          { name: "No [object Object] in JSON", check: !json.includes('[object Object]') },
+          { name: "No [object Object] in Tailwind", check: !tailwind.includes('[object Object]') }
+        ];
+
+        var allPassed = true;
+        tests.forEach(function(test) {
+          if (test.check) {
+            console.log("✅", test.name);
+          } else {
+            console.error("❌", test.name);
+            allPassed = false;
+          }
+        });
+
+        if (allPassed) {
+          console.log("🎉 ALL TESTS PASSED!");
+        } else {
+          console.error("💥 SOME TESTS FAILED!");
+        }
+
+        // Afficher les outputs pour inspection
+        console.log("📄 CSS Output:", css);
+        console.log("📄 JSON Output:", json);
+
+      } catch (e) {
+        console.error("💥 TEST FAILED with exception:", e);
+      }
+    }
+
+    /**
+     * Tests runtime pour valider l'intégrité des exports avant génération
+     */
+    function runExportIntegrityTests() {
+      console.log("🔍 RUNNING EXPORT INTEGRITY TESTS...");
+
+      var tests = [];
+      var allPassed = true;
+
+      // Test 1: Primitives non vides si elles existent dans currentTokens
+      var hasPrimitivesInTokens = false;
+      if (currentTokens.primitives) {
+        for (var cat in currentTokens.primitives) {
+          if (currentTokens.primitives.hasOwnProperty(cat) && Object.keys(currentTokens.primitives[cat]).length > 0) {
+            hasPrimitivesInTokens = true;
+            break;
+          }
+        }
+      }
+      tests.push({
+        name: "Primitives présentes dans currentTokens",
+        passed: hasPrimitivesInTokens,
+        detail: hasPrimitivesInTokens ? "Primitives trouvées" : "Aucune primitive dans currentTokens"
+      });
+
+      // Test 2: Aucun objet dans les valeurs sémantiques (anti-[object Object])
+      var semanticObjectValues = [];
+      if (currentTokens.semantic) {
+        for (var key in currentTokens.semantic) {
+          if (currentTokens.semantic.hasOwnProperty(key)) {
+            var token = currentTokens.semantic[key];
+            if (typeof token === 'object' && token.resolvedValue !== undefined) {
+              if (typeof token.resolvedValue === 'object') {
+                semanticObjectValues.push(key + ": " + JSON.stringify(token.resolvedValue));
+              }
+            }
+          }
+        }
+      }
+      tests.push({
+        name: "Aucun objet dans resolvedValue sémantique",
+        passed: semanticObjectValues.length === 0,
+        detail: semanticObjectValues.length === 0 ? "OK" : "Objets trouvés: " + semanticObjectValues.join(", ")
+      });
+
+      // Test 3: Alias sémantiques ont une structure valide
+      var invalidAliasTokens = [];
+      if (currentTokens.semantic) {
+        for (var key in currentTokens.semantic) {
+          if (currentTokens.semantic.hasOwnProperty(key)) {
+            var token = currentTokens.semantic[key];
+            if (typeof token === 'object' && token.aliasTo) {
+              // Vérifier que aliasTo peut générer une référence string
+              var canGenerateRef = false;
+              var aliasTo = token.aliasTo;
+
+              if (typeof aliasTo === 'object' && (aliasTo.cssName || (aliasTo.collection && aliasTo.key))) {
+                canGenerateRef = true;
+              }
+
+              if (!canGenerateRef) {
+                invalidAliasTokens.push(key);
+              }
+            }
+          }
+        }
+      }
+      tests.push({
+        name: "Alias sémantiques peuvent générer des références",
+        passed: invalidAliasTokens.length === 0,
+        detail: invalidAliasTokens.length === 0 ? "OK" : "Alias invalides: " + invalidAliasTokens.join(", ")
+      });
+
+      // Rapport des tests
+      tests.forEach(function(test) {
+        if (test.passed) {
+          console.log("✅", test.name);
+        } else {
+          console.error("❌", test.name + ":", test.detail);
+          allPassed = false;
+        }
+      });
+
+      if (!allPassed) {
+        console.warn("⚠️ Certains tests d'intégrité ont échoué. L'export peut produire des résultats inattendus.");
+      } else {
+        console.log("🎯 Tous les tests d'intégrité passent. Export prêt.");
+      }
+    }
+
     function updateExport() {
       if (!currentTokens) return;
+
+      // TESTS RUNTIME - Validation de l'intégrité des exports
+      runExportIntegrityTests();
 
       var format = exportFormat.value;
       var output = "";
@@ -9478,6 +9724,9 @@
         };
 
         var exportEntries = buildExportEntries(currentTokens, exportOptions);
+
+        // Phase 1.5: Normalisation des valeurs (unités CSS et préservation des alias)
+        exportEntries.forEach(e => e.value = normalizeExportEntryValue(e));
 
         // Phase 2: Formatage selon le type demandé
         if (format === "css") {
