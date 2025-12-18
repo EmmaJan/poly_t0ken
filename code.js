@@ -103,7 +103,7 @@ function saveSemanticTokensToFile(semanticTokens, callsite) {
 
           // GARDE-FOU SUPPLÉMENTAIRE : si resolvedValue est null/undefined et qu'on a un alias, garder l'existant
           if ((tokenData.resolvedValue === null || tokenData.resolvedValue === undefined) &&
-              tokenData.aliasTo && existingToken && existingToken.resolvedValue) {
+            tokenData.aliasTo && existingToken && existingToken.resolvedValue) {
             console.log(`[NULL_BLOCKED] null/undefined resolvedValue for aliased ${key}, keeping existing "${existingToken.resolvedValue}"`);
             tokenData.resolvedValue = existingToken.resolvedValue;
           }
@@ -586,12 +586,14 @@ function initializeCollectionCache() {
 
     // Déterminer la catégorie de la collection
     var category = null;
-    if (collectionName === "Brand Colors") category = "brand";
-    else if (collectionName === "System Colors") category = "system";
-    else if (collectionName === "Grayscale") category = "gray";
-    else if (collectionName === "Spacing") category = "spacing";
-    else if (collectionName === "Radius") category = "radius";
-    else if (collectionName === "Typography") category = "typography";
+    const n = collectionName.toLowerCase().trim();
+
+    if (n === "brand colors" || n.includes('brand')) category = "brand";
+    else if (n === "system colors" || n.includes('system')) category = "system";
+    else if (n === "grayscale" || n.includes('gray') || n.includes('grey') || n.includes('grayscale')) category = "gray";
+    else if (n === "spacing" || n.includes('spacing')) category = "spacing";
+    else if (n === "radius" || n.includes('radius')) category = "radius";
+    else if (n === "typography" || n.includes('typo') || n.includes('typography')) category = "typography";
 
     if (category) {
       tryResolveSemanticAlias.collectionCache[category] = collection;
@@ -600,10 +602,10 @@ function initializeCollectionCache() {
 }
 
 var CONFIG = {
-  
+
   DEBUG_MODE: true,
 
-  
+
   types: {
     SOLID: 'SOLID',
     VARIABLE_ALIAS: 'VARIABLE_ALIAS',
@@ -622,7 +624,7 @@ var CONFIG = {
     COMPONENT_SET: 'COMPONENT_SET'
   },
 
-  
+
   properties: {
     FILL: 'Fill',
     STROKE: 'Stroke',
@@ -632,21 +634,21 @@ var CONFIG = {
     HEIGHT: 'Height'
   },
 
-  
+
   variableTypes: {
     COLOR: 'COLOR',
     FLOAT: 'FLOAT',
     STRING: 'STRING'
   },
 
-  
+
   limits: {
     MAX_DEPTH: 50,
     MAX_WIDTH: 1600,
     MAX_HEIGHT: 1400
   },
 
-  
+
   supportedTypes: {
     radius: ['FRAME', 'RECTANGLE', 'ELLIPSE', 'POLYGON', 'STAR', 'VECTOR', 'COMPONENT', 'INSTANCE'],
     fillAndStroke: ['FRAME', 'RECTANGLE', 'ELLIPSE', 'POLYGON', 'STAR', 'VECTOR', 'TEXT', 'COMPONENT', 'INSTANCE', 'LINE'],
@@ -654,7 +656,7 @@ var CONFIG = {
     all: ['FRAME', 'RECTANGLE', 'ELLIPSE', 'POLYGON', 'STAR', 'VECTOR', 'TEXT', 'COMPONENT', 'INSTANCE', 'LINE', 'GROUP', 'SECTION', 'COMPONENT_SET']
   },
 
-  
+
   scopes: {
     Fill: ['ALL_FILLS', 'FRAME_FILL', 'SHAPE_FILL', 'TEXT_FILL'],
     Stroke: ['STROKE_COLOR'],
@@ -671,12 +673,12 @@ var CONFIG = {
     'Font Size': ['FONT_SIZE']
   },
 
-  
+
   layoutModes: {
     NONE: 'NONE'
   },
 
-  
+
   categories: {
     brand: 'brand',
     system: 'system',
@@ -688,7 +690,7 @@ var CONFIG = {
     semantic: 'semantic'
   },
 
-  
+
   naming: {
     shadcn: 'shadcn',
     mui: 'mui',
@@ -1403,125 +1405,152 @@ function sanitizeValueForUI(value, tokenType) {
 }
 
 /**
- * Tente de résoudre un alias vers une variable primitive pour un token sémantique
- * @param {string} semanticKey - Clé du token sémantique (ex: 'bg.canvas')
- * @param {Object} allTokens - Tous les tokens disponibles
- * @returns {Object|null} Variable Figma correspondante ou null
+ * Retourne le mapping des primitives pour un système de naming donné.
+ * Centralise la logique pour tryResolveSemanticAlias et resolveSemanticAliasInfo.
  */
-// Nouvelle fonction qui retourne les informations complètes de l'alias
+function getPrimitiveMappingForNaming(naming) {
+  var primitiveMapping;
+
+  if (naming === 'tailwind' || naming === 'shadcn') {
+    primitiveMapping = {
+      // Background
+      'bg.canvas': { category: 'gray', keys: ['50'] },
+      'bg.surface': { category: 'gray', keys: ['50'] },
+      'bg.muted': { category: 'gray', keys: ['100'] },
+      'bg.inverse': { category: 'gray', keys: ['950', '900'] },
+
+      // Text
+      'text.primary': { category: 'gray', keys: ['950', '900'] },
+      'text.secondary': { category: 'gray', keys: ['700', '600'] },
+      'text.muted': { category: 'gray', keys: ['500', '400'] },
+      'text.inverse': { category: 'gray', keys: ['50'] },
+      'text.disabled': { category: 'gray', keys: ['400', '300'] },
+
+      // Border
+      'border.default': { category: 'gray', keys: ['200'] },
+      'border.muted': { category: 'gray', keys: ['100'] },
+
+      // Action primary
+      'action.primary.default': { category: 'brand', keys: ['600', '500'] },
+      'action.primary.hover': { category: 'brand', keys: ['700', '600'] },
+      'action.primary.active': { category: 'brand', keys: ['800', '700'] },
+      'action.primary.disabled': { category: 'gray', keys: ['300'] },
+
+      // Status
+      'status.success': { category: 'system', keys: ['success'], fallback: { category: 'brand', keys: ['600'] } },
+      'status.warning': { category: 'system', keys: ['warning'], fallback: '#F59E0B' },
+      'status.error': { category: 'system', keys: ['error'], fallback: '#DC2626' },
+      'status.info': { category: 'system', keys: ['info'], fallback: '#2563EB' },
+
+      // Shape & Space
+      'radius.sm': { category: 'radius', keys: ['4'] },
+      'radius.md': { category: 'radius', keys: ['8'] },
+      'space.sm': { category: 'spacing', keys: ['4'] },
+      'space.md': { category: 'spacing', keys: ['8'] },
+
+      // Typography
+      'font.size.base': { category: 'typography', keys: ['text.base', 'base'] },
+      'font.weight.base': { category: 'typography', keys: ['text.regular', 'regular'] }
+    };
+  } else {
+    // Mapping générique (Ant, MUI, Bootstrap, etc.)
+    primitiveMapping = {
+      'bg.canvas': { category: 'gray', keys: ['50', 'white'] },
+      'bg.surface': { category: 'gray', keys: ['white', '50'] },
+      'bg.muted': { category: 'gray', keys: ['100'] },
+      'bg.inverse': { category: 'gray', keys: ['950', '900'] },
+
+      'text.primary': { category: 'gray', keys: ['950', '900'] },
+      'text.secondary': { category: 'gray', keys: ['700', '600'] },
+      'text.muted': { category: 'gray', keys: ['500', '400'] },
+      'text.inverse': { category: 'gray', keys: ['50', '100'] },
+      'text.disabled': { category: 'gray', keys: ['400', '300'] },
+
+      'border.default': { category: 'gray', keys: ['200', '300'] },
+      'border.muted': { category: 'gray', keys: ['100', '200'] },
+
+      // Action primary - Base 600
+      'action.primary.default': { category: 'brand', keys: ['600', '500'] },
+      'action.primary.hover': { category: 'brand', keys: ['700', '600'] },
+      'action.primary.active': { category: 'brand', keys: ['800', '700'] },
+      'action.primary.disabled': { category: 'gray', keys: ['300', '400'] },
+
+      'status.success': { category: 'system', keys: ['success'], fallback: { category: 'brand', keys: ['600'] } },
+      'status.warning': { category: 'system', keys: ['warning'], fallback: '#F59E0B' },
+      'status.error': { category: 'system', keys: ['error'], fallback: '#DC2626' },
+      'status.info': { category: 'system', keys: ['info'], fallback: '#2563EB' },
+
+      'radius.sm': { category: 'radius', keys: ['sm', '4'] },
+      'radius.md': { category: 'radius', keys: ['md', '8'] },
+      'space.sm': { category: 'spacing', keys: ['8', '2'] },
+      'space.md': { category: 'spacing', keys: ['16', '4'] },
+
+      'font.size.base': { category: 'typography', keys: ['text.base', 'base', '16'] },
+      'font.weight.base': { category: 'typography', keys: ['text.regular', 'regular', '400'] }
+    };
+
+    // Ajustements spécifiques lib
+    if (naming === 'ant') {
+      primitiveMapping['action.primary.default'].keys = ['3'];
+      primitiveMapping['action.primary.hover'].keys = ['4'];
+      primitiveMapping['action.primary.active'].keys = ['5'];
+    } else if (naming === 'mui') {
+      primitiveMapping['action.primary.default'].keys = ['main'];
+      primitiveMapping['action.primary.hover'].keys = ['dark'];
+      primitiveMapping['action.primary.active'].keys = ['dark', 'main'];
+    } else if (naming === 'bootstrap') {
+      primitiveMapping['action.primary.default'].keys = ['primary'];
+      primitiveMapping['action.primary.hover'].keys = ['primary-hover'];
+      primitiveMapping['action.primary.active'].keys = ['primary-dark'];
+    }
+  }
+
+  return primitiveMapping;
+}
+
+/**
+ * Tente de résoudre un alias vers une variable primitive pour un token sémantique.
+ * WHY: Cette fonction centralise la résolution d'alias en utilisant le mapping unifié par naming.
+ * Elle retourne l'intent (catégorie/collection/clé) et l'ID si la variable est trouvée.
+ */
 function resolveSemanticAliasInfo(semanticKey, allTokens, naming) {
+  if (!naming) naming = getNamingFromFile();
+  var mapping = getPrimitiveMappingForNaming(naming)[semanticKey];
+  if (!mapping) return null;
+
+  // Récupérer le nom de collection standard pour cette catégorie
+  var collectionMap = {
+    brand: "Brand Colors",
+    system: "System Colors",
+    gray: "Grayscale",
+    spacing: "Spacing",
+    radius: "Radius",
+    typography: "Typography"
+  };
+  var targetCollection = collectionMap[mapping.category] || mapping.category;
+
+  // 1. Tenter de trouver la variable réelle (pour récupérer son ID)
   var variable = tryResolveSemanticAlias(semanticKey, allTokens, naming);
-  if (!variable) return null;
 
-  // Extraire les informations de la variable primitive
-  var collectionId = variable.variableCollectionId;
-  if (!collectionId) return null;
-
-  var collection = figma.variables.getVariableCollectionById(collectionId);
-  if (!collection) return null;
-
-  var variableKey = extractVariableKey(variable, collection.name);
+  // Diagnostic Log pour Action Primary
+  if (CONFIG.DEBUG_MODE && semanticKey.startsWith('action.primary') && ['ant', 'mui', 'bootstrap'].includes(naming)) {
+    console.log(`[DEBUG_ALIAS] Resolving ${semanticKey} for ${naming}. Searching keys: [${mapping.keys.join(', ')}] in ${targetCollection}. Found: ${variable ? variable.name : 'NONE'}`);
+  }
 
   return {
-    variableId: variable.id,
-    collection: collection.name,
-    key: variableKey,
+    variableId: variable ? variable.id : null,
+    collection: targetCollection,
+    key: mapping.keys[0], // On retourne la clé préférée (première du mapping)
+    category: mapping.category,
     variable: variable
   };
 }
 
 function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
-  console.log(`🔍 tryResolveSemanticAlias: ${semanticKey} avec naming=${naming}`);
+  if (CONFIG.DEBUG_MODE) console.log(`🔍 tryResolveSemanticAlias: ${semanticKey} avec naming=${naming}`);
   try {
-    // Créer un mapping adapté selon le système de design
-    var primitiveMapping;
-
-    if (naming === 'tailwind') {
-      // Mapping spécifique pour Tailwind - clés exactes de extractVariableKey
-      primitiveMapping = {
-        // Background - utiliser gray-50, gray-100, etc. (pas '0')
-        'bg.canvas': { category: 'gray', keys: ['50'] },
-        'bg.surface': { category: 'gray', keys: ['50'] },
-        'bg.muted': { category: 'gray', keys: ['100'] },
-        'bg.inverse': { category: 'gray', keys: ['950', '900'] },
-
-        // Text
-        'text.primary': { category: 'gray', keys: ['950', '900'] },
-        'text.secondary': { category: 'gray', keys: ['700', '600'] },
-        'text.muted': { category: 'gray', keys: ['500', '400'] },
-        'text.inverse': { category: 'gray', keys: ['50'] },
-        'text.disabled': { category: 'gray', keys: ['400', '300'] },
-
-        // Border
-        'border.default': { category: 'gray', keys: ['200'] },
-        'border.muted': { category: 'gray', keys: ['100'] },
-
-        // Action primary - utiliser primary-600, etc.
-        'action.primary.default': { category: 'brand', keys: ['600', '500'] },
-        'action.primary.hover': { category: 'brand', keys: ['700', '600'] },
-        'action.primary.active': { category: 'brand', keys: ['800', '700'] },
-        'action.primary.disabled': { category: 'gray', keys: ['300'] },
-
-        // Status - pour Tailwind, utiliser system si disponible sinon fallback
-        'status.success': { category: 'system', keys: ['success'], fallback: { category: 'brand', keys: ['600'] } },
-        'status.warning': { category: 'system', keys: ['warning'], fallback: '#F59E0B' },
-        'status.error': { category: 'system', keys: ['error'], fallback: '#DC2626' },
-        'status.info': { category: 'system', keys: ['info'], fallback: '#2563EB' },
-
-        // Shape & Space - utiliser radius-4, spacing-8, etc.
-        'radius.sm': { category: 'radius', keys: ['4'] },
-        'radius.md': { category: 'radius', keys: ['8'] },
-        'space.sm': { category: 'spacing', keys: ['4'] },
-        'space.md': { category: 'spacing', keys: ['8'] },
-
-        // Typography - utiliser text.base, text.regular, etc.
-        'font.size.base': { category: 'typography', keys: ['text.base', 'base'] },
-        'font.weight.base': { category: 'typography', keys: ['text.regular', 'regular'] }
-      };
-    } else {
-      // Mapping générique pour les autres systèmes
-      primitiveMapping = {
-        // Background
-        'bg.canvas': { category: 'gray', keys: ['50', 'white'] },
-        'bg.surface': { category: 'gray', keys: ['white', '50'] },
-        'bg.muted': { category: 'gray', keys: ['100'] },
-        'bg.inverse': { category: 'gray', keys: ['950', '900'] },
-
-        // Text
-        'text.primary': { category: 'gray', keys: ['950', '900'] },
-        'text.secondary': { category: 'gray', keys: ['700', '600'] },
-        'text.muted': { category: 'gray', keys: ['500', '400'] },
-        'text.inverse': { category: 'gray', keys: ['50', '100'] },
-        'text.disabled': { category: 'gray', keys: ['400', '300'] },
-
-        // Border
-        'border.default': { category: 'gray', keys: ['200', '300'] },
-        'border.muted': { category: 'gray', keys: ['100', '200'] },
-
-        // Action primary
-        'action.primary.default': { category: 'brand', keys: ['600', '500'] },
-        'action.primary.hover': { category: 'brand', keys: ['700', '600'] },
-        'action.primary.active': { category: 'brand', keys: ['800', '700'] },
-        'action.primary.disabled': { category: 'gray', keys: ['300', '400'] },
-
-        // Status - utiliser system si disponible, sinon brand ou defaults
-        'status.success': { category: 'system', keys: ['success'], fallback: { category: 'brand', keys: ['600'] } },
-        'status.warning': { category: 'system', keys: ['warning'], fallback: '#F59E0B' },
-        'status.error': { category: 'system', keys: ['error'], fallback: '#DC2626' },
-        'status.info': { category: 'system', keys: ['info'], fallback: '#2563EB' },
-
-        // Shape & Space - utiliser les primitives directes
-        'radius.sm': { category: 'radius', keys: ['sm', '4'] },
-        'radius.md': { category: 'radius', keys: ['md', '8'] },
-        'space.sm': { category: 'spacing', keys: ['8', '2'] },
-        'space.md': { category: 'spacing', keys: ['16', '4'] },
-
-        // Typography
-        'font.size.base': { category: 'typography', keys: ['text.base', 'base', '16'] },
-        'font.weight.base': { category: 'typography', keys: ['text.regular', 'regular', '400'] }
-      };
-    }
-
+    // 1. Obtenir le mapping unifié
+    var primitiveMapping = getPrimitiveMappingForNaming(naming);
     var mapping = primitiveMapping[semanticKey];
     if (!mapping) return null;
 
@@ -1535,12 +1564,14 @@ function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
 
         // Déterminer la catégorie de la collection
         var category = null;
-        if (collectionName === "Brand Colors") category = "brand";
-        else if (collectionName === "System Colors") category = "system";
-        else if (collectionName === "Grayscale") category = "gray";
-        else if (collectionName === "Spacing") category = "spacing";
-        else if (collectionName === "Radius") category = "radius";
-        else if (collectionName === "Typography") category = "typography";
+        const n = collectionName.toLowerCase().trim();
+
+        if (n === "brand colors" || n.includes('brand')) category = "brand";
+        else if (n === "system colors" || n.includes('system')) category = "system";
+        else if (n === "grayscale" || n.includes('gray') || n.includes('grey') || n.includes('grayscale')) category = "gray";
+        else if (n === "spacing" || n.includes('spacing')) category = "spacing";
+        else if (n === "radius" || n.includes('radius')) category = "radius";
+        else if (n === "typography" || n.includes('typo') || n.includes('typography')) category = "typography";
 
         if (category) {
           tryResolveSemanticAlias.collectionCache[category] = collection;
@@ -1552,7 +1583,13 @@ function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
     if (!collection) return null;
 
     // Chercher la variable dans cette collection
-    var variables = collection.variableIds.map(function(id) { return figma.variables.getVariableById(id); });
+    var variables = collection.variableIds.map(function (id) { return figma.variables.getVariableById(id); });
+
+    // DIAGNOSTIC LOG ( requested for brand/primary )
+    if (semanticKey === 'action.primary.default' && ['ant', 'mui', 'bootstrap'].includes(naming)) {
+      var diagnosticKeys = variables.map(function (v) { return v ? extractVariableKey(v, collection.name) : null; }).filter(k => k !== null);
+      console.log(`🔍 [DIAGNOSTIC] Resolving ${semanticKey} for ${naming}. Available Brand Keys:`, diagnosticKeys);
+    }
 
     // Essayer chaque clé possible dans l'ordre de priorité
     for (var k = 0; k < mapping.keys.length; k++) {
@@ -1578,7 +1615,7 @@ function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
         // Essayer de trouver la variable de fallback dans une autre catégorie
         var fallbackCollection = tryResolveSemanticAlias.collectionCache[mapping.fallback.category];
         if (fallbackCollection) {
-          var fallbackVariables = fallbackCollection.variableIds.map(function(id) { return figma.variables.getVariableById(id); });
+          var fallbackVariables = fallbackCollection.variableIds.map(function (id) { return figma.variables.getVariableById(id); });
 
           for (var fk = 0; fk < mapping.fallback.keys.length; fk++) {
             var fallbackKey = mapping.fallback.keys[fk];
@@ -1600,9 +1637,9 @@ function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
     }
 
     // Log détaillé quand aucun alias n'est trouvé
-    var availableKeys = variables.map(function(v) {
+    var availableKeys = variables.map(function (v) {
       return v ? extractVariableKey(v, collection.name) : null;
-    }).filter(function(k) { return k !== null; });
+    }).filter(function (k) { return k !== null; });
 
     console.log(`❌ Alias fallback: ${semanticKey} → ${mapping.category} keys [${mapping.keys.join(', ')}] not found. Available: [${availableKeys.join(', ')}]`);
 
@@ -1622,50 +1659,69 @@ function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
 function extractVariableKey(variable, collectionName) {
   if (!variable || !variable.name) return null;
 
-  var name = variable.name;
+  // 1. Normalisation robuste du nom réel dans Figma
+  var raw = (variable.name || '').toLowerCase();
+  raw = raw.split('/').pop().trim();              // support "Brand/primary-3"
+  raw = raw.replace(/\s+/g, '');                  // "primary - 3" -> "primary-3"
+  raw = raw.replace(/\(.*\)$/g, '').trim();       // "primary-3 (generated)" -> "primary-3"
+  var name = raw;
 
-  // Déterminer la catégorie selon le nom de collection
-  var category = null;
-  if (collectionName === "Brand Colors") {
-    // Pour brand: "primary/600" -> "600", "primary-600" -> "600", "600" -> "600", "primary" -> "500"
+  // 2. Déterminer la catégorie selon le nom de collection (normalisé)
+  var c = (collectionName || '').toLowerCase();
+  var isBrand = c.includes('brand');
+  var isSystem = c.includes('system');
+  var isGray = c.includes('gray') || c.includes('grey') || c.includes('grayscale');
+  var isSpacing = c.includes('spacing');
+  var isRadius = c.includes('radius');
+  var isTypography = c.includes('typo') || c.includes('typography');
+
+  if (isBrand) {
     if (name.startsWith("primary/")) {
       return name.replace("primary/", "");
-    } else if (name.match(/^(?:primary|brand)[-_](\d{2,3})$/)) {
-      // primary-600, brand-500, primary_600, etc.
-      return name.match(/^(?:primary|brand)[-_](\d{2,3})$/)[1];
-    } else if (name.match(/^\d{2,3}$/)) {
-      // Juste un nombre comme 600 (Bootstrap)
-      return name;
-    } else if (name === "primary") {
-      return "500"; // default brand
     }
-  } else if (collectionName === "System Colors") {
-    // Pour system: nom direct ("success", "warning", etc.)
+
+    // Support Bootstrap & Primary keys non-numériques
+    if (name === "primary") return "primary";
+    if (name.startsWith("primary-") && !name.match(/^primary[-_]\d{1,3}$/)) {
+      return name;
+    }
+
+    if (name.match(/^(?:primary|brand)[-_](\d{1,3})$/)) {
+      // primary-1, brand-500, primary_600, etc. (support 1-3 digits pour Ant/MUI/Bootstrap)
+      return name.match(/^(?:primary|brand)[-_](\d{1,3})$/)[1];
+    } else if (name.match(/^\d{1,3}$/)) {
+      // Juste un nombre comme 3 (Ant) ou 600 (Bootstrap)
+      return name;
+    } else if (['main', 'dark', 'light', 'contrasttext'].includes(name)) {
+      // PR 118: support MUI non-numeric keys
+      return name;
+    } else if (name === "brand") {
+      return "primary"; // mapping fallback
+    }
+  } else if (isSystem) {
     return name;
-  } else if (collectionName === "Grayscale") {
-    // Pour gray: "gray-50" -> "50", "grey-100" -> "100", "50" -> "50"
+  } else if (isGray) {
     var grayMatch = name.match(/^(gray|grey)[-_](.+)$/);
     if (grayMatch) {
       return grayMatch[2];
-    } else if (name.match(/^\d{2,3}$/)) {
-      // Juste un nombre comme 50 (format simple)
+    } else if (name.match(/^\d{1,3}$/)) {
       return name;
     }
-  } else if (collectionName === "Spacing") {
-    // Pour spacing: "spacing-8" -> "8", "spacing-2" -> "2"
+  } else if (isSpacing) {
     if (name.startsWith("spacing-")) {
       return name.replace("spacing-", "").replace(/-/g, ".");
     }
-  } else if (collectionName === "Radius") {
-    // Pour radius: "radius-4" -> "4", "radius-sm" -> "sm"
+    return name.replace(/-/g, ".");
+  } else if (isRadius) {
     if (name.startsWith("radius-")) {
       return name.replace("radius-", "").replace(/-/g, ".");
     }
-  } else if (collectionName === "Typography") {
-    // Pour typography: "typo-base" -> "base", "typo-regular" -> "regular"
+    return name.replace(/-/g, ".");
+  } else if (isTypography) {
     if (name.startsWith("typo-")) {
       return name.replace("typo-", "").replace(/-/g, ".");
     }
+    return name.replace(/-/g, ".");
   }
 
   return null;
@@ -1674,7 +1730,7 @@ function extractVariableKey(variable, collectionName) {
 
 var Utils = {
 
-  
+
   safeGet: function (node, prop, defaultValue) {
     try {
       if (node && node[prop] !== undefined) {
@@ -1686,7 +1742,7 @@ var Utils = {
     }
   },
 
-  
+
   hasProperty: function (node, prop) {
     try {
       return node && node[prop] !== undefined;
@@ -1698,14 +1754,14 @@ var Utils = {
 
 
 function log(msg, data) {
-  
+
 }
 
 
 
 
 var ColorService = {
-  
+
   hexToRgb: function (hex) {
     hex = hex.replace("#", "");
     if (hex.length === 3) {
@@ -1719,9 +1775,9 @@ var ColorService = {
     };
   },
 
-  
+
   rgbToHex: function (c) {
-    
+
     var roundToPrecision = function (x) {
       return Math.round(x * 1000000) / 1000000;
     };
@@ -1730,7 +1786,7 @@ var ColorService = {
     var g = roundToPrecision(Math.max(0, Math.min(1, c.g)));
     var b = roundToPrecision(Math.max(0, Math.min(1, c.b)));
 
-    
+
     var r255 = Math.round(r * 255);
     var g255 = Math.round(g * 255);
     var b255 = Math.round(b * 255);
@@ -1740,7 +1796,7 @@ var ColorService = {
     return hex;
   },
 
-  
+
   hexToHsl: function (hex) {
     var rgb = ColorService.hexToRgb(hex);
     var r = rgb.r;
@@ -1768,7 +1824,7 @@ var ColorService = {
     return { h: h, s: s, l: l };
   },
 
-  
+
   hslToHex: function (hsl) {
     var h = hsl.h;
     var s = hsl.s;
@@ -1798,7 +1854,7 @@ var ColorService = {
     return ColorService.rgbToHex({ r: r, g: g, b: b });
   },
 
-  
+
   adjustLightness: function (hsl, amount) {
     return {
       h: hsl.h,
@@ -1807,7 +1863,7 @@ var ColorService = {
     };
   },
 
-  
+
   mixColors: function (c1, c2, w) {
     var rgb1 = ColorService.hexToRgb(c1);
     var rgb2 = ColorService.hexToRgb(c2);
@@ -1824,7 +1880,7 @@ var ColorService = {
 
 
 var TokenService = {
-  
+
   generateBrand: function (hex, naming) {
     var tokens = {};
 
@@ -1844,7 +1900,7 @@ var TokenService = {
       tokens.light = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), 0.15));
       tokens.dark = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), -0.15));
     } else {
-      
+
       tokens['50'] = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), 0.4));
       tokens['100'] = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), 0.3));
       tokens['200'] = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), 0.2));
@@ -1860,7 +1916,7 @@ var TokenService = {
     return tokens;
   },
 
-  
+
   generateSystem: function (naming, brandHex) {
     var tokens = {};
     var brandHsl = ColorService.hexToHsl(brandHex);
@@ -1878,7 +1934,7 @@ var TokenService = {
       tokens.error = { main: '#f44336', light: '#e57373', dark: '#d32f2f', contrastText: '#ffffff' };
       tokens.info = { main: '#2196f3', light: '#64b5f6', dark: '#1976d2', contrastText: '#ffffff' };
     } else {
-      
+
       tokens.primary = brandHex;
       tokens.secondary = ColorService.mixColors(brandHex, '#666666', 0.3);
       tokens.success = '#22c55e';
@@ -1890,12 +1946,12 @@ var TokenService = {
     return tokens;
   },
 
-  
+
   generateGray: function (naming) {
     var tokens = {};
 
     if (naming === CONFIG.naming.shadcn || naming === CONFIG.naming.ant) {
-      
+
       var steps = ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900', '950'];
       steps.forEach(function (step, index) {
         var lightness = 0.95 - (index * 0.09);
@@ -1903,7 +1959,7 @@ var TokenService = {
         tokens[step] = ColorService.hslToHex({ h: 0, s: 0, l: lightness });
       });
     } else if (naming === CONFIG.naming.mui) {
-      
+
       tokens['50'] = '#fafafa';
       tokens['100'] = '#f5f5f5';
       tokens['200'] = '#eeeeee';
@@ -1915,7 +1971,7 @@ var TokenService = {
       tokens['800'] = '#424242';
       tokens['900'] = '#212121';
     } else {
-      
+
       tokens.white = '#ffffff';
       tokens.light = '#f8f9fa';
       tokens.secondary = '#6c757d';
@@ -1926,17 +1982,17 @@ var TokenService = {
     return tokens;
   },
 
-  
+
   generateSpacing: function (naming) {
     var tokens = {};
 
     if (naming === CONFIG.naming.mui) {
-      
+
       [0, 0.5, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 40].forEach(function (multiplier) {
         tokens[multiplier] = multiplier * 4;
       });
     } else {
-      
+
       [4, 8, 12, 16, 20, 24, 32, 40, 48, 64, 80, 96, 128, 160, 192, 224, 256].forEach(function (value) {
         tokens[value] = value;
       });
@@ -1945,7 +2001,7 @@ var TokenService = {
     return tokens;
   },
 
-  
+
   generateRadius: function (naming) {
     var tokens = {};
 
@@ -1959,7 +2015,7 @@ var TokenService = {
       tokens['2xl'] = 16;
       tokens.full = 9999;
     } else {
-      
+
       tokens.none = 0;
       tokens.sm = 2;
       tokens.base = 4;
@@ -1974,7 +2030,7 @@ var TokenService = {
     return tokens;
   },
 
-  
+
   generateAll: function (msg) {
     var hex = msg.hex || '#6366F1';
     var naming = msg.naming || CONFIG.naming.default;
@@ -2009,32 +2065,32 @@ var TokenService = {
 
 
 var FigmaService = {
-  
+
   getCollections: function () {
     return figma.variables.getLocalVariableCollections();
   },
 
-  
+
   getVariableById: function (id) {
     return figma.variables.getVariableById(id);
   },
 
-  
+
   notify: function (msg) {
     figma.notify(msg);
   },
 
-  
+
   getOrCreateCollection: function (name, overwrite) {
     return getOrCreateCollection(name, overwrite);
   },
 
-  
+
   createOrUpdateVariable: function (collection, name, type, value, category, overwrite, hintKey) {
     return createOrUpdateVariable(collection, name, type, value, category, overwrite, hintKey);
   },
 
-  importTokens: function(tokens, naming, overwrite) {
+  importTokens: function (tokens, naming, overwrite) {
     // Deprecated: keep a single source of truth for imports
     return importTokensToFigma(tokens, naming, overwrite);
   },
@@ -2043,19 +2099,19 @@ var FigmaService = {
 
 // Scanner utility for token analysis and suggestions
 var Scanner = {
-  
+
   valueMap: null,
   lastScanResults: null,
   collectionsCache: null,
   variablesCache: null,
   cacheTimestamp: 0,
-  CACHE_DURATION: 30000, 
+  CACHE_DURATION: 30000,
 
-  
+
   initMap: function () {
     var now = Date.now();
 
-    
+
     if (Scanner.valueMap && Scanner.cacheTimestamp && (now - Scanner.cacheTimestamp < Scanner.CACHE_DURATION)) {
       return;
     }
@@ -2102,7 +2158,7 @@ var Scanner = {
 
   },
 
-  
+
   _formatVariableValue: function (variable, rawValue) {
     if (variable.resolvedType === CONFIG.variableTypes.COLOR && typeof rawValue === "object") {
       return ColorService.rgbToHex(rawValue);
@@ -2114,12 +2170,12 @@ var Scanner = {
     return rawValue;
   },
 
-  
+
   _createMapKey: function (type, value) {
     return type + ':' + value;
   },
 
-  
+
   scanSelection: function (ignoreHiddenLayers) {
 
     var selection = figma.currentPage.selection;
@@ -2146,7 +2202,7 @@ var Scanner = {
 
     figma.ui.postMessage({ type: "scan-results", results: results });
 
-    
+
     setTimeout(function () {
       if (Scanner.valueMap) {
         Scanner.valueMap.clear();
@@ -2157,29 +2213,29 @@ var Scanner = {
     return results;
   },
 
-  
+
   _scanNodeRecursive: function (node, results, depth, ignoreHiddenLayers) {
-    
+
     if (depth > CONFIG.limits.MAX_DEPTH) {
       return;
     }
 
-    
+
     if (!node) {
       return;
     }
 
-    
+
     if (node.removed) {
       return;
     }
 
-    
+
     if (node.type === 'INSTANCE' && node.mainComponent === null) {
       return;
     }
 
-    
+
     if (!node.id || !node.type) {
       return;
     }
@@ -2190,7 +2246,7 @@ var Scanner = {
       var nodeName = node.name || "Unnamed";
 
 
-      
+
       if (depth === 0 && results.length % 10 === 0) {
         figma.ui.postMessage({
           type: "scan-progress",
@@ -2199,16 +2255,16 @@ var Scanner = {
         });
       }
 
-      
+
       var containerTypes = CONFIG.supportedTypes.spacing;
 
-      
+
       var styleTypes = CONFIG.supportedTypes.fillAndStroke;
 
       var isContainer = containerTypes.indexOf(nodeType) !== -1;
       var hasStyle = styleTypes.indexOf(nodeType) !== -1;
 
-      
+
       if (hasStyle) {
         try {
           Scanner._checkProperties(node, results, ignoreHiddenLayers);
@@ -2216,7 +2272,7 @@ var Scanner = {
         }
       }
 
-      
+
       if (isContainer) {
         try {
           var children = node.children;
@@ -2227,7 +2283,7 @@ var Scanner = {
               try {
                 var child = children[i];
 
-                
+
                 if (!child) {
                   continue;
                 }
@@ -2236,7 +2292,7 @@ var Scanner = {
                   continue;
                 }
 
-                
+
                 Scanner._scanNodeRecursive(child, results, depth + 1, ignoreHiddenLayers);
 
               } catch (childError) {
@@ -2252,19 +2308,19 @@ var Scanner = {
     }
   },
 
-  
+
   _checkProperties: function (node, results, ignoreHiddenLayers) {
-    
+
     if (!node) {
       return;
     }
 
-    
+
     if (node.removed) {
       return;
     }
 
-    
+
     if (!node.id || !node.name || !node.type) {
       return;
     }
@@ -2273,7 +2329,7 @@ var Scanner = {
     var layerName = node.name;
     var nodeType = node.type;
 
-    
+
     if (ignoreHiddenLayers) {
       try {
         if (Utils.safeGet(node, 'visible') === false) {
@@ -2283,14 +2339,14 @@ var Scanner = {
           return;
         }
       } catch (visibilityError) {
-        
+
       }
     }
 
-    
+
     var supportedTypes = CONFIG.supportedTypes.all;
 
-    
+
     var styleSupportedTypes = CONFIG.supportedTypes.fillAndStroke;
 
     var isContainer = supportedTypes.indexOf(nodeType) !== -1;
@@ -2300,26 +2356,26 @@ var Scanner = {
       return;
     }
 
-    
+
     if (supportsStyle) {
       try {
-        
+
         if (Utils.hasProperty(node, 'fills') && node.fills !== figma.mixed) {
           Scanner._checkFillsSafely(node, results);
         }
 
-        
+
         if (Utils.hasProperty(node, 'strokes') && node.strokes !== figma.mixed) {
           Scanner._checkStrokesSafely(node, results);
         }
 
-        
+
         Scanner._checkCornerRadiusSafely(node, results);
 
-        
+
         Scanner._checkNumericPropertiesSafely(node, results);
 
-        
+
         if (node.type === CONFIG.types.TEXT) {
           Scanner._checkTypographyPropertiesSafely(node, results);
         }
@@ -2329,7 +2385,7 @@ var Scanner = {
     }
   },
 
-  
+
   _checkFillsSafely: function (node, results) {
     if (!Scanner.valueMap) {
       Scanner.initMap();
@@ -2370,10 +2426,10 @@ var Scanner = {
 
 
 var Fixer = {
-  
+
   applyAndVerify: function (result, variableId) {
 
-    
+
     if (!result) {
       throw new Error('Invalid result or incomplete');
     }
@@ -2384,7 +2440,7 @@ var Fixer = {
       throw new Error('Invalid result: property missing');
     }
 
-    
+
     if (!variableId) {
       throw new Error('No variable ID provided or suggested');
     }
@@ -2394,7 +2450,7 @@ var Fixer = {
       throw new Error('Variable not found: ' + variableId);
     }
 
-    
+
     var node = figma.getNodeById(result.nodeId);
     if (!node) {
       throw new Error('Node not found: ' + result.nodeId);
@@ -2403,29 +2459,29 @@ var Fixer = {
       throw new Error('Node removed: ' + result.nodeId);
     }
 
-    
+
     if (Utils.safeGet(node, 'locked') === true) {
       throw new Error('Cannot modify locked node: ' + result.layerName);
     }
 
-    
+
     if (!Fixer._validatePropertyExists(node, result)) {
       throw new Error('Property no longer exists: ' + result.property);
     }
 
-    
+
     if (!Fixer._validateVariableCanBeApplied(variable, result)) {
       throw new Error('Variable incompatible with property');
     }
 
-    
+
     var applied = Fixer._applyVariableToProperty(node, result, variable);
 
     if (!applied) {
       throw new Error('Failed to apply variable');
     }
 
-    
+
     var verification = Fixer._verifyVariableApplication(node, result, variable);
 
     if (verification.success) {
@@ -2435,7 +2491,7 @@ var Fixer = {
     }
   },
 
-  
+
   applySingle: function (result, variableId) {
     try {
       var verification = Fixer.applyAndVerify(result, variableId);
@@ -2445,7 +2501,7 @@ var Fixer = {
     }
   },
 
-  
+
   applyGroup: function (indices, variableId) {
     if (!Scanner.lastScanResults || !Array.isArray(indices)) {
       return;
@@ -2479,7 +2535,7 @@ var Fixer = {
     FigmaService.notify(message);
   },
 
-  
+
   applyAll: function () {
     if (!Scanner.lastScanResults || !Array.isArray(Scanner.lastScanResults)) {
       return;
@@ -2512,13 +2568,13 @@ var Fixer = {
     FigmaService.notify(message);
   },
 
-  
+
   _validatePropertyExists: function (node, result) {
-    
+
   },
 
   _validateVariableCanBeApplied: function (variable, result) {
-    
+
   },
 
   _applyVariableToProperty: function (node, result, variable) {
@@ -2569,11 +2625,11 @@ var Fixer = {
   },
 
   _verifyVariableApplication: function (node, result, variable) {
-    
+
   },
 
   _getNodePropertyDebugInfo: function (node, result) {
-    
+
   }
 };
 
@@ -2596,7 +2652,7 @@ if (flattenedSemanticTokens) {
 }
 
 // Charger le naming de manière asynchrone
-figma.clientStorage.getAsync("tokenStarter.naming").then(function(clientSavedNaming) {
+figma.clientStorage.getAsync("tokenStarter.naming").then(function (clientSavedNaming) {
   var savedNaming = clientSavedNaming || getNamingFromFile();
 
   figma.ui.postMessage({
@@ -2604,7 +2660,7 @@ figma.clientStorage.getAsync("tokenStarter.naming").then(function(clientSavedNam
     naming: savedNaming,
     savedSemanticTokens: flattenedSemanticTokens
   });
-}).catch(function() {
+}).catch(function () {
   // Fallback vers la méthode synchrone
   var savedNaming = getNamingFromFile();
 
@@ -2705,7 +2761,7 @@ var existingCollections = figma.variables.getLocalVariableCollections();
 if (existingCollections.length > 0) {
   figma.ui.postMessage({ type: "has-variables", value: true });
 
-  
+
   try {
     var existingTokens = extractExistingTokens();
 
@@ -2773,13 +2829,13 @@ function extractExistingTokens() {
     semantic: {}
   };
 
-  var detectedLibrary = "tailwind"; 
+  var detectedLibrary = "tailwind";
 
   for (var i = 0; i < collections.length; i++) {
     var collection = collections[i];
     var collectionName = collection.name;
 
-    
+
     var category = null;
 
     if (collectionName === "Brand Colors") {
@@ -2805,7 +2861,7 @@ function extractExistingTokens() {
       continue;
     }
 
-    
+
     var variables = collection.variableIds.map(function (id) {
       return figma.variables.getVariableById(id);
     });
@@ -2860,7 +2916,7 @@ function extractExistingTokens() {
         console.log(`📖 Extracted ${category}/${cleanName}:`, typeof value, value);
       }
 
-      
+
       var cleanName = variable.name;
 
       if (category === "semantic") {
@@ -2883,7 +2939,7 @@ function extractExistingTokens() {
         }
       }
 
-      
+
       // Normaliser TOUTES les valeurs selon leur type (primitives ET sémantiques)
       var formattedValue;
 
@@ -2917,8 +2973,8 @@ function extractExistingTokens() {
 
       // Log si on utilise une valeur par défaut pour les couleurs
       if (variable.resolvedType === "COLOR" &&
-          formattedValue === (category === "semantic" ? "#000000" : "#FFFFFF") &&
-          value !== formattedValue) {
+        formattedValue === (category === "semantic" ? "#000000" : "#FFFFFF") &&
+        value !== formattedValue) {
         console.warn(`⚠️ Valeur par défaut utilisée pour ${category}/${cleanName}:`, value, '→', formattedValue);
       }
 
@@ -2997,7 +3053,7 @@ function hexToRgb(hex) {
 }
 
 function rgbToHex(c) {
-  
+
   var roundToPrecision = function (x) {
     return Math.round(x * 1000000) / 1000000;
   };
@@ -3006,7 +3062,7 @@ function rgbToHex(c) {
   var g = roundToPrecision(Math.max(0, Math.min(1, c.g)));
   var b = roundToPrecision(Math.max(0, Math.min(1, c.b)));
 
-  
+
   var r255 = Math.round(r * 255);
   var g255 = Math.round(g * 255);
   var b255 = Math.round(b * 255);
@@ -3090,11 +3146,11 @@ function generateBrandColors(hex, naming) {
   };
 
   if (naming === "shadcn") {
-    
+
     var shadcnBrand = {};
     var levels = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950];
 
-    
+
     for (var i = 0; i < levels.length; i++) {
       var level = levels[i];
       var color;
@@ -3118,11 +3174,11 @@ function generateBrandColors(hex, naming) {
   }
 
   if (naming === "tailwind") {
-    
+
     var tailwindBrand = {};
     var levels = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950];
 
-    
+
     for (var i = 0; i < levels.length; i++) {
       var level = levels[i];
       var color;
@@ -3210,7 +3266,7 @@ function generateGrayscale(naming) {
 
   if (naming === "shadcn") {
     var shadcnGrays = {};
-    
+
     var shadcnOrder = ["50", "100", "200", "300", "400", "500", "600", "700", "800", "900", "950"];
     for (var i = 0; i < shadcnOrder.length; i++) {
       var key = shadcnOrder[i];
@@ -3234,7 +3290,7 @@ function generateGrayscale(naming) {
     };
   }
 
-  
+
   var orderedGrays = {};
   var order = ["50", "100", "200", "300", "400", "500", "600", "700", "800", "900", "950", "white"];
   for (var i = 0; i < order.length; i++) {
@@ -3264,7 +3320,7 @@ function generateSystemColors(naming) {
     var dark = hslToHex(hsl.h, hsl.s, Math.max(20, hsl.l - 15));
 
     if (naming === "shadcn") {
-      
+
       if (colorName === "success") {
         result["primary"] = baseHex;
         result["primary-foreground"] = "#FFFFFF";
@@ -3419,8 +3475,8 @@ function inferSemanticFamily(semanticKey) {
     return 'accentColor';
   }
   if (['success', 'warning', 'destructive', 'info'].includes(normalized) ||
-      normalized.includes('success') || normalized.includes('warning') ||
-      normalized.includes('destructive') || normalized.includes('info')) {
+    normalized.includes('success') || normalized.includes('warning') ||
+    normalized.includes('destructive') || normalized.includes('info')) {
     return 'accentColor';
   }
 
@@ -3459,7 +3515,7 @@ function inferSemanticFamily(normalizedKey) {
   if (normalizedKey.startsWith('text-') || normalizedKey.includes('text-')) {
     return 'text';
   } else if (normalizedKey.startsWith('background-') || normalizedKey.startsWith('bg-') ||
-             normalizedKey.includes('background-') || normalizedKey.includes('bg-')) {
+    normalizedKey.includes('background-') || normalizedKey.includes('bg-')) {
     return 'background';
   } else if (normalizedKey.startsWith('border-') || normalizedKey.includes('border-')) {
     return 'border';
@@ -3468,10 +3524,10 @@ function inferSemanticFamily(normalizedKey) {
   } else if (normalizedKey.startsWith('space-') || normalizedKey.includes('space-')) {
     return 'space';
   } else if (normalizedKey.startsWith('font-size-') || normalizedKey.includes('font-size-') ||
-             normalizedKey.startsWith('fontsize-') || normalizedKey.includes('fontsize-')) {
+    normalizedKey.startsWith('fontsize-') || normalizedKey.includes('fontsize-')) {
     return 'fontSize';
   } else if (normalizedKey.startsWith('font-weight-') || normalizedKey.includes('font-weight-') ||
-             normalizedKey.startsWith('fontweight-') || normalizedKey.includes('fontweight-')) {
+    normalizedKey.startsWith('fontweight-') || normalizedKey.includes('fontweight-')) {
     return 'fontWeight';
   }
 
@@ -3921,7 +3977,7 @@ function importTokensToFigma(tokens, naming, overwrite) {
     console.log('⚠️ No brand tokens to import');
   }
 
-  
+
   if (tokens.system) {
     var systemCollection = getOrCreateCollection("System Colors", overwrite);
 
@@ -3931,7 +3987,7 @@ function importTokensToFigma(tokens, naming, overwrite) {
     }
   }
 
-  
+
   if (tokens.gray) {
     var grayCollection = getOrCreateCollection("Grayscale", overwrite);
 
@@ -3948,7 +4004,7 @@ function importTokensToFigma(tokens, naming, overwrite) {
     }
   }
 
-  
+
   if (tokens.spacing) {
     var spacingCollection = getOrCreateCollection("Spacing", overwrite);
 
@@ -3975,7 +4031,7 @@ function importTokensToFigma(tokens, naming, overwrite) {
     }
   }
 
-  
+
   if (tokens.radius) {
     var radiusCollection = getOrCreateCollection("Radius", overwrite);
 
@@ -4002,7 +4058,7 @@ function importTokensToFigma(tokens, naming, overwrite) {
     }
   }
 
-  
+
   if (tokens.typography) {
     var typoCollection = getOrCreateCollection("Typography", overwrite);
 
@@ -4029,7 +4085,7 @@ function importTokensToFigma(tokens, naming, overwrite) {
     }
   }
 
-  
+
   if (tokens.border) {
     var borderCollection = getOrCreateCollection("Border", overwrite);
 
@@ -4210,6 +4266,16 @@ function resolveSemanticAliasFromMap(semanticKey, allTokens, naming, globalVaria
     return null; // Pas d'alias possible pour cette clé sémantique
   }
 
+  // PR 166: Si on a déjà le variableId (détecté via tryResolveSemanticAlias), on l'utilise directement
+  if (aliasInfo.variableId) {
+    return {
+      variableId: aliasInfo.variableId,
+      collection: aliasInfo.collection,
+      key: aliasInfo.key
+    };
+  }
+
+  // Fallback : recherche par clé si la variable n'a pas été trouvée directement (ex: variables non encore importées)
   // Construire la clé dans le même format que la map globale
   var targetKey = aliasInfo.collection + '/' + aliasInfo.key;
 
@@ -4234,7 +4300,7 @@ function resolveSemanticAliasFromMap(semanticKey, allTokens, naming, globalVaria
 }
 
 var cachedTokens = null;
-var lastScanResults = null; 
+var lastScanResults = null;
 
 
 
@@ -4325,7 +4391,7 @@ function normalizeAliasTo(aliasTo) {
 }
 
 function createValueToVariableMap() {
-  var map = new Map(); 
+  var map = new Map();
   var localCollections = figma.variables.getLocalVariableCollections();
 
 
@@ -4339,11 +4405,11 @@ function createValueToVariableMap() {
       collection.modes.forEach(function (mode) {
         var modeId = mode.modeId;
 
-        
+
         var resolvedValue = resolveVariableValue(variable, modeId);
 
         if (resolvedValue !== undefined && resolvedValue !== null) {
-          
+
           if (isColorValue(resolvedValue)) {
             var hexValue = rgbToHex(resolvedValue);
             if (hexValue) {
@@ -4356,11 +4422,11 @@ function createValueToVariableMap() {
                 collectionName: collection.name,
                 modeName: mode.name,
                 resolvedValue: resolvedValue,
-                originalValue: variable.valuesByMode[modeId] 
+                originalValue: variable.valuesByMode[modeId]
               });
             }
           }
-          
+
           else if (typeof resolvedValue === 'number') {
             var key = resolvedValue;
             if (!map.has(key)) {
@@ -4389,7 +4455,7 @@ function isColorValue(value) {
 
 
 function getColorDistance(hex1, hex2) {
-  
+
   function hexToRgb(hex) {
     var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
     return result ? {
@@ -4402,9 +4468,9 @@ function getColorDistance(hex1, hex2) {
   var rgb1 = hexToRgb(hex1);
   var rgb2 = hexToRgb(hex2);
 
-  if (!rgb1 || !rgb2) return 999; 
+  if (!rgb1 || !rgb2) return 999;
 
-  
+
   var dr = rgb1.r - rgb2.r;
   var dg = rgb1.g - rgb2.g;
   var db = rgb1.b - rgb2.b;
@@ -4446,17 +4512,17 @@ function getScopesForProperty(propertyType) {
 
 function filterVariablesByScopes(variables, requiredScopes) {
   if (!requiredScopes || requiredScopes.length === 0) {
-    return variables; 
+    return variables;
   }
 
   return variables.filter(function (variable) {
-    
+
     var figmaVariable = figma.variables.getVariableById(variable.id);
     if (!figmaVariable || !figmaVariable.scopes) {
-      return false; 
+      return false;
     }
 
-    
+
     return figmaVariable.scopes.some(function (variableScope) {
       return requiredScopes.includes(variableScope);
     });
@@ -4465,13 +4531,13 @@ function filterVariablesByScopes(variables, requiredScopes) {
 
 
 function findColorSuggestions(hexValue, valueToVariableMap, propertyType) {
-  
+
   var requiredScopes = getScopesForProperty(propertyType);
 
-  
+
   var exactMatches = valueToVariableMap.get(hexValue);
   if (exactMatches && exactMatches.length > 0) {
-    
+
     var filteredExactMatches = filterVariablesByScopes(exactMatches, requiredScopes);
     if (filteredExactMatches.length > 0) {
       return [{
@@ -4484,11 +4550,11 @@ function findColorSuggestions(hexValue, valueToVariableMap, propertyType) {
     }
   }
 
-  
-  var suggestions = [];
-  var maxDistance = 150; 
 
-  
+  var suggestions = [];
+  var maxDistance = 150;
+
+
   var minDistanceFound = Infinity;
   valueToVariableMap.forEach(function (vars, varHex) {
     if (vars && vars.length > 0) {
@@ -4496,7 +4562,7 @@ function findColorSuggestions(hexValue, valueToVariableMap, propertyType) {
       minDistanceFound = Math.min(minDistanceFound, distance);
 
       if (distance <= maxDistance) {
-        
+
         var filteredVars = filterVariablesByScopes(vars, requiredScopes);
         var passScope = filteredVars.length > 0;
 
@@ -4517,8 +4583,8 @@ function findColorSuggestions(hexValue, valueToVariableMap, propertyType) {
     }
   });
 
-  
-  
+
+
   if (suggestions.length === 0) {
 
     valueToVariableMap.forEach(function (vars, varHex) {
@@ -4531,7 +4597,7 @@ function findColorSuggestions(hexValue, valueToVariableMap, propertyType) {
             hex: varHex,
             distance: distance,
             isExact: false,
-            scopeMismatch: true, 
+            scopeMismatch: true,
             warning: "Scope mismatch - Cette variable pourrait ne pas être appropriée pour ce type de propriété"
           });
         }
@@ -4539,13 +4605,13 @@ function findColorSuggestions(hexValue, valueToVariableMap, propertyType) {
     });
   }
 
-  
+
   suggestions.sort(function (a, b) {
     return a.distance - b.distance;
   });
 
 
-  
+
   if (suggestions.length === 0) {
   }
 
@@ -4577,11 +4643,11 @@ function findNumericSuggestions(targetValue, valueToVariableMap, tolerance, prop
 
   var requiredScopes = getScopesForProperty(propertyType);
 
-  
+
   var exactMatches = valueToVariableMap.get(targetValue);
 
   if (exactMatches && exactMatches.length > 0) {
-    
+
     var filteredExactMatches = filterVariablesByScopes(exactMatches, requiredScopes);
     if (filteredExactMatches.length > 0) {
       return [{
@@ -4596,13 +4662,13 @@ function findNumericSuggestions(targetValue, valueToVariableMap, tolerance, prop
   } else {
   }
 
-  
+
   var suggestions = [];
 
-  
+
   valueToVariableMap.forEach(function (vars, varValue) {
     if (vars && vars.length > 0 && typeof varValue === 'number') {
-      
+
       var filteredVars = filterVariablesByScopes(vars, requiredScopes);
       if (filteredVars.length > 0) {
         var difference = Math.abs(targetValue - varValue);
@@ -4619,7 +4685,7 @@ function findNumericSuggestions(targetValue, valueToVariableMap, tolerance, prop
     }
   });
 
-  
+
   suggestions.sort(function (a, b) {
     return a.difference - b.difference;
   });
@@ -4627,7 +4693,7 @@ function findNumericSuggestions(targetValue, valueToVariableMap, tolerance, prop
   if (suggestions.length > 0) {
   } else {
   }
-  
+
   return suggestions.slice(0, 3);
 }
 
@@ -4636,10 +4702,10 @@ function enrichSuggestionsWithRealValues(suggestions) {
   return suggestions.map(function (suggestion) {
     var enriched = Object.assign({}, suggestion);
 
-    
+
     var variable = figma.variables.getVariableById(suggestion.id);
     if (variable) {
-      
+
       var collections = figma.variables.getLocalVariableCollections();
       var collection = null;
       for (var i = 0; i < collections.length; i++) {
@@ -4653,7 +4719,7 @@ function enrichSuggestionsWithRealValues(suggestions) {
         var modeId = (collection.modes && collection.modes.length > 0) ? collection.modes[0].modeId : 'default';
         var rawValue = variable.valuesByMode[modeId];
 
-        
+
         if (variable.resolvedType === "COLOR" && typeof rawValue === "object") {
           enriched.resolvedValue = rgbToHex(rawValue);
         } else if (variable.resolvedType === "FLOAT") {
@@ -4673,17 +4739,17 @@ function enrichSuggestionsWithRealValues(suggestions) {
 
 
 function checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLayers) {
-  
+
   if (!node) {
     return;
   }
 
-  
+
   if (node.removed) {
     return;
   }
 
-  
+
   if (!node.id || !node.name || !node.type) {
     return;
   }
@@ -4692,13 +4758,13 @@ function checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLaye
   var layerName = node.name;
   var nodeType = node.type;
 
-  
+
   if (!node || !node.id || !node.type) {
     return;
   }
 
-  
-  
+
+
   if (ignoreHiddenLayers) {
     try {
       if (node.visible === false) {
@@ -4708,14 +4774,14 @@ function checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLaye
         return;
       }
     } catch (visibilityError) {
-      
+
     }
   }
 
-  
+
   var supportedTypes = CONFIG.supportedTypes.all;
 
-  
+
   var styleSupportedTypes = CONFIG.supportedTypes.fillAndStroke;
 
   var isContainer = supportedTypes.indexOf(nodeType) !== -1;
@@ -4725,23 +4791,23 @@ function checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLaye
     return;
   }
 
-  
+
   if (supportsStyle) {
     try {
-      
+
       if (node.fills !== undefined && node.fills !== figma.mixed) {
         checkFillsSafely(node, valueToVariableMap, results);
       }
 
-      
+
       if (node.strokes !== undefined && node.strokes !== figma.mixed) {
         checkStrokesSafely(node, valueToVariableMap, results);
       }
 
-      
+
       checkCornerRadiusSafely(node, valueToVariableMap, results);
 
-      
+
       checkNumericPropertiesSafely(node, valueToVariableMap, results);
 
 
@@ -4753,7 +4819,7 @@ function checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLaye
       checkLocalStylesSafely(node, valueToVariableMap, results);
 
     } catch (propertyError) {
-      
+
     }
   }
 }
@@ -4761,7 +4827,7 @@ function checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLaye
 
 function checkTypographyPropertiesSafely(node, valueToVariableMap, results) {
   try {
-    
+
     if (typeof node.fontSize === 'number' && node.fontSize > 0) {
       var isFontSizeBound = isPropertyBoundToVariable(node.boundVariables || {}, 'fontSize');
       if (!isFontSizeBound) {
@@ -4782,8 +4848,8 @@ function checkTypographyPropertiesSafely(node, valueToVariableMap, results) {
       }
     }
 
-    
-    
+
+
 
   } catch (typographyError) {
   }
@@ -4889,7 +4955,7 @@ function checkFillsSafely(node, valueToVariableMap, results) {
         var fill = fills[i];
         if (!fill || fill.type !== CONFIG.types.SOLID || !fill.color) continue;
 
-        
+
         var isBound = isPropertyBoundToVariable(node.boundVariables || {}, 'fills', i);
         if (isBound) continue;
 
@@ -4898,7 +4964,7 @@ function checkFillsSafely(node, valueToVariableMap, results) {
 
         var suggestions = enrichSuggestionsWithRealValues(findColorSuggestions(hexValue, valueToVariableMap, "Fill"));
 
-        
+
         if (suggestions.length > 0) {
           results.push({
             nodeId: node.id,
@@ -4913,7 +4979,7 @@ function checkFillsSafely(node, valueToVariableMap, results) {
           });
         }
       } catch (fillError) {
-        
+
       }
     }
   } catch (fillsError) {
@@ -4931,7 +4997,7 @@ function checkStrokesSafely(node, valueToVariableMap, results) {
         var stroke = strokes[j];
         if (!stroke || stroke.type !== CONFIG.types.SOLID || !stroke.color) continue;
 
-        
+
         var isBound = isPropertyBoundToVariable(node.boundVariables || {}, 'strokes', j);
         if (isBound) continue;
 
@@ -4940,7 +5006,7 @@ function checkStrokesSafely(node, valueToVariableMap, results) {
 
         var suggestions = enrichSuggestionsWithRealValues(findColorSuggestions(hexValue, valueToVariableMap, "Stroke"));
 
-        
+
         if (suggestions.length > 0) {
           results.push({
             nodeId: node.id,
@@ -4955,7 +5021,7 @@ function checkStrokesSafely(node, valueToVariableMap, results) {
           });
         }
       } catch (strokeError) {
-        
+
       }
     }
   } catch (strokesError) {
@@ -4970,7 +5036,7 @@ function checkCornerRadiusSafely(node, valueToVariableMap, results) {
 
     if (radiusSupportedTypes.indexOf(nodeType) === -1) return;
 
-    
+
     if (node.cornerRadius === figma.mixed) {
       var radiusProperties = [
         { name: 'topLeftRadius', displayName: 'TOP LEFT RADIUS', figmaProp: 'topLeftRadius' },
@@ -4985,7 +5051,7 @@ function checkCornerRadiusSafely(node, valueToVariableMap, results) {
           var radiusValue = node[prop.name];
 
           if (typeof radiusValue === 'number' && radiusValue > 0) {
-            
+
             var isBound = isPropertyBoundToVariable(node.boundVariables || {}, prop.figmaProp);
             if (isBound) continue;
 
@@ -5008,9 +5074,9 @@ function checkCornerRadiusSafely(node, valueToVariableMap, results) {
         }
       }
     }
-    
+
     else if (typeof node.cornerRadius === 'number' && node.cornerRadius > 0) {
-      
+
       var boundVars = node.boundVariables || {};
       var isBound = isPropertyBoundToVariable(boundVars, 'cornerRadius') ||
         isPropertyBoundToVariable(boundVars, 'topLeftRadius') ||
@@ -5065,7 +5131,7 @@ function checkNumericPropertiesSafely(node, valueToVariableMap, results) {
       }
     }
 
-    
+
     var paddingProperties = [
       { name: 'paddingLeft', displayName: 'Padding Left', figmaProp: 'paddingLeft' },
       { name: 'paddingRight', displayName: 'Padding Right', figmaProp: 'paddingRight' },
@@ -5112,7 +5178,7 @@ function isPropertyBoundToVariable(boundVariables, propertyPath, index) {
     var binding = index !== undefined ? boundVariables[propertyPath] && boundVariables[propertyPath][index] : boundVariables[propertyPath];
     if (!binding) return false;
 
-    
+
     if (typeof binding !== 'object' ||
       binding.type !== 'VARIABLE_ALIAS' ||
       !binding.id ||
@@ -5120,57 +5186,57 @@ function isPropertyBoundToVariable(boundVariables, propertyPath, index) {
       return false;
     }
 
-    
+
     var variable = figma.variables.getVariableById(binding.id);
     return variable !== null && variable !== undefined;
 
   } catch (bindingError) {
-    return false; 
+    return false;
   }
 }
 
 
 
 function scanNodeRecursive(node, valueToVariableMap, results, depth, ignoreHiddenLayers) {
-  
+
   depth = depth || 0;
-  var MAX_DEPTH = CONFIG.limits.MAX_DEPTH; 
+  var MAX_DEPTH = CONFIG.limits.MAX_DEPTH;
   if (depth > MAX_DEPTH) {
     return;
   }
 
-  
+
   if (!node) {
     return;
   }
 
-  
+
   if (node.removed) {
     return;
   }
 
-  
+
   if (!node.id || !node.type) {
     return;
   }
 
-  
+
   try {
     var nodeType = node.type;
     var nodeId = node.id;
     var nodeName = node.name || "Unnamed";
 
 
-    
+
     var containerTypes = CONFIG.supportedTypes.spacing;
 
-    
+
     var styleTypes = CONFIG.supportedTypes.fillAndStroke;
 
     var isContainer = containerTypes.indexOf(nodeType) !== -1;
     var hasStyle = styleTypes.indexOf(nodeType) !== -1;
 
-    
+
     if (hasStyle) {
       try {
         checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLayers);
@@ -5178,9 +5244,9 @@ function scanNodeRecursive(node, valueToVariableMap, results, depth, ignoreHidde
       }
     }
 
-    
-    
-    
+
+
+
     if (isContainer) {
       try {
         var children = node.children;
@@ -5191,7 +5257,7 @@ function scanNodeRecursive(node, valueToVariableMap, results, depth, ignoreHidde
             try {
               var child = children[i];
 
-              
+
               if (!child) {
                 continue;
               }
@@ -5200,24 +5266,24 @@ function scanNodeRecursive(node, valueToVariableMap, results, depth, ignoreHidde
                 continue;
               }
 
-              
+
               scanNodeRecursive(child, valueToVariableMap, results, depth + 1, ignoreHiddenLayers);
 
             } catch (childError) {
-              
+
             }
           }
         } else if (nodeType === 'INSTANCE') {
-          
+
         }
 
       } catch (childrenError) {
-        
+
       }
     }
 
   } catch (nodeError) {
-    
+
   }
 }
 
@@ -5225,7 +5291,7 @@ function scanNodeRecursive(node, valueToVariableMap, results, depth, ignoreHidde
 function scanSelection(ignoreHiddenLayers) {
 
   try {
-    
+
     var selection = figma.currentPage.selection;
 
     if (!selection || !Array.isArray(selection)) {
@@ -5233,16 +5299,16 @@ function scanSelection(ignoreHiddenLayers) {
       return [];
     }
 
-    
+
     if (selection.length === 0) {
       figma.notify("📄 Aucune sélection : Analyse de la page entière...");
 
-      
+
       return scanPage(ignoreHiddenLayers);
     }
 
 
-    
+
     var valueToVariableMap;
     try {
       valueToVariableMap = createValueToVariableMap();
@@ -5258,7 +5324,7 @@ function scanSelection(ignoreHiddenLayers) {
       return [];
     }
 
-    
+
     startAsyncScan(selection, valueToVariableMap, ignoreHiddenLayers);
 
   } catch (scanError) {
@@ -5278,7 +5344,7 @@ function scanPage(ignoreHiddenLayers) {
       return [];
     }
 
-    
+
     var valueToVariableMap;
     try {
       valueToVariableMap = createValueToVariableMap();
@@ -5293,7 +5359,7 @@ function scanPage(ignoreHiddenLayers) {
       return [];
     }
 
-    
+
     startAsyncScan(pageChildren, valueToVariableMap, ignoreHiddenLayers);
 
   } catch (pageScanError) {
@@ -5304,12 +5370,12 @@ function scanPage(ignoreHiddenLayers) {
 
 
 function startAsyncScan(nodes, valueToVariableMap, ignoreHiddenLayers) {
-  var CHUNK_SIZE = 50; 
+  var CHUNK_SIZE = 50;
   var currentIndex = 0;
   var results = [];
   var totalNodes = nodes.length;
 
-  
+
   figma.ui.postMessage({
     type: "scan-progress",
     progress: 0,
@@ -5322,17 +5388,17 @@ function startAsyncScan(nodes, valueToVariableMap, ignoreHiddenLayers) {
     var chunkEnd = Math.min(currentIndex + CHUNK_SIZE, totalNodes);
     var processedInChunk = 0;
 
-    
+
     for (var i = currentIndex; i < chunkEnd; i++) {
       try {
         var node = nodes[i];
 
-        
+
         if (!node || node.removed) {
           continue;
         }
 
-        
+
         scanNodeRecursive(node, valueToVariableMap, results, 0, ignoreHiddenLayers);
         processedInChunk++;
 
@@ -5342,7 +5408,7 @@ function startAsyncScan(nodes, valueToVariableMap, ignoreHiddenLayers) {
 
     currentIndex = chunkEnd;
 
-    
+
     var progress = (currentIndex / totalNodes) * 100;
     figma.ui.postMessage({
       type: "scan-progress",
@@ -5352,17 +5418,17 @@ function startAsyncScan(nodes, valueToVariableMap, ignoreHiddenLayers) {
       status: "Analyse en cours... " + currentIndex + "/" + totalNodes
     });
 
-    
+
     if (currentIndex < totalNodes) {
-      
+
       setTimeout(processChunk, 10);
     } else {
-      
+
       finishScan(results);
     }
   }
 
-  
+
   setTimeout(processChunk, 10);
 }
 
@@ -5370,23 +5436,23 @@ function startAsyncScan(nodes, valueToVariableMap, ignoreHiddenLayers) {
 
 function finishScan(results) {
 
-  
-  
+
+
   lastScanResults = results;
-  
+
   Scanner.lastScanResults = results;
 
 
-  
+
   if (results.length > 0) {
     FigmaService.notify("✅ Analyse terminée - " + results.length + " problème(s) détecté(s)");
   } else {
     FigmaService.notify("✅ Analyse terminée - Aucun problème détecté");
   }
 
-  
+
   setTimeout(function () {
-    
+
     figma.ui.postMessage({
       type: "scan-progress",
       progress: 100,
@@ -5416,7 +5482,7 @@ function diagnoseApplicationFailure(result, variableId, error) {
   };
 
   try {
-    
+
     var variable = figma.variables.getVariableById(variableId);
     if (!variable) {
       diagnosis.issue = 'variable_missing';
@@ -5426,7 +5492,7 @@ function diagnoseApplicationFailure(result, variableId, error) {
       return diagnosis;
     }
 
-    
+
     var requiredScopes = getScopesForProperty(result.property);
     var variableScopes = variable.scopes || [];
 
@@ -5440,7 +5506,7 @@ function diagnoseApplicationFailure(result, variableId, error) {
       diagnosis.details.variableScopes = variableScopes;
     }
 
-    
+
     var expectedType = getExpectedVariableType(result.property);
     if (variable.resolvedType !== expectedType) {
       diagnosis.issue = 'type_mismatch';
@@ -5450,7 +5516,7 @@ function diagnoseApplicationFailure(result, variableId, error) {
       diagnosis.details.actualType = variable.resolvedType;
     }
 
-    
+
     var node = figma.getNodeById(result.nodeId);
     if (!node) {
       diagnosis.issue = 'node_missing';
@@ -5466,13 +5532,13 @@ function diagnoseApplicationFailure(result, variableId, error) {
       return diagnosis;
     }
 
-    
+
     var propertyCheck = checkSpecificPropertyIssue(node, result);
     if (propertyCheck.issue) {
       diagnosis = propertyCheck;
     }
 
-    
+
     if (diagnosis.issue === 'unknown') {
       diagnosis.issue = 'technical_error';
       diagnosis.confidence = 'medium';
@@ -5584,9 +5650,9 @@ async function applyAndVerifyFix(result, variableId) {
   };
 
   try {
-    
 
-    
+
+
     if (!result) {
       throw new Error('Résultat invalide ou incomplet');
     }
@@ -5597,7 +5663,7 @@ async function applyAndVerifyFix(result, variableId) {
       throw new Error('Résultat invalide: property manquant');
     }
 
-    
+
     var finalVariableId = variableId || result.suggestedVariableId;
 
     if (!finalVariableId) {
@@ -5605,19 +5671,19 @@ async function applyAndVerifyFix(result, variableId) {
     }
     verificationResult.details.variableId = finalVariableId;
 
-    
+
     var variable = figma.variables.getVariableById(finalVariableId);
     if (variable) {
     }
 
     if (!variable) {
 
-      
+
       var allVars = figma.variables.getLocalVariables().slice(0, 5);
       throw new Error('Variable introuvable: ' + finalVariableId);
     }
 
-    
+
     var node = figma.getNodeById(result.nodeId);
     if (node) {
     }
@@ -5629,21 +5695,21 @@ async function applyAndVerifyFix(result, variableId) {
       throw new Error('Nœud supprimé: ' + result.nodeId);
     }
 
-    
+
     if (!validatePropertyExists(node, result)) {
       throw new Error('Propriété n\'existe plus: ' + result.property);
     }
 
-    
+
     if (!validateVariableCanBeApplied(variable, result)) {
       throw new Error('Variable incompatible: ' + variable.name + ' (' + variable.resolvedType + ') pour ' + result.property);
     }
 
 
-    
+
     var stateBefore = captureNodeState(node, result);
 
-    
+
 
     var applied = await applyVariableToProperty(node, variable, result);
 
@@ -5687,7 +5753,7 @@ async function applyAndVerifyFix(result, variableId) {
     verificationResult.error = error.message;
     verificationResult.success = false;
 
-    
+
     try {
       var diagnosis = diagnoseApplicationFailure(result, verificationResult.details.variableId, error);
       verificationResult.diagnosis = diagnosis;
@@ -5790,12 +5856,12 @@ function captureNodeState(node, result) {
   };
 
   try {
-    
+
     if (node.boundVariables) {
       state.boundVariables = JSON.parse(JSON.stringify(node.boundVariables));
     }
 
-    
+
     switch (result.property) {
       case "Fill":
         if (node.fills && node.fills[result.fillIndex]) {
@@ -5824,7 +5890,7 @@ function captureNodeState(node, result) {
         break;
 
       default:
-        
+
         if (result.figmaProperty && typeof node[result.figmaProperty] === 'number') {
           state.propertyValues[result.figmaProperty] = node[result.figmaProperty];
         }
@@ -5937,7 +6003,7 @@ function verifyFillApplication(node, variable, fillIndex, stateBefore, stateAfte
 
     var currentFill = node.fills[fillIndex];
 
-    
+
     if (currentFill.boundVariables && currentFill.boundVariables.color) {
       var boundVar = currentFill.boundVariables.color;
       if (boundVar.type === 'VARIABLE_ALIAS' && boundVar.id === variable.id) {
@@ -5961,7 +6027,7 @@ function verifyStrokeApplication(node, variable, strokeIndex, stateBefore, state
 
     var currentStroke = node.strokes[strokeIndex];
 
-    
+
     if (currentStroke.boundVariables && currentStroke.boundVariables.color) {
       var boundVar = currentStroke.boundVariables.color;
       if (boundVar.type === 'VARIABLE_ALIAS' && boundVar.id === variable.id) {
@@ -6061,7 +6127,7 @@ function validatePropertyExists(node, result) {
 
 function validateVariableCanBeApplied(variable, result) {
   try {
-    
+
     var variableType = variable.resolvedType;
 
     switch (result.property) {
@@ -6299,14 +6365,14 @@ function applyColorVariableToStroke(node, variable, strokeIndex) {
   try {
     var strokePath = 'strokes[' + strokeIndex + '].color';
 
-    
+
     try {
       node.setBoundVariable(strokePath, variable);
       return true;
     } catch (setBoundError) {
     }
 
-    
+
     if (node.strokes && Array.isArray(node.strokes) && node.strokes[strokeIndex]) {
       var clonedStrokes = JSON.parse(JSON.stringify(node.strokes));
       if (!clonedStrokes[strokeIndex].boundVariables) {
@@ -6317,7 +6383,7 @@ function applyColorVariableToStroke(node, variable, strokeIndex) {
         id: variable.id
       };
 
-      
+
       if (node.strokeStyleId) {
         node.strokeStyleId = '';
       }
@@ -6379,10 +6445,10 @@ async function applyNumericVariable(node, variable, figmaProperty, displayProper
 
 
 async function applyFixToNode(nodeId, variableId, property, result) {
-  
-  
-  
-  
+
+
+
+
 
   var verification = await applyAndVerifyFix(result, variableId);
 
@@ -6438,9 +6504,9 @@ async function applyAllFixes() {
     }
   }
 
-  
 
-  
+
+
   if (failedCount > 0) {
     results.forEach(function (item) {
       if (!item.verification.success && item.verification.diagnosis) {
@@ -6465,7 +6531,7 @@ function checkAndNotifySelection() {
       node.type === "SECTION";
   });
 
-  
+
   var selectedFrameName = null;
   if (hasValidSelection) {
     var firstValidNode = selection.find(function (node) {
@@ -6480,7 +6546,7 @@ function checkAndNotifySelection() {
     }
   }
 
-  
+
   var selectionId = selection.map(function (n) { return n.id; }).sort().join('|');
 
   figma.ui.postMessage({
@@ -6513,14 +6579,14 @@ figma.ui.onmessage = function (msg) {
       border: generateBorder()
     };
 
-  console.log('📊 Generated primitives:', {
-    brand: tokens.brand ? Object.keys(tokens.brand).length + ' keys: ' + Object.keys(tokens.brand).slice(0, 3).join(', ') : 0,
-    system: tokens.system ? Object.keys(tokens.system).length : 0,
-    gray: tokens.gray ? Object.keys(tokens.gray).length : 0,
-    spacing: tokens.spacing ? Object.keys(tokens.spacing).length : 0,
-    radius: tokens.radius ? Object.keys(tokens.radius).length : 0,
-    typography: tokens.typography ? Object.keys(tokens.typography).length : 0
-  });
+    console.log('📊 Generated primitives:', {
+      brand: tokens.brand ? Object.keys(tokens.brand).length + ' keys: ' + Object.keys(tokens.brand).slice(0, 3).join(', ') : 0,
+      system: tokens.system ? Object.keys(tokens.system).length : 0,
+      gray: tokens.gray ? Object.keys(tokens.gray).length : 0,
+      spacing: tokens.spacing ? Object.keys(tokens.spacing).length : 0,
+      radius: tokens.radius ? Object.keys(tokens.radius).length : 0,
+      typography: tokens.typography ? Object.keys(tokens.typography).length : 0
+    });
 
     // Générer automatiquement les tokens sémantiques pour les presets connus
     if (naming === "tailwind" || naming === "mui" || naming === "ant" || naming === "bootstrap") {
@@ -6533,7 +6599,7 @@ figma.ui.onmessage = function (msg) {
 
         console.log(`✅ Sémantiques générées:`, generated ? Object.keys(generated).length : 0, 'tokens');
         if (merged) {
-          console.log(`📋 Exemples:`, Object.entries(merged).slice(0, 3).map(([k,v]) => `${k}=${JSON.stringify(v)}`).join(', '));
+          console.log(`📋 Exemples:`, Object.entries(merged).slice(0, 3).map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(', '));
           // Sauvegarder les sémantiques fusionnées (avec alias préservés)
           saveSemanticTokensToFile(merged, 'AUTO_GENERATE_MERGED');
         }
@@ -6631,7 +6697,7 @@ figma.ui.onmessage = function (msg) {
 
   if (msg.type === "scan-frame") {
     try {
-      
+
       var ignoreHiddenLayers = msg.ignoreHiddenLayers !== false;
       scanSelection(ignoreHiddenLayers);
     } catch (e) {
@@ -6640,7 +6706,7 @@ figma.ui.onmessage = function (msg) {
   }
 
   if (msg.type === "apply-all-fixes") {
-    (async function() {
+    (async function () {
       var appliedCount = 0;
       var applicationError = null;
 
@@ -6662,7 +6728,7 @@ figma.ui.onmessage = function (msg) {
   }
 
   if (msg.type === "apply-single-fix") {
-    (async function() {
+    (async function () {
       var appliedCount = 0;
       var applicationError = null;
       var index = msg.index;
@@ -6687,16 +6753,16 @@ figma.ui.onmessage = function (msg) {
     })();
   }
 
-  
+
   if (msg.type === "undo-fix") {
     var indices = msg.indices || [];
 
-    
-    
-    
+
+
+
     figma.notify("⟲ Utilisez Ctrl+Z (ou Cmd+Z) pour annuler dans Figma", { timeout: 3000 });
 
-    
+
     figma.ui.postMessage({
       type: "undo-acknowledged",
       indices: indices
@@ -6724,29 +6790,29 @@ figma.ui.onmessage = function (msg) {
     }
   }
 
-  
-  
-  
+
+
+
 
   if (msg.type === "highlight-nodes") {
     try {
       var indices = msg.indices || [];
       if (indices.length === 0 || !lastScanResults) return;
 
-      
+
       var nodeIds = indices.map(function (index) {
         return lastScanResults[index] ? lastScanResults[index].nodeId : null;
       }).filter(function (nodeId) { return nodeId !== null; });
 
       if (nodeIds.length === 0) return;
 
-      
+
       var nodes = nodeIds.map(function (nodeId) {
         return figma.getNodeById(nodeId);
       }).filter(function (node) { return node !== null; });
 
       if (nodes.length > 0) {
-        
+
         figma.currentPage.selection = nodes;
         figma.viewport.scrollAndZoomIntoView(nodes);
       }
@@ -6755,7 +6821,7 @@ figma.ui.onmessage = function (msg) {
   }
 
   if (msg.type === "apply-group-fix") {
-    (async function() {
+    (async function () {
       console.log('Received apply-group-fix message:', msg);
       var appliedCount = 0;
       var applicationError = null;
@@ -6829,7 +6895,7 @@ figma.ui.onmessage = function (msg) {
     var appliedCount = 0;
 
     indices.forEach(function (index) {
-      
+
       if (index >= 0 && index < scanResults.length) {
         var result = scanResults[index];
         var node = figma.getNodeById(result.nodeId);
@@ -6860,7 +6926,7 @@ figma.ui.onmessage = function (msg) {
 
   }
 
-  
+
   if (msg.type === "sync-scan-results") {
 
     if (msg.results && Array.isArray(msg.results)) {
@@ -6868,7 +6934,7 @@ figma.ui.onmessage = function (msg) {
     } else {
     }
 
-    
+
     figma.ui.postMessage({
       type: "sync-confirmation",
       success: !!Scanner.lastScanResults,
@@ -6876,11 +6942,11 @@ figma.ui.onmessage = function (msg) {
     });
   }
 
-  
-  
-  
 
-  
+
+
+
+
   function simpleScan() {
 
     var results = [];
@@ -6890,13 +6956,13 @@ figma.ui.onmessage = function (msg) {
     for (var i = 0; i < pageChildren.length; i++) {
       var node = pageChildren[i];
 
-      
+
       if (node.fills && Array.isArray(node.fills)) {
         for (var j = 0; j < node.fills.length; j++) {
           var fill = node.fills[j];
 
           if (fill.type === CONFIG.types.SOLID && fill.color) {
-            
+
             var isBound = node.boundVariables &&
               node.boundVariables.fills &&
               node.boundVariables.fills[j];
@@ -6921,12 +6987,12 @@ figma.ui.onmessage = function (msg) {
     return results;
   }
 
-  
+
   function simpleApply(results) {
 
     var successCount = 0;
 
-    
+
     var colorVars = figma.variables.getLocalVariables().filter(function (v) {
       return v.resolvedType === 'COLOR';
     });
@@ -6936,7 +7002,7 @@ figma.ui.onmessage = function (msg) {
       return 0;
     }
 
-    
+
     var defaultVar = colorVars[0];
 
     for (var i = 0; i < results.length; i++) {
@@ -6949,10 +7015,10 @@ figma.ui.onmessage = function (msg) {
           continue;
         }
 
-        
+
         node.setBoundVariable('fills[' + result.fillIndex + '].color', defaultVar);
 
-        
+
         var updatedFill = node.fills[result.fillIndex];
         var isApplied = updatedFill.boundVariables &&
           updatedFill.boundVariables.color &&
@@ -6961,7 +7027,7 @@ figma.ui.onmessage = function (msg) {
         if (isApplied) {
           successCount++;
         } else {
-          
+
           successCount++;
         }
 
