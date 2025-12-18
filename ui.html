@@ -8903,7 +8903,17 @@
     function getTokenDisplayValue(token) {
       // Pour les tokens sémantiques modernes (objets avec resolvedValue)
       if (typeof token === 'object' && token.resolvedValue !== undefined) {
-        return token.resolvedValue;
+        // S'assurer que resolvedValue est une valeur scalaire
+        var resolved = token.resolvedValue;
+        if (typeof resolved === 'string' || typeof resolved === 'number') {
+          return resolved;
+        }
+        // Si c'est un objet, essayer d'extraire une valeur utile
+        if (typeof resolved === 'object' && resolved.value !== undefined) {
+          return resolved.value;
+        }
+        console.warn('⚠️ getTokenDisplayValue: resolvedValue non scalaire pour token:', token);
+        return ""; // Valeur par défaut si rien ne marche
       }
       // Pour les tokens primitifs (valeurs directes)
       return token;
@@ -8912,7 +8922,16 @@
     function getTokenColorValue(token) {
       // Pour les tokens sémantiques modernes
       if (typeof token === 'object' && token.resolvedValue !== undefined) {
-        return token.resolvedValue;
+        // S'assurer que resolvedValue est une valeur scalaire
+        var resolved = token.resolvedValue;
+        if (typeof resolved === 'string' || typeof resolved === 'number') {
+          return resolved;
+        }
+        // Si c'est un objet, essayer d'extraire une valeur utile
+        if (typeof resolved === 'object' && resolved.value !== undefined) {
+          return resolved.value;
+        }
+        return "#000000"; // Valeur par défaut pour les couleurs
       }
       // Pour les tokens primitifs
       return token;
@@ -9259,9 +9278,14 @@
       // Format intermédiaire : { collection, key }
       else if (typeof aliasTo === 'object' && aliasTo.collection && aliasTo.key) {
         var collectionPrefix = {
-          "Brand": "brand", "System": "system", "Gray": "gray", "Grey": "gray",
-          "Spacing": "spacing", "Radius": "radius", "Typography": "typography"
-        }[aliasTo.collection] || aliasTo.collection.toLowerCase();
+          // Catégories canoniques (nouvelles)
+          "brand": "brand", "system": "system", "gray": "gray", "grey": "gray",
+          "spacing": "spacing", "radius": "radius", "typography": "typography",
+          // Noms complets legacy (à normaliser)
+          "Brand Colors": "brand", "System Colors": "system",
+          "Grayscale": "gray", "GreyScale": "gray", "Gray Scale": "gray",
+          "Border Radius": "radius", "Spacing": "spacing"
+        }[aliasTo.collection] || aliasTo.collection.toLowerCase().replace(/\s+/g, '-');
 
         targetName = collectionPrefix + "-" + aliasTo.key.toLowerCase().replace(/[^a-z0-9-]/g, '-');
       }
