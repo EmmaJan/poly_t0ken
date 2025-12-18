@@ -1127,7 +1127,8 @@ function generateSemanticTokens(primitives, options = {}) {
 
   // Action primary - fallbacks naming-aware
   var getActionPrimaryFallback = function(action, naming) {
-    if (naming === 'mui') {
+    if (naming === 'mui' || naming === 'chakra') {
+      // MUI et Chakra utilisent des noms sémantiques (main, dark, light)
       if (action === 'default') return safeGet(brand, 'main', safeGet(system, 'primary.main', '#1976d2'));
       if (action === 'hover') return safeGet(brand, 'dark', safeGet(system, 'primary.dark', '#115293'));
       if (action === 'active') return safeGet(brand, 'dark', safeGet(system, 'primary.dark', '#115293')); // same as hover
@@ -1563,8 +1564,8 @@ function resolveSemanticAliasInfo(semanticKey, allTokens, naming) {
 function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
   console.log(`🔍 tryResolveSemanticAlias: ${semanticKey} avec naming=${naming}`);
 
-  // Debug pour les actions primaires en MUI
-  if (naming === 'mui' && semanticKey.startsWith('action.primary.')) {
+  // Debug pour les actions primaires en MUI et Chakra
+  if ((naming === 'mui' || naming === 'chakra') && semanticKey.startsWith('action.primary.')) {
     debugSemanticAliasResolution(semanticKey, naming);
   }
 
@@ -1572,8 +1573,8 @@ function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
     // Créer un mapping adapté selon le système de design
     var primitiveMapping;
 
-    if (naming === 'tailwind') {
-      // Mapping spécifique pour Tailwind - clés exactes de extractVariableKey
+    if (naming === 'mui' || naming === 'chakra') {
+      // Mapping spécifique pour MUI et Chakra - utilisent des noms sémantiques
       primitiveMapping = {
         // Background - utiliser gray-50, gray-100, etc. (pas '0')
         'bg.canvas': { category: 'gray', keys: ['50'] },
@@ -1592,23 +1593,65 @@ function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
         'border.default': { category: 'gray', keys: ['200'] },
         'border.muted': { category: 'gray', keys: ['100'] },
 
-      // Action primary - utiliser les noms MUI car c'est ce que les primitives utilisent
-      'action.primary.default': { category: 'brand', keys: ['main', '600', '500'] },
-      'action.primary.hover': { category: 'brand', keys: ['dark', '700', '600'] },
-      'action.primary.active': { category: 'brand', keys: ['dark', '800', '700'] },
+        // Action primary - utiliser les noms MUI/Chakra (main, dark, light)
+        'action.primary.default': { category: 'brand', keys: ['main', '500', '600'] },
+        'action.primary.hover': { category: 'brand', keys: ['dark', '700', '600'] },
+        'action.primary.active': { category: 'brand', keys: ['dark', '800', '700'] },
         'action.primary.disabled': { category: 'gray', keys: ['300'] },
 
-      // Status - pour Tailwind, utiliser system si disponible sinon fallback
-      'status.success': { category: 'system', keys: ['success-main', 'success'], fallback: { category: 'brand', keys: ['main', '600'] } },
-      'status.warning': { category: 'system', keys: ['warning-main', 'warning'], fallback: '#F59E0B' },
-      'status.error': { category: 'system', keys: ['error-main', 'error'], fallback: '#DC2626' },
-      'status.info': { category: 'system', keys: ['info-main', 'info'], fallback: '#2563EB' },
+        // Status - utiliser system si disponible sinon fallback
+        'status.success': { category: 'system', keys: ['success-main', 'success'], fallback: { category: 'brand', keys: ['main', '600'] } },
+        'status.warning': { category: 'system', keys: ['warning-main', 'warning'], fallback: '#F59E0B' },
+        'status.error': { category: 'system', keys: ['error-main', 'error'], fallback: '#DC2626' },
+        'status.info': { category: 'system', keys: ['info-main', 'info'], fallback: '#2563EB' },
 
         // Shape & Space - utiliser radius-4, spacing-8, etc.
-      'radius.sm': { category: 'radius', keys: ['sm', '4'] },
-      'radius.md': { category: 'radius', keys: ['md', '8'] },
-      'space.sm': { category: 'spacing', keys: ['4', '8'] },
-      'space.md': { category: 'spacing', keys: ['8', '16'] },
+        'radius.sm': { category: 'radius', keys: ['sm', '4'] },
+        'radius.md': { category: 'radius', keys: ['md', '8'] },
+        'space.sm': { category: 'spacing', keys: ['4', '8'] },
+        'space.md': { category: 'spacing', keys: ['8', '16'] },
+
+        // Typography - utiliser text.base, text.regular, etc.
+        'font.size.base': { category: 'typography', keys: ['text.base', 'base'] },
+        'font.weight.base': { category: 'typography', keys: ['text.regular', 'regular'] }
+      };
+    } else if (naming === 'tailwind') {
+      // Mapping spécifique pour Tailwind - clés numériques pures
+      primitiveMapping = {
+        // Background - utiliser gray-50, gray-100, etc. (pas '0')
+        'bg.canvas': { category: 'gray', keys: ['50'] },
+        'bg.surface': { category: 'gray', keys: ['50'] },
+        'bg.muted': { category: 'gray', keys: ['100'] },
+        'bg.inverse': { category: 'gray', keys: ['950', '900'] },
+
+        // Text
+        'text.primary': { category: 'gray', keys: ['950', '900'] },
+        'text.secondary': { category: 'gray', keys: ['700', '600'] },
+        'text.muted': { category: 'gray', keys: ['500', '400'] },
+        'text.inverse': { category: 'gray', keys: ['50'] },
+        'text.disabled': { category: 'gray', keys: ['400', '300'] },
+
+        // Border
+        'border.default': { category: 'gray', keys: ['200'] },
+        'border.muted': { category: 'gray', keys: ['100'] },
+
+        // Action primary - utiliser les clés numériques Tailwind
+        'action.primary.default': { category: 'brand', keys: ['600', '500'] },
+        'action.primary.hover': { category: 'brand', keys: ['700', '600'] },
+        'action.primary.active': { category: 'brand', keys: ['800', '700'] },
+        'action.primary.disabled': { category: 'gray', keys: ['300'] },
+
+        // Status - pour Tailwind, utiliser system si disponible sinon fallback
+        'status.success': { category: 'system', keys: ['success-main', 'success'], fallback: { category: 'brand', keys: ['600', '500'] } },
+        'status.warning': { category: 'system', keys: ['warning-main', 'warning'], fallback: '#F59E0B' },
+        'status.error': { category: 'system', keys: ['error-main', 'error'], fallback: '#DC2626' },
+        'status.info': { category: 'system', keys: ['info-main', 'info'], fallback: '#2563EB' },
+
+        // Shape & Space - utiliser radius-4, spacing-8, etc.
+        'radius.sm': { category: 'radius', keys: ['sm', '4'] },
+        'radius.md': { category: 'radius', keys: ['md', '8'] },
+        'space.sm': { category: 'spacing', keys: ['4', '8'] },
+        'space.md': { category: 'spacing', keys: ['8', '16'] },
 
         // Typography - utiliser text.base, text.regular, etc.
         'font.size.base': { category: 'typography', keys: ['text.base', 'base'] },
@@ -1664,8 +1707,8 @@ function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
         primitiveMapping['action.primary.default'].keys = ['600', '500', 'main', 'primary'];
         primitiveMapping['action.primary.hover'].keys = ['700', '600', 'dark', 'primary-dark'];
         primitiveMapping['action.primary.active'].keys = ['800', '700', 'dark', 'primary-active'];
-      } else if (naming === 'mui') {
-        // Pour MUI, les primitives utilisent les noms sémantiques MUI
+      } else if (naming === 'mui' || naming === 'chakra') {
+        // Pour MUI et Chakra, les primitives utilisent les noms sémantiques
         // main = couleur principale, dark = version sombre, light = version claire
         primitiveMapping['action.primary.default'].keys = ['main', 'primary'];
         primitiveMapping['action.primary.hover'].keys = ['dark', 'primary-dark'];
