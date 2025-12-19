@@ -2193,12 +2193,24 @@ function extractVariableKey(variable, collectionName) {
 
   // 2. Déterminer la catégorie selon le nom de collection (normalisé)
   var c = (collectionName || '').toLowerCase();
-  var isBrand = c.includes('brand');
-  var isSystem = c.includes('system');
-  var isGray = c.includes('gray') || c.includes('grey') || c.includes('grayscale');
-  var isSpacing = c.includes('spacing');
-  var isRadius = c.includes('radius');
-  var isTypography = c.includes('typo') || c.includes('typography');
+  var isBrand = c.includes('brand') || c.includes('color') || c.includes('theme') || c.includes('palette') || c.includes('ui') || c === "colors" || c === "design tokens";
+  var isSystem = c.includes('system') || c.includes('status') || c.includes('state') || c.includes('semantic');
+  var isGray = c.includes('gray') || c.includes('grey') || c.includes('grayscale') || c.includes('neutral');
+  var isSpacing = c.includes('spacing') || c.includes('gap') || c.includes('margin') || c.includes('padding') || c.includes('space');
+  var isRadius = c.includes('radius') || c.includes('corner') || c.includes('border-radius') || c.includes('round');
+  var isTypography = c.includes('typo') || c.includes('typography') || c.includes('font') || c.includes('text') || c.includes('type');
+
+  // 🆕 NOUVEAU : Détection transversale - même si la collection n'est pas catégorisée comme radius/spacing,
+  // détecter les patterns individuels et les traiter comme tels
+  var forceRadius = false;
+  var forceSpacing = false;
+
+  if (!isRadius && isRadiusPattern(variable.name)) {
+    forceRadius = true;
+  }
+  if (!isSpacing && isSpacingPattern(variable.name)) {
+    forceSpacing = true;
+  }
 
   if (isBrand) {
     if (name.startsWith("primary/")) {
@@ -2250,14 +2262,17 @@ function extractVariableKey(variable, collectionName) {
     } else if (name.match(/^\d{1,3}$/)) {
       return name;
     }
-  } else if (isSpacing) {
+  } else if (isSpacing || forceSpacing) {
     if (name.startsWith("spacing-")) {
       return name.replace("spacing-", "").replace(/-/g, ".");
     }
+    if (name.startsWith("gap-") || name.startsWith("margin-") || name.startsWith("padding-")) {
+      return name.replace(/^(gap|margin|padding)-/, "").replace(/-/g, ".");
+    }
     return name.replace(/-/g, ".");
-  } else if (isRadius) {
-    if (name.startsWith("radius-")) {
-      return name.replace("radius-", "").replace(/-/g, ".");
+  } else if (isRadius || forceRadius) {
+    if (name.startsWith("radius-") || name.startsWith("corner-") || name.startsWith("border-radius-")) {
+      return name.replace(/^(radius|corner|border-radius)-/, "").replace(/-/g, ".");
     }
     return name.replace(/-/g, ".");
   } else if (isTypography) {
@@ -3419,38 +3434,33 @@ function extractExistingTokens() {
       var raw = variable.valuesByMode[modeId];
       var value = resolveVariableValue(variable, modeId);
 
-      // EXTRACTION SPÉCIALE POUR LES TOKENS SÉMANTIQUES
+      // EXTRACTION AVANCÉE : Alias dans TOUTES les variables (primitives + sémantiques)
       var aliasTo = null;
       var resolvedValue = null;
 
-      if (category === "semantic") {
-        if (raw && typeof raw === 'object' && raw.type === 'VARIABLE_ALIAS') {
-          // ✅ VARIABLE_ALIAS détecté : normaliser l'alias + garantir valeur scalaire résolue
-          var rawAliasTo = raw.id; // string ID brut
-          aliasTo = normalizeAliasTo(rawAliasTo, tokens); // normalisé vers objet complet
-          resolvedValue = normalizeResolvedValue(value, variable.resolvedType);
+      if (raw && typeof raw === 'object' && raw.type === 'VARIABLE_ALIAS') {
+        // ✅ VARIABLE_ALIAS détecté dans n'importe quelle variable !
+        var rawAliasTo = raw.id; // string ID brut
+        aliasTo = normalizeAliasTo(rawAliasTo, tokens); // normalisé vers objet complet
+        resolvedValue = normalizeResolvedValue(value, variable.resolvedType);
 
-          // GARDE-FOU : resolvedValue DOIT être scalaire, jamais objet
-          if (typeof resolvedValue === 'object' || resolvedValue === null || resolvedValue === undefined) {
-            console.warn(`🚨 CRITICAL: resolvedValue for aliased semantic ${variable.name} is not scalar:`, resolvedValue);
-            resolvedValue = getFallbackValue(variable.resolvedType, category);
-          }
-
-          console.log(`[ALIAS_LOAD] ${variable.name} → alias:${JSON.stringify(aliasTo)}, resolved:${resolvedValue}`);
-        } else {
-          // Pas d'alias : juste la valeur résolue normalisée
-          aliasTo = null;
-          resolvedValue = normalizeResolvedValue(value, variable.resolvedType);
-
-          // GARDE-FOU : resolvedValue DOIT être scalaire
-          if (typeof resolvedValue === 'object' || resolvedValue === null || resolvedValue === undefined) {
-            console.warn(`🚨 CRITICAL: resolvedValue for non-aliased semantic ${variable.name} is not scalar:`, resolvedValue);
-            resolvedValue = getFallbackValue(variable.resolvedType, category);
-          }
+        // GARDE-FOU : resolvedValue DOIT être scalaire, jamais objet
+        if (typeof resolvedValue === 'object' || resolvedValue === null || resolvedValue === undefined) {
+          console.warn(`🚨 CRITICAL: resolvedValue for aliased ${category} ${variable.name} is not scalar:`, resolvedValue);
+          resolvedValue = getFallbackValue(variable.resolvedType, category);
         }
+
+        console.log(`🔗 [ALIAS_LOAD] ${category}:${variable.name} → alias vers ${rawAliasTo}, resolved:${resolvedValue}`);
       } else {
-        // Pour les primitives : logique existante
-        resolvedValue = value;
+        // Pas d'alias : juste la valeur résolue normalisée
+        aliasTo = null;
+        resolvedValue = normalizeResolvedValue(value, variable.resolvedType);
+
+        // GARDE-FOU : resolvedValue DOIT être scalaire
+        if (typeof resolvedValue === 'object' || resolvedValue === null || resolvedValue === undefined) {
+          console.warn(`🚨 CRITICAL: resolvedValue for non-aliased ${category} ${variable.name} is not scalar:`, resolvedValue);
+          resolvedValue = getFallbackValue(variable.resolvedType, category);
+        }
       }
 
       // Debug log pour voir les valeurs extraites
@@ -3536,9 +3546,27 @@ function extractExistingTokens() {
         };
         console.log(`✅ Final semantic ${cleanName}: aliasTo=${aliasTo}, resolvedValue=${resolvedValue}`);
       } else {
-        // Pour les primitives : garder l'ancienne logique
-        console.log(`✅ Final ${category}/${cleanName}: ${formattedValue}`);
-        tokens[category][cleanName] = formattedValue;
+        // Pour les primitives : logique améliorée avec re-catégorisation
+        var finalCategory = category;
+
+        // 🆕 NOUVEAU : Re-catégorisation intelligente basée sur le contenu des variables
+        // Si la collection est générique ("brand", "unknown", etc.) et que la variable a un pattern spécifique,
+        // la ranger dans la bonne catégorie
+        if ((category === "brand" || category === "unknown") && isRadiusPattern(variable.name)) {
+          finalCategory = "radius";
+          console.log(`🔄 Re-catégorisation: ${variable.name} déplacé de ${category} vers ${finalCategory}`);
+        } else if ((category === "brand" || category === "unknown") && isSpacingPattern(variable.name)) {
+          finalCategory = "spacing";
+          console.log(`🔄 Re-catégorisation: ${variable.name} déplacé de ${category} vers ${finalCategory}`);
+        }
+
+        // S'assurer que la catégorie finale existe dans tokens
+        if (!tokens[finalCategory]) {
+          tokens[finalCategory] = {};
+        }
+
+        console.log(`✅ Final ${finalCategory}/${cleanName}: ${formattedValue}`);
+        tokens[finalCategory][cleanName] = formattedValue;
       }
     }
   }
@@ -8130,6 +8158,21 @@ function getCategoryFromVariableCollection(collectionName) {
            n.includes('font') || n.includes('text') || n.includes('type')) return "typography";
 
   return "unknown";
+}
+
+// Fonctions helper pour la détection transversale de patterns spéciaux
+function isRadiusPattern(variableName) {
+  if (!variableName) return false;
+  var name = variableName.toLowerCase();
+  return name.includes('radius') || name.includes('corner') || name.includes('border-radius') ||
+         name.includes('round') || /^\d+$/.test(name);
+}
+
+function isSpacingPattern(variableName) {
+  if (!variableName) return false;
+  var name = variableName.toLowerCase();
+  return name.includes('spacing') || name.includes('gap') || name.includes('margin') ||
+         name.includes('padding') || name.includes('space') || /^\d+$/.test(name);
 }
 
 // Fonction d'inférence du type de collection depuis son contenu (améliorée)
