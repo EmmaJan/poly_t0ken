@@ -4085,9 +4085,9 @@
     var livePreviewReady = false; // Indicateur simple : système prêt pour Live Preview
 
     // ============================================
-    // SEMANTIC TOKENS MAPPINGS
+    // SEMANTIC TOKENS MAPPINGS - Source de vérité unique
     // ============================================
-    var SEMANTIC_NAME_MAP = {
+    var SEMANTIC_NAME_MAP = window.SEMANTIC_NAME_MAP || {
       tailwind: {
         // Background
         'bg.canvas': 'background/canvas',

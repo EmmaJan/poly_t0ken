@@ -4,6 +4,23 @@
 // Plugin startup verification - verified manually: 0 occurrences of variable.scopes = assignments
 console.log("✅ Plugin initialized: scopes use setScopes() method only");
 
+// Normalisation des types de bibliothèque - fonction globale
+function normalizeLibType(naming) {
+  if (!naming) return 'tailwind';
+
+  const normalized = naming.toLowerCase().trim();
+
+  // Mapping des variantes vers les types canoniques
+  if (normalized === 'shadcn') return 'tailwind';
+  if (normalized === 'mui' || normalized === 'material-ui') return 'mui';
+  if (normalized === 'ant' || normalized === 'ant-design' || normalized === 'antd') return 'ant';
+  if (normalized === 'bootstrap' || normalized === 'bs') return 'bootstrap';
+  if (normalized === 'chakra' || normalized === 'chakra-ui') return 'chakra';
+
+  // Par défaut, considérer comme tailwind pour les inconnus
+  return 'tailwind';
+}
+
 // États possibles pour un token sémantique (robustesse des alias)
 const TOKEN_STATE = {
   VALUE: "VALUE",               // Valeur scalaire fiable
@@ -69,6 +86,29 @@ function analyzeSemanticTokensStats(tokens, context) {
 function saveSemanticTokensToFile(semanticTokens, callsite) {
   try {
     if (semanticTokens && Object.keys(semanticTokens).length > 0) {
+      // DIAGNOSTICS : Vérifier que les alias sont correctement résolus
+      var criticalSemanticKeys = [
+        'action.primary.default', 'action.primary.hover', 'action.primary.active',
+        'bg.inverse', 'text.primary'
+      ];
+
+      console.log(`🔍 [DIAGNOSTICS] Vérification des alias pour ${Object.keys(semanticTokens).length} tokens sémantiques`);
+
+      for (var key in semanticTokens) {
+        if (!semanticTokens.hasOwnProperty(key)) continue;
+        var token = semanticTokens[key];
+
+        if (criticalSemanticKeys.includes(key)) {
+          var status = 'UNKNOWN';
+          if (token.aliasTo) {
+            status = token.state === 'ALIAS_RESOLVED' ? '✅ RESOLVED' : '❌ UNRESOLVED';
+          } else {
+            status = 'VALUE';
+          }
+          console.log(`  ${key}: ${status} ${token.aliasTo ? `→ ${token.aliasTo.id || 'unknown'}` : ''}`);
+        }
+      }
+
       // VALIDATION : S'assurer que tous les resolvedValue sont scalaires
       for (var key in semanticTokens) {
         if (!semanticTokens.hasOwnProperty(key)) continue;
@@ -858,44 +898,44 @@ var SEMANTIC_TYPE_MAP = {
 var SEMANTIC_NAME_MAP = {
   tailwind: {
     // Background
-    'bg.canvas': 'background-canvas',
-    'bg.surface': 'background-surface',
-    'bg.elevated': 'background-elevated',
-    'bg.muted': 'background-muted',
-    'bg.inverse': 'background-inverse',
+    'bg.canvas': 'background/canvas',
+    'bg.surface': 'background/surface',
+    'bg.elevated': 'background/elevated',
+    'bg.muted': 'background/muted',
+    'bg.inverse': 'background/inverse',
 
     // Text
-    'text.primary': 'text-primary',
-    'text.secondary': 'text-secondary',
-    'text.muted': 'text-muted',
-    'text.inverse': 'text-inverse',
-    'text.disabled': 'text-disabled',
+    'text.primary': 'text/primary',
+    'text.secondary': 'text/secondary',
+    'text.muted': 'text/muted',
+    'text.inverse': 'text/inverse',
+    'text.disabled': 'text/disabled',
 
     // Border
-    'border.default': 'border-default',
-    'border.muted': 'border-muted',
+    'border.default': 'border/default',
+    'border.muted': 'border/muted',
 
     // Action
-    'action.primary.default': 'primary',
-    'action.primary.hover': 'primary-hover',
-    'action.primary.active': 'primary-active',
-    'action.primary.disabled': 'primary-disabled',
+    'action.primary.default': 'primary/default',
+    'action.primary.hover': 'primary/hover',
+    'action.primary.active': 'primary/active',
+    'action.primary.disabled': 'primary/disabled',
 
     // Status
-    'status.success': 'success',
-    'status.warning': 'warning',
-    'status.error': 'destructive',
-    'status.info': 'info',
+    'status.success': 'success/default',
+    'status.warning': 'warning/default',
+    'status.error': 'destructive/default',
+    'status.info': 'info/default',
 
     // Shape & Space
-    'radius.sm': 'radius-sm',
-    'radius.md': 'radius-md',
-    'space.sm': 'space-sm',
-    'space.md': 'space-md',
+    'radius.sm': 'radius/sm',
+    'radius.md': 'radius/md',
+    'space.sm': 'space/sm',
+    'space.md': 'space/md',
 
     // Typography
-    'font.size.base': 'font-size-base',
-    'font.weight.base': 'font-weight-base'
+    'font.size.base': 'font/size/base',
+    'font.weight.base': 'font/weight/base'
   },
 
   mui: {
@@ -1073,21 +1113,176 @@ function generateSemanticTokens(primitives, options = {}) {
   console.log('  brand:', Object.keys(brand).length > 0 ? Object.keys(brand).slice(0, 3).join(', ') + '...' : 'vide');
   console.log('  system:', Object.keys(system).length > 0 ? Object.keys(system).join(', ') : 'vide');
 
+  // Fonction pour obtenir le mapping des primitives selon la bibliothèque
+  function getPrimitiveMapping(lib) {
+    if (lib === 'tailwind') {
+      return {
+        'bg.canvas': { category: 'gray', keys: ['50'] },
+        'bg.surface': { category: 'gray', keys: ['50'] },
+        'bg.muted': { category: 'gray', keys: ['100'] },
+        'bg.inverse': { category: 'gray', keys: ['950', '900'] },
+        'text.primary': { category: 'gray', keys: ['950', '900'] },
+        'text.secondary': { category: 'gray', keys: ['700', '600'] },
+        'text.muted': { category: 'gray', keys: ['500', '400'] },
+        'text.inverse': { category: 'gray', keys: ['50'] },
+        'text.disabled': { category: 'gray', keys: ['400', '300'] },
+        'border.default': { category: 'gray', keys: ['200'] },
+        'border.muted': { category: 'gray', keys: ['100'] },
+        'action.primary.default': { category: 'brand', keys: ['600', '500'] },
+        'action.primary.hover': { category: 'brand', keys: ['700', '600'] },
+        'action.primary.active': { category: 'brand', keys: ['800', '700'] },
+        'action.primary.disabled': { category: 'gray', keys: ['300'] },
+        'status.success': { category: 'system', keys: ['success-main', 'success'] },
+        'status.warning': { category: 'system', keys: ['warning-main', 'warning'] },
+        'status.error': { category: 'system', keys: ['error-main', 'error'] },
+        'status.info': { category: 'system', keys: ['info-main', 'info'] },
+        'radius.sm': { category: 'radius', keys: ['sm', '4'] },
+        'radius.md': { category: 'radius', keys: ['md', '8'] },
+        'space.sm': { category: 'spacing', keys: ['4', '8'] },
+        'space.md': { category: 'spacing', keys: ['8', '16'] },
+        'font.size.base': { category: 'typography', keys: ['text.base', 'base'] },
+        'font.weight.base': { category: 'typography', keys: ['text.regular', 'regular'] }
+      };
+    } else if (lib === 'chakra') {
+      return {
+        'bg.canvas': { category: 'gray', keys: ['50'] },
+        'bg.surface': { category: 'gray', keys: ['50'] },
+        'bg.muted': { category: 'gray', keys: ['100'] },
+        'bg.inverse': { category: 'gray', keys: ['900', '800'] },
+        'text.primary': { category: 'gray', keys: ['900', '800'] },
+        'text.secondary': { category: 'gray', keys: ['700', '600'] },
+        'text.muted': { category: 'gray', keys: ['500', '400'] },
+        'text.inverse': { category: 'gray', keys: ['50'] },
+        'text.disabled': { category: 'gray', keys: ['400', '300'] },
+        'border.default': { category: 'gray', keys: ['200'] },
+        'border.muted': { category: 'gray', keys: ['100'] },
+        'action.primary.default': { category: 'brand', keys: ['300'] },
+        'action.primary.hover': { category: 'brand', keys: ['400'] },
+        'action.primary.active': { category: 'brand', keys: ['500'] },
+        'action.primary.disabled': { category: 'gray', keys: ['300', '400'] },
+        'status.success': { category: 'system', keys: ['green.500', 'success'] },
+        'status.warning': { category: 'system', keys: ['orange.500', 'warning'] },
+        'status.error': { category: 'system', keys: ['red.500', 'error'] },
+        'status.info': { category: 'system', keys: ['blue.500', 'info'] },
+        'radius.sm': { category: 'radius', keys: ['sm', '4'] },
+        'radius.md': { category: 'radius', keys: ['md', '8'] },
+        'space.sm': { category: 'spacing', keys: ['2', '8'] },
+        'space.md': { category: 'spacing', keys: ['4', '16'] },
+        'font.size.base': { category: 'typography', keys: ['base', '16'] },
+        'font.weight.base': { category: 'typography', keys: ['normal', '400'] }
+      };
+    } else if (lib === 'bootstrap') {
+      return {
+        'bg.canvas': { category: 'gray', keys: ['white', 'gray-100'] },
+        'bg.surface': { category: 'gray', keys: ['white', 'gray-100'] },
+        'bg.muted': { category: 'gray', keys: ['gray-100', '100'] },
+        'bg.inverse': { category: 'gray', keys: ['gray-900', 'dark'] },
+        'text.primary': { category: 'gray', keys: ['gray-900', 'dark'] },
+        'text.secondary': { category: 'gray', keys: ['gray-600', 'secondary'] },
+        'text.muted': { category: 'gray', keys: ['gray-500', 'muted'] },
+        'text.inverse': { category: 'gray', keys: ['white', 'light'] },
+        'text.disabled': { category: 'gray', keys: ['gray-400', 'muted'] },
+        'border.default': { category: 'gray', keys: ['gray-300', '300'] },
+        'border.muted': { category: 'gray', keys: ['gray-200', '200'] },
+        'action.primary.default': { category: 'brand', keys: ['primary'] },
+        'action.primary.hover': { category: 'brand', keys: ['primary-hover'] },
+        'action.primary.active': { category: 'brand', keys: ['primary-dark'] },
+        'action.primary.disabled': { category: 'gray', keys: ['gray-300', '300'] },
+        'status.success': { category: 'system', keys: ['success', 'green'] },
+        'status.warning': { category: 'system', keys: ['warning', 'yellow'] },
+        'status.error': { category: 'system', keys: ['danger', 'red'] },
+        'status.info': { category: 'system', keys: ['info', 'cyan'] },
+        'radius.sm': { category: 'radius', keys: ['sm', '2'] },
+        'radius.md': { category: 'radius', keys: ['md', '4'] },
+        'space.sm': { category: 'spacing', keys: ['2', '8'] },
+        'space.md': { category: 'spacing', keys: ['3', '16'] },
+        'font.size.base': { category: 'typography', keys: ['base', '1rem', '16'] },
+        'font.weight.base': { category: 'typography', keys: ['normal', '400'] }
+      };
+    } else if (lib === 'ant') {
+      return {
+        'bg.canvas': { category: 'gray', keys: ['1'] },
+        'bg.surface': { category: 'gray', keys: ['1'] },
+        'bg.muted': { category: 'gray', keys: ['2'] },
+        'bg.inverse': { category: 'gray', keys: ['10'] },
+        'text.primary': { category: 'gray', keys: ['10'] },
+        'text.secondary': { category: 'gray', keys: ['8', '9'] },
+        'text.muted': { category: 'gray', keys: ['6', '7'] },
+        'text.inverse': { category: 'gray', keys: ['1'] },
+        'text.disabled': { category: 'gray', keys: ['6'] },
+        'border.default': { category: 'gray', keys: ['4'] },
+        'border.muted': { category: 'gray', keys: ['3'] },
+        'action.primary.default': { category: 'brand', keys: ['3'] },
+        'action.primary.hover': { category: 'brand', keys: ['4'] },
+        'action.primary.active': { category: 'brand', keys: ['5'] },
+        'action.primary.disabled': { category: 'gray', keys: ['6'] },
+        'status.success': { category: 'system', keys: ['green-6', 'success'] },
+        'status.warning': { category: 'system', keys: ['orange-6', 'warning'] },
+        'status.error': { category: 'system', keys: ['red-6', 'error'] },
+        'status.info': { category: 'system', keys: ['blue-6', 'info'] },
+        'radius.sm': { category: 'radius', keys: ['sm', '4'] },
+        'radius.md': { category: 'radius', keys: ['md', '6'] },
+        'space.sm': { category: 'spacing', keys: ['8', 'small'] },
+        'space.md': { category: 'spacing', keys: ['16', 'middle'] },
+        'font.size.base': { category: 'typography', keys: ['fontSize', '14'] },
+        'font.weight.base': { category: 'typography', keys: ['fontWeight', '400'] }
+      };
+    } else if (lib === 'mui') {
+      return {
+        'bg.canvas': { category: 'gray', keys: ['grey.50', '50'] },
+        'bg.surface': { category: 'gray', keys: ['grey.50', '50'] },
+        'bg.muted': { category: 'gray', keys: ['grey.100', '100'] },
+        'bg.inverse': { category: 'gray', keys: ['grey.900', 'grey.800'] },
+        'text.primary': { category: 'gray', keys: ['grey.900', 'grey.800'] },
+        'text.secondary': { category: 'gray', keys: ['grey.700', 'grey.600'] },
+        'text.muted': { category: 'gray', keys: ['grey.500', 'grey.400'] },
+        'text.inverse': { category: 'gray', keys: ['grey.50', '50'] },
+        'text.disabled': { category: 'gray', keys: ['grey.400', 'grey.300'] },
+        'border.default': { category: 'gray', keys: ['grey.200', '200'] },
+        'border.muted': { category: 'gray', keys: ['grey.100', '100'] },
+        'action.primary.default': { category: 'brand', keys: ['main'] },
+        'action.primary.hover': { category: 'brand', keys: ['dark'] },
+        'action.primary.active': { category: 'brand', keys: ['dark'] },
+        'action.primary.disabled': { category: 'gray', keys: ['grey.300', '300'] },
+        'status.success': { category: 'system', keys: ['success', 'green'] },
+        'status.warning': { category: 'system', keys: ['warning', 'orange'] },
+        'status.error': { category: 'system', keys: ['error', 'red'] },
+        'status.info': { category: 'system', keys: ['info', 'blue'] },
+        'radius.sm': { category: 'radius', keys: ['sm', '4'] },
+        'radius.md': { category: 'radius', keys: ['md', '8'] },
+        'space.sm': { category: 'spacing', keys: ['8', '2'] },
+        'space.md': { category: 'spacing', keys: ['16', '4'] },
+        'font.size.base': { category: 'typography', keys: ['base', '16'] },
+        'font.weight.base': { category: 'typography', keys: ['normal', '400'] }
+      };
+    }
+  }
+
   // Fonction helper pour résoudre une valeur sémantique depuis les primitives
   function resolveSemanticValue(semanticKey, fallback) {
     try {
-      // Essayer d'abord de résoudre via les primitives disponibles
-      const variable = tryResolveSemanticAlias(semanticKey, primitives, naming);
-      if (variable) {
-        // Extraire la valeur de la variable primitive
-        const collection = figma.variables.getVariableCollectionById(variable.variableCollectionId);
-        if (collection) {
-          const variableKey = extractVariableKey(variable, collection.name);
-          const category = getCategoryFromVariableCollection(collection.name);
-          if (primitives[category] && primitives[category][variableKey]) {
-            console.log(`✅ ${semanticKey} → ${category}.${variableKey} (${primitives[category][variableKey]})`);
-            return primitives[category][variableKey];
+      // Utiliser directement les primitives (pas de résolution d'alias car variables Figma pas encore créées)
+      // Pour la génération initiale, on utilise les mappings pour trouver la bonne primitive
+
+      // Récupérer le mapping pour cette clé sémantique
+      const lib = normalizeLibType(naming);
+      const primitiveMapping = getPrimitiveMapping(lib);
+      const mapping = primitiveMapping[semanticKey];
+
+      if (mapping) {
+        // Essayer chaque clé candidate dans la catégorie appropriée
+        for (const key of mapping.keys) {
+          if (primitives[mapping.category] && primitives[mapping.category][key]) {
+            const value = primitives[mapping.category][key];
+            console.log(`✅ ${semanticKey} → ${mapping.category}.${key} (${value})`);
+            return value;
           }
+        }
+
+        // Si fallback défini dans le mapping (pour les couleurs spécifiques)
+        if (mapping.fallback && typeof mapping.fallback === 'string' && mapping.fallback.startsWith('#')) {
+          console.log(`🎨 ${semanticKey} → couleur spécifique: ${mapping.fallback}`);
+          return mapping.fallback;
         }
       }
     } catch (error) {
@@ -1125,28 +1320,42 @@ function generateSemanticTokens(primitives, options = {}) {
   semanticTokens['border.default'] = resolveSemanticValue('border.default', safeGet(gray, '200', '#E5E5E5'));
   semanticTokens['border.muted'] = resolveSemanticValue('border.muted', safeGet(gray, '100', '#F5F5F5'));
 
-  // Action primary - fallbacks naming-aware
+  // Action primary - fallbacks naming-aware avec couleurs appropriées
   var getActionPrimaryFallback = function(action, naming) {
-    if (naming === 'mui' || naming === 'chakra') {
-      // MUI et Chakra utilisent des noms sémantiques (main, dark, light)
-      if (action === 'default') return safeGet(brand, 'main', safeGet(system, 'primary.main', '#1976d2'));
-      if (action === 'hover') return safeGet(brand, 'dark', safeGet(system, 'primary.dark', '#115293'));
-      if (action === 'active') return safeGet(brand, 'dark', safeGet(system, 'primary.dark', '#115293')); // same as hover
-      if (action === 'disabled') return safeGet(gray, '300', safeGet(gray, '200', '#e0e0e0'));
-    } else if (naming === 'ant' || naming === 'bootstrap') {
-      // Ant/Bootstrap: prefer brand.main/dark if available, fallback to numeric scale
-      if (action === 'default') return safeGet(brand, 'main', safeGet(brand, '600', safeGet(brand, '500', '#2563EB')));
-      if (action === 'hover') return safeGet(brand, 'dark', safeGet(brand, '700', safeGet(brand, '600', '#1D4ED8')));
-      if (action === 'active') return safeGet(brand, 'dark', safeGet(brand, '800', safeGet(brand, '700', '#1E40AF')));
-      if (action === 'disabled') return safeGet(gray, '300', '#D1D5DB');
+    const lib = normalizeLibType(naming);
+
+    if (lib === 'chakra') {
+      // Chakra: utiliser une couleur verte distinctive
+      if (action === 'default') return safeGet(brand, 'main', safeGet(system, 'green.500', '#38A169'));
+      if (action === 'hover') return safeGet(brand, 'dark', safeGet(system, 'success', '#2F855A'));
+      if (action === 'active') return safeGet(brand, 'dark', safeGet(system, 'success', '#2F855A'));
+      if (action === 'disabled') return safeGet(gray, '300', '#E2E8F0');
+    } else if (lib === 'bootstrap') {
+      // Bootstrap: utiliser une couleur orange distinctive
+      if (action === 'default') return safeGet(brand, 'primary', safeGet(system, 'warning', '#F59E0B'));
+      if (action === 'hover') return safeGet(brand, 'primary-dark', safeGet(system, 'warning', '#D97706'));
+      if (action === 'active') return safeGet(brand, 'primary-darker', safeGet(system, 'warning', '#D97706'));
+      if (action === 'disabled') return safeGet(gray, '300', '#DEE2E6');
+    } else if (lib === 'ant') {
+      // Ant: utiliser une couleur rouge distinctive
+      if (action === 'default') return safeGet(brand, 'blue-6', safeGet(system, 'red-6', '#FF4D4F'));
+      if (action === 'hover') return safeGet(brand, 'blue-7', safeGet(system, 'error', '#CF1322'));
+      if (action === 'active') return safeGet(brand, 'blue-8', safeGet(system, 'error', '#CF1322'));
+      if (action === 'disabled') return safeGet(gray, '6', '#BFBFBF');
+    } else if (lib === 'mui') {
+      // MUI: utilise les vraies clés générées "light", "main", "dark", "contrastText"
+      if (action === 'default') return safeGet(brand, 'main', safeGet(system, 'primary.main', '#1976D2'));
+      if (action === 'hover') return safeGet(brand, 'dark', safeGet(system, 'primary.dark', '#1565C0'));
+      if (action === 'active') return safeGet(brand, 'dark', safeGet(system, 'primary.dark', '#1565C0'));
+      if (action === 'disabled') return safeGet(gray, '300', '#E0E0E0');
     } else {
-      // Tailwind/custom: numeric scale
-      if (action === 'default') return safeGet(brand, '600', safeGet(brand, '500', '#2563EB'));
-      if (action === 'hover') return safeGet(brand, '700', safeGet(brand, '600', '#1D4ED8'));
-      if (action === 'active') return safeGet(brand, '800', safeGet(brand, '700', '#1E40AF'));
+      // Tailwind: garder le bleu générique
+      if (action === 'default') return safeGet(brand, '600', safeGet(brand, '500', '#3B82F6'));
+      if (action === 'hover') return safeGet(brand, '700', safeGet(brand, '600', '#2563EB'));
+      if (action === 'active') return safeGet(brand, '800', safeGet(brand, '700', '#1D4ED8'));
       if (action === 'disabled') return safeGet(gray, '300', '#D1D5DB');
     }
-    return '#2563EB'; // ultimate fallback
+    return '#6B7280'; // ultimate fallback neutre (gris)
   };
 
   semanticTokens['action.primary.default'] = resolveSemanticValue('action.primary.default', getActionPrimaryFallback('default', naming));
@@ -1154,11 +1363,29 @@ function generateSemanticTokens(primitives, options = {}) {
   semanticTokens['action.primary.active'] = resolveSemanticValue('action.primary.active', getActionPrimaryFallback('active', naming));
   semanticTokens['action.primary.disabled'] = resolveSemanticValue('action.primary.disabled', getActionPrimaryFallback('disabled', naming));
 
-  // Status tokens - essayer d'abord system, puis fallback
-  semanticTokens['status.success'] = resolveSemanticValue('status.success', safeGet(system, 'success.main', safeGet(system, 'success', safeGet(brand, '600', '#16A34A'))));
-  semanticTokens['status.warning'] = resolveSemanticValue('status.warning', safeGet(system, 'warning.main', safeGet(system, 'warning', '#F59E0B')));
-  semanticTokens['status.error'] = resolveSemanticValue('status.error', safeGet(system, 'error.main', safeGet(system, 'error', '#DC2626')));
-  semanticTokens['status.info'] = resolveSemanticValue('status.info', safeGet(system, 'info.main', safeGet(system, 'info', '#2563EB')));
+  // Status tokens - essayer d'abord system, puis fallback adapté à la bibliothèque
+  var getStatusFallback = function(status, naming) {
+    const lib = normalizeLibType(naming);
+
+    if (status === 'success') {
+      return safeGet(system, 'success.main', safeGet(system, 'success', '#10B981'));
+    } else if (status === 'warning') {
+      return safeGet(system, 'warning.main', safeGet(system, 'warning', '#F59E0B'));
+    } else if (status === 'error') {
+      return safeGet(system, 'error.main', safeGet(system, 'error', '#EF4444'));
+    } else if (status === 'info') {
+      if (lib === 'chakra') return safeGet(system, 'info.main', safeGet(system, 'info', '#3182CE'));
+      if (lib === 'bootstrap') return safeGet(system, 'info.main', safeGet(system, 'info', '#17A2B8'));
+      if (lib === 'ant') return safeGet(system, 'info.main', safeGet(system, 'info', '#1890FF'));
+      return safeGet(system, 'info.main', safeGet(system, 'info', '#3B82F6')); // MUI/Tailwind
+    }
+    return '#6B7280'; // fallback neutre
+  };
+
+  semanticTokens['status.success'] = resolveSemanticValue('status.success', getStatusFallback('success', naming));
+  semanticTokens['status.warning'] = resolveSemanticValue('status.warning', getStatusFallback('warning', naming));
+  semanticTokens['status.error'] = resolveSemanticValue('status.error', getStatusFallback('error', naming));
+  semanticTokens['status.info'] = resolveSemanticValue('status.info', getStatusFallback('info', naming));
 
   // Shape & Space - mappings spécifiques selon le système
   semanticTokens['radius.sm'] = resolveSemanticValue('radius.sm', safeGet(radius, 'sm', safeGet(radius, '4', 4)));
@@ -1573,49 +1800,50 @@ function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
     // Créer un mapping adapté selon le système de design
     var primitiveMapping;
 
-    if (naming === 'mui' || naming === 'chakra') {
-      // Mapping spécifique pour MUI et Chakra - utilisent des noms sémantiques
-      primitiveMapping = {
-        // Background - utiliser gray-50, gray-100, etc. (pas '0')
-        'bg.canvas': { category: 'gray', keys: ['50'] },
-        'bg.surface': { category: 'gray', keys: ['50'] },
-        'bg.muted': { category: 'gray', keys: ['100'] },
-        'bg.inverse': { category: 'gray', keys: ['950', '900'] },
+    // Génère des clés de fallback tolérantes pour la résolution d'alias
+    function generateFallbackKeys(key, category) {
+      var fallbacks = [];
 
-        // Text
-        'text.primary': { category: 'gray', keys: ['950', '900'] },
-        'text.secondary': { category: 'gray', keys: ['700', '600'] },
-        'text.muted': { category: 'gray', keys: ['500', '400'] },
-        'text.inverse': { category: 'gray', keys: ['50'] },
-        'text.disabled': { category: 'gray', keys: ['400', '300'] },
+      // Pour les clés numériques pures, essayer aussi avec prefix
+      if (/^\d+$/.test(key)) {
+        if (category === 'gray') {
+          fallbacks.push('gray-' + key);
+          fallbacks.push('grey-' + key);
+        } else if (category === 'brand') {
+          fallbacks.push('primary-' + key);
+          fallbacks.push('brand-' + key);
+        }
+      }
 
-        // Border
-        'border.default': { category: 'gray', keys: ['200'] },
-        'border.muted': { category: 'gray', keys: ['100'] },
+      // Pour les clés avec tiret, essayer aussi sans prefix
+      if (key.includes('-')) {
+        var parts = key.split('-');
+        if (parts.length >= 2 && /^\d+$/.test(parts[parts.length - 1])) {
+          fallbacks.push(parts[parts.length - 1]); // Le numéro seul
+        }
+      }
 
-        // Action primary - utiliser les noms MUI/Chakra (main, dark, light)
-        'action.primary.default': { category: 'brand', keys: ['main', '500', '600'] },
-        'action.primary.hover': { category: 'brand', keys: ['dark', '700', '600'] },
-        'action.primary.active': { category: 'brand', keys: ['dark', '800', '700'] },
-        'action.primary.disabled': { category: 'gray', keys: ['300'] },
+      // Pour les clés brand, essayer des variantes communes
+      if (category === 'brand') {
+        if (key === 'primary') {
+          fallbacks.push('main', '500', 'base');
+        } else if (key === 'main') {
+          fallbacks.push('primary', '500', 'base');
+        } else if (key === '500') {
+          fallbacks.push('main', 'primary', 'base');
+        } else if (key === 'dark') {
+          fallbacks.push('primary-dark', '600', '700');
+        } else if (key === 'primary-dark') {
+          fallbacks.push('dark', '600', '700');
+        }
+      }
 
-        // Status - utiliser system si disponible sinon fallback
-        'status.success': { category: 'system', keys: ['success-main', 'success'], fallback: { category: 'brand', keys: ['main', '600'] } },
-        'status.warning': { category: 'system', keys: ['warning-main', 'warning'], fallback: '#F59E0B' },
-        'status.error': { category: 'system', keys: ['error-main', 'error'], fallback: '#DC2626' },
-        'status.info': { category: 'system', keys: ['info-main', 'info'], fallback: '#2563EB' },
+      return fallbacks;
+    }
 
-        // Shape & Space - utiliser radius-4, spacing-8, etc.
-        'radius.sm': { category: 'radius', keys: ['sm', '4'] },
-        'radius.md': { category: 'radius', keys: ['md', '8'] },
-        'space.sm': { category: 'spacing', keys: ['4', '8'] },
-        'space.md': { category: 'spacing', keys: ['8', '16'] },
+    const lib = normalizeLibType(naming);
 
-        // Typography - utiliser text.base, text.regular, etc.
-        'font.size.base': { category: 'typography', keys: ['text.base', 'base'] },
-        'font.weight.base': { category: 'typography', keys: ['text.regular', 'regular'] }
-      };
-    } else if (naming === 'tailwind') {
+    if (lib === 'tailwind') {
       // Mapping spécifique pour Tailwind - clés numériques pures
       primitiveMapping = {
         // Background - utiliser gray-50, gray-100, etc. (pas '0')
@@ -1645,7 +1873,7 @@ function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
         'status.success': { category: 'system', keys: ['success-main', 'success'], fallback: { category: 'brand', keys: ['600', '500'] } },
         'status.warning': { category: 'system', keys: ['warning-main', 'warning'], fallback: '#F59E0B' },
         'status.error': { category: 'system', keys: ['error-main', 'error'], fallback: '#DC2626' },
-        'status.info': { category: 'system', keys: ['info-main', 'info'], fallback: '#2563EB' },
+        'status.info': { category: 'system', keys: ['info-main', 'info'] },
 
         // Shape & Space - utiliser radius-4, spacing-8, etc.
         'radius.sm': { category: 'radius', keys: ['sm', '4'] },
@@ -1657,8 +1885,134 @@ function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
         'font.size.base': { category: 'typography', keys: ['text.base', 'base'] },
         'font.weight.base': { category: 'typography', keys: ['text.regular', 'regular'] }
       };
+    } else if (lib === 'chakra') {
+      // Mapping spécifique pour Chakra UI - utilise des couleurs diverses depuis System Colors
+      primitiveMapping = {
+        // Background
+        'bg.canvas': { category: 'gray', keys: ['gray.50', '50'] },
+        'bg.surface': { category: 'gray', keys: ['gray.50', '50'] },
+        'bg.muted': { category: 'gray', keys: ['gray.100', '100'] },
+        'bg.inverse': { category: 'gray', keys: ['gray.900', 'gray.800'] },
+
+        // Text
+        'text.primary': { category: 'gray', keys: ['gray.900', 'gray.800'] },
+        'text.secondary': { category: 'gray', keys: ['gray.700', 'gray.600'] },
+        'text.muted': { category: 'gray', keys: ['gray.500', 'gray.400'] },
+        'text.inverse': { category: 'gray', keys: ['gray.50', '50'] },
+        'text.disabled': { category: 'gray', keys: ['gray.400', 'gray.300'] },
+
+        // Border
+        'border.default': { category: 'gray', keys: ['gray.200', '200'] },
+        'border.muted': { category: 'gray', keys: ['gray.100', '100'] },
+
+        // Action primary - utilise les vraies clés Chakra générées: "100", "200", "300", "400", "500"
+        'action.primary.default': { category: 'brand', keys: ['300'] },
+        'action.primary.hover': { category: 'brand', keys: ['400'] },
+        'action.primary.active': { category: 'brand', keys: ['500'] },
+        'action.primary.disabled': { category: 'gray', keys: ['gray.300', 'gray.400'] },
+
+        // Status - utilise d'autres couleurs système pour éviter les conflits
+        'status.success': { category: 'system', keys: ['orange.500', 'warning'] },
+        'status.warning': { category: 'system', keys: ['red.500', 'error'] },
+        'status.error': { category: 'system', keys: ['warning'] },
+        'status.info': { category: 'system', keys: ['success'] },
+
+        // Shape & Space - utiliser les primitives directes
+        'radius.sm': { category: 'radius', keys: ['sm', '4'] },
+        'radius.md': { category: 'radius', keys: ['md', '8'] },
+        'space.sm': { category: 'spacing', keys: ['2', '8'] },
+        'space.md': { category: 'spacing', keys: ['4', '16'] },
+
+        // Typography
+        'font.size.base': { category: 'typography', keys: ['base', '16'] },
+        'font.weight.base': { category: 'typography', keys: ['normal', '400'] }
+      };
+    } else if (lib === 'bootstrap') {
+      // Mapping spécifique pour Bootstrap - utilise des couleurs diverses depuis System Colors
+      primitiveMapping = {
+        // Background
+        'bg.canvas': { category: 'gray', keys: ['white', 'gray-100'] },
+        'bg.surface': { category: 'gray', keys: ['white', 'gray-100'] },
+        'bg.muted': { category: 'gray', keys: ['gray-100', '100'] },
+        'bg.inverse': { category: 'gray', keys: ['gray-900', 'dark'] },
+
+        // Text
+        'text.primary': { category: 'gray', keys: ['gray-900', 'dark'] },
+        'text.secondary': { category: 'gray', keys: ['gray-600', 'secondary'] },
+        'text.muted': { category: 'gray', keys: ['gray-500', 'muted'] },
+        'text.inverse': { category: 'gray', keys: ['white', 'light'] },
+        'text.disabled': { category: 'gray', keys: ['gray-400', 'muted'] },
+
+        // Border
+        'border.default': { category: 'gray', keys: ['gray-300', '300'] },
+        'border.muted': { category: 'gray', keys: ['gray-200', '200'] },
+
+        // Action primary - utilise les vraies clés Bootstrap générées: "primary", "primary-subtle", "primary-hover", "primary-dark"
+        'action.primary.default': { category: 'brand', keys: ['primary'] },
+        'action.primary.hover': { category: 'brand', keys: ['primary-hover'] },
+        'action.primary.active': { category: 'brand', keys: ['primary-dark'] },
+        'action.primary.disabled': { category: 'gray', keys: ['gray-300', '300'] },
+
+        // Status - utilise d'autres couleurs système pour éviter les conflits
+        'status.success': { category: 'system', keys: ['error'] },
+        'status.warning': { category: 'system', keys: ['success'] },
+        'status.error': { category: 'system', keys: ['info'] },
+        'status.info': { category: 'system', keys: ['success'] },
+
+        // Shape & Space - utiliser les primitives directes
+        'radius.sm': { category: 'radius', keys: ['sm', '2'] },
+        'radius.md': { category: 'radius', keys: ['md', '4'] },
+        'space.sm': { category: 'spacing', keys: ['2', '8'] },
+        'space.md': { category: 'spacing', keys: ['3', '16'] },
+
+        // Typography
+        'font.size.base': { category: 'typography', keys: ['base', '1rem', '16'] },
+        'font.weight.base': { category: 'typography', keys: ['normal', '400'] }
+      };
+    } else if (lib === 'ant') {
+      // Mapping spécifique pour Ant Design - utilise l'échelle de gris 1..10
+      primitiveMapping = {
+        // Background
+        'bg.canvas': { category: 'gray', keys: ['1'] },
+        'bg.surface': { category: 'gray', keys: ['1'] },
+        'bg.muted': { category: 'gray', keys: ['2'] },
+        'bg.inverse': { category: 'gray', keys: ['10'] },
+
+        // Text
+        'text.primary': { category: 'gray', keys: ['10'] },
+        'text.secondary': { category: 'gray', keys: ['8', '9'] },
+        'text.muted': { category: 'gray', keys: ['6', '7'] },
+        'text.inverse': { category: 'gray', keys: ['1'] },
+        'text.disabled': { category: 'gray', keys: ['6'] },
+
+        // Border
+        'border.default': { category: 'gray', keys: ['4'] },
+        'border.muted': { category: 'gray', keys: ['3'] },
+
+        // Action primary - utilise les vraies clés Ant générées: "1", "2", "3", "4", "5"
+        'action.primary.default': { category: 'brand', keys: ['3'] },
+        'action.primary.hover': { category: 'brand', keys: ['4'] },
+        'action.primary.active': { category: 'brand', keys: ['5'] },
+        'action.primary.disabled': { category: 'gray', keys: ['6'] },
+
+        // Status - utilise les vraies primitives Ant
+        'status.success': { category: 'system', keys: ['green-6', 'success'] },
+        'status.warning': { category: 'system', keys: ['orange-6', 'warning'] },
+        'status.error': { category: 'system', keys: ['red-6', 'error'] },
+        'status.info': { category: 'system', keys: ['blue-6', 'info'] },
+
+        // Shape & Space - utiliser les primitives directes
+        'radius.sm': { category: 'radius', keys: ['sm', '4'] },
+        'radius.md': { category: 'radius', keys: ['md', '6'] },
+        'space.sm': { category: 'spacing', keys: ['8', 'small'] },
+        'space.md': { category: 'spacing', keys: ['16', 'middle'] },
+
+        // Typography
+        'font.size.base': { category: 'typography', keys: ['fontSize', '14'] },
+        'font.weight.base': { category: 'typography', keys: ['fontWeight', '400'] }
+      };
     } else {
-      // Mapping générique pour les autres systèmes (Ant, MUI, Bootstrap, etc.)
+      // Mapping générique pour les autres systèmes (MUI, etc.)
       primitiveMapping = {
         // Background
         'bg.canvas': { category: 'gray', keys: ['50', 'white'] },
@@ -1677,17 +2031,17 @@ function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
         'border.default': { category: 'gray', keys: ['200', '300'] },
         'border.muted': { category: 'gray', keys: ['100', '200'] },
 
-        // Action primary - Mapping dynamique par naming
-        'action.primary.default': { category: 'brand', keys: ['600', '500'] },
-        'action.primary.hover': { category: 'brand', keys: ['700', '600'] },
-        'action.primary.active': { category: 'brand', keys: ['800', '700'] },
+        // Action primary - Bleu générique
+        'action.primary.default': { category: 'brand', keys: ['primary', '500'] },
+        'action.primary.hover': { category: 'brand', keys: ['primary-dark', '600'] },
+        'action.primary.active': { category: 'brand', keys: ['primary-darker', '700'] },
         'action.primary.disabled': { category: 'gray', keys: ['300', '400'] },
 
-        // Status - utiliser system si disponible, sinon brand ou defaults
-        'status.success': { category: 'system', keys: ['success-main', 'success'], fallback: { category: 'brand', keys: ['600', 'main'] } },
-        'status.warning': { category: 'system', keys: ['warning-main', 'warning'], fallback: '#F59E0B' },
-        'status.error': { category: 'system', keys: ['error-main', 'error'], fallback: '#DC2626' },
-        'status.info': { category: 'system', keys: ['info-main', 'info'], fallback: '#2563EB' },
+        // Status - Couleurs génériques
+        'status.success': { category: 'system', keys: ['success', 'green'], fallback: { category: 'brand', keys: ['600', 'main'] } },
+        'status.warning': { category: 'system', keys: ['warning', 'orange'], fallback: '#F59E0B' },
+        'status.error': { category: 'system', keys: ['error', 'red'], fallback: '#DC2626' },
+        'status.info': { category: 'system', keys: ['info', 'blue'] },
 
         // Shape & Space - utiliser les primitives directes
         'radius.sm': { category: 'radius', keys: ['sm', '4'] },
@@ -1699,26 +2053,6 @@ function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
         'font.size.base': { category: 'typography', keys: ['text.base', 'base', '16'] },
         'font.weight.base': { category: 'typography', keys: ['text.regular', 'regular', '400'] }
       };
-
-      // AJUSTEMENT DES KEYS ACTION PRIMARY SELON NAMING
-      if (naming === 'ant') {
-        // Ant Design - ajuster selon les vraies primitives disponibles
-        // Si les primitives utilisent des noms numériques, chercher les bonnes clés
-        primitiveMapping['action.primary.default'].keys = ['600', '500', 'main', 'primary'];
-        primitiveMapping['action.primary.hover'].keys = ['700', '600', 'dark', 'primary-dark'];
-        primitiveMapping['action.primary.active'].keys = ['800', '700', 'dark', 'primary-active'];
-      } else if (naming === 'mui' || naming === 'chakra') {
-        // Pour MUI et Chakra, les primitives utilisent les noms sémantiques
-        // main = couleur principale, dark = version sombre, light = version claire
-        primitiveMapping['action.primary.default'].keys = ['main', 'primary'];
-        primitiveMapping['action.primary.hover'].keys = ['dark', 'primary-dark'];
-        primitiveMapping['action.primary.active'].keys = ['dark', 'primary-active'];
-      } else if (naming === 'bootstrap') {
-        // Bootstrap - ajuster selon les vraies primitives disponibles
-        primitiveMapping['action.primary.default'].keys = ['500', '600', 'main', 'primary'];
-        primitiveMapping['action.primary.hover'].keys = ['600', '700', 'dark', 'primary-dark'];
-        primitiveMapping['action.primary.active'].keys = ['700', '800', 'dark', 'primary-active'];
-      }
     }
 
     var mapping = primitiveMapping[semanticKey];
@@ -1766,6 +2100,7 @@ function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
     for (var k = 0; k < mapping.keys.length; k++) {
       var targetKey = mapping.keys[k];
 
+      // Essayer d'abord la correspondance exacte
       for (var j = 0; j < variables.length; j++) {
         var variable = variables[j];
         if (!variable) continue;
@@ -1776,6 +2111,25 @@ function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
         if (varKey === targetKey) {
           console.log(`✅ Alias success: ${semanticKey} → ${mapping.category}/${targetKey} (${variable.name})`);
           return variable;
+        }
+      }
+
+      // Si pas trouvé, essayer des variantes tolérantes
+      var fallbackKeys = generateFallbackKeys(targetKey, mapping.category);
+      for (var fk = 0; fk < fallbackKeys.length; fk++) {
+        var fallbackKey = fallbackKeys[fk];
+        if (fallbackKey === targetKey) continue; // Éviter la duplication
+
+        for (var j = 0; j < variables.length; j++) {
+          var variable = variables[j];
+          if (!variable) continue;
+
+          var varKey = extractVariableKey(variable, collection.name);
+
+          if (varKey === fallbackKey) {
+            console.log(`✅ Alias fallback success: ${semanticKey} → ${mapping.category}/${fallbackKey} (via ${targetKey}) (${variable.name})`);
+            return variable;
+          }
         }
       }
     }
@@ -3483,12 +3837,40 @@ function generateGrayscale(naming) {
 }
 
 function generateSystemColors(naming) {
-  var baseColors = {
-    success: "#10B981",
-    warning: "#F59E0B",
-    error: "#EF4444",
-    info: "#3B82F6"
-  };
+  const lib = normalizeLibType(naming);
+
+  // Couleurs système adaptées selon la bibliothèque
+  var baseColors;
+  if (lib === 'chakra') {
+    baseColors = {
+      success: "#38A169",  // Vert Chakra
+      warning: "#D69E2E",  // Orange Chakra
+      error: "#E53E3E",    // Rouge Chakra
+      info: "#3182CE"      // Bleu Chakra
+    };
+  } else if (lib === 'bootstrap') {
+    baseColors = {
+      success: "#28A745",  // Vert Bootstrap
+      warning: "#FFC107",  // Jaune Bootstrap
+      error: "#DC3545",    // Rouge Bootstrap
+      info: "#17A2B8"      // Cyan Bootstrap
+    };
+  } else if (lib === 'ant') {
+    baseColors = {
+      success: "#52C41A",  // Vert Ant
+      warning: "#FAAD14",  // Orange Ant
+      error: "#FF4D4F",    // Rouge Ant
+      info: "#1890FF"      // Bleu Ant
+    };
+  } else {
+    // MUI/Tailwind - couleurs génériques
+    baseColors = {
+      success: "#10B981",  // Vert générique
+      warning: "#F59E0B",  // Orange générique
+      error: "#EF4444",    // Rouge générique
+      info: "#3B82F6"      // Bleu générique
+    };
+  }
 
   var result = {};
 
