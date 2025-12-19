@@ -3372,27 +3372,14 @@ function extractExistingTokens() {
     var collectionName = collection.name;
 
 
-    var category = null;
+    var category = getCategoryFromVariableCollection(collectionName);
 
-    if (collectionName === "Brand Colors") {
-      category = "brand";
-    } else if (collectionName === "System Colors") {
-      category = "system";
-    } else if (collectionName === "Grayscale") {
-      category = "gray";
-    } else if (collectionName === "Spacing") {
-      category = "spacing";
-    } else if (collectionName === "Radius") {
-      category = "radius";
-    } else if (collectionName === "Typography") {
-      category = "typography";
-    } else if (collectionName === "Border") {
-      category = "border";
-    } else if (collectionName === "Semantic") {
-      category = "semantic";
+    // Si toujours inconnu, essayer d'inférer depuis le contenu (sécurisé)
+    if (category === "unknown") {
+      category = inferCollectionTypeFromContent(collection);
     }
 
-
+    // Sécurité : ignorer si toujours pas de catégorie déterminée
     if (!category) {
       continue;
     }
@@ -4286,10 +4273,53 @@ function applySemanticValue(variable, semanticData, semanticKey) {
   if (norm.isValid) {
     var aliasVariable = figma.variables.getVariableById(norm.variableId);
     if (aliasVariable) {
-      // ✅ ALIAS VALIDE : créer VARIABLE_ALIAS, jamais de fallback destructeur
-      processedValue = { type: "VARIABLE_ALIAS", id: norm.variableId };
-      valueType = 'alias';
-      console.log(`🔗 [APPLY] ${semanticKey} alias => id=${norm.variableId}`);
+      // ✅ VÉRIFICATIONS SUPPLÉMENTAIRES pour éviter les alias cassés
+      // 1. Vérifier la compatibilité des types
+      var semanticType = semanticData.type || variable.resolvedType;
+      var aliasType = aliasVariable.resolvedType;
+      if (semanticType !== aliasType) {
+        console.warn(`⚠️ [APPLY_SKIP] ${semanticKey}: type mismatch (semantic: ${semanticType}, alias: ${aliasType}), skipping alias creation`);
+        // Fallback vers resolvedValue si disponible
+        if (semanticData.resolvedValue != null && semanticData.resolvedValue !== undefined) {
+          processedValue = getProcessedValueFromResolved(semanticData.resolvedValue, semanticData.type);
+          valueType = 'raw';
+          console.log(`💾 [APPLY] ${semanticKey} => raw (type mismatch) => ${semanticData.resolvedValue}`);
+        } else {
+          return; // EARLY RETURN - pas d'écrasement
+        }
+      } else {
+        // 2. Vérifier que la variable cible a une valeur dans au moins un mode
+        var aliasCollection = figma.variables.getVariableCollectionById(aliasVariable.variableCollectionId);
+        var hasValidValue = false;
+        if (aliasCollection && aliasCollection.modes && aliasCollection.modes.length > 0) {
+          // Vérifier si la variable a une valeur dans le mode actuel ou un mode compatible
+          for (var m = 0; m < aliasCollection.modes.length; m++) {
+            var aliasModeId = aliasCollection.modes[m].modeId;
+            var aliasValue = aliasVariable.valuesByMode[aliasModeId];
+            if (aliasValue !== undefined && aliasValue !== null) {
+              hasValidValue = true;
+              break;
+            }
+          }
+        }
+        
+        if (!hasValidValue) {
+          console.warn(`⚠️ [APPLY_SKIP] ${semanticKey}: alias variable ${norm.variableId} has no valid value in any mode, skipping alias creation`);
+          // Fallback vers resolvedValue si disponible
+          if (semanticData.resolvedValue != null && semanticData.resolvedValue !== undefined) {
+            processedValue = getProcessedValueFromResolved(semanticData.resolvedValue, semanticData.type);
+            valueType = 'raw';
+            console.log(`💾 [APPLY] ${semanticKey} => raw (no valid value) => ${semanticData.resolvedValue}`);
+          } else {
+            return; // EARLY RETURN - pas d'écrasement
+          }
+        } else {
+          // ✅ ALIAS VALIDE : créer VARIABLE_ALIAS, jamais de fallback destructeur
+          processedValue = { type: "VARIABLE_ALIAS", id: norm.variableId };
+          valueType = 'alias';
+          console.log(`🔗 [APPLY] ${semanticKey} alias => id=${norm.variableId}`);
+        }
+      }
     } else {
       // ❌ ALIAS INVALIDE : NE PAS écraser avec fallback noir
       console.warn(`⚠️ [APPLY_SKIP] ${semanticKey}: alias ${norm.variableId} not found, skipping (keeping existing value)`);
@@ -4317,10 +4347,37 @@ function applySemanticValue(variable, semanticData, semanticKey) {
   }
 
   try {
+    // ✅ VÉRIFICATION FINALE avant setValueForMode pour éviter les alias cassés
+    if (valueType === 'alias' && processedValue && processedValue.type === 'VARIABLE_ALIAS') {
+      // Vérifier une dernière fois que la variable existe toujours (race condition protection)
+      var finalCheckVariable = figma.variables.getVariableById(processedValue.id);
+      if (!finalCheckVariable) {
+        console.warn(`⚠️ [APPLY_SKIP] ${semanticKey}: alias variable ${processedValue.id} was deleted before application, skipping (keeping existing value)`);
+        // Fallback vers resolvedValue si disponible
+        if (semanticData.resolvedValue != null && semanticData.resolvedValue !== undefined) {
+          processedValue = getProcessedValueFromResolved(semanticData.resolvedValue, semanticData.type);
+          valueType = 'raw';
+          console.log(`💾 [APPLY] ${semanticKey} => raw (variable deleted) => ${semanticData.resolvedValue}`);
+        } else {
+          return; // EARLY RETURN - pas d'écrasement
+        }
+      }
+    }
+    
     variable.setValueForMode(modeId, processedValue);
-    console.log(`✅ [APPLY] ${semanticKey} => success`);
+    console.log(`✅ [APPLY] ${semanticKey} => success (${valueType})`);
   } catch (e) {
     console.error(`❌ [APPLY_FAIL] ${semanticKey}: failed to set value:`, e);
+    // En cas d'erreur, ne pas créer d'alias cassé - utiliser resolvedValue si disponible
+    if (valueType === 'alias' && semanticData.resolvedValue != null && semanticData.resolvedValue !== undefined) {
+      try {
+        var fallbackValue = getProcessedValueFromResolved(semanticData.resolvedValue, semanticData.type);
+        variable.setValueForMode(modeId, fallbackValue);
+        console.log(`💾 [APPLY_FALLBACK] ${semanticKey} => raw value after alias failure => ${semanticData.resolvedValue}`);
+      } catch (fallbackError) {
+        console.error(`❌ [APPLY_FALLBACK_FAIL] ${semanticKey}: failed to set fallback value:`, fallbackError);
+      }
+    }
   }
 }
 
@@ -4795,6 +4852,7 @@ async function importTokensToFigma(tokens, naming, overwrite) {
 
 
 // Fonction pour construire une map globale des variables existantes pour la résolution des alias
+// VERSION AMÉLIORÉE avec plus de variantes de clés
 function buildGlobalVariableMap() {
   console.log('🔍 Building global variable map for semantic alias resolution');
 
@@ -4806,32 +4864,284 @@ function buildGlobalVariableMap() {
     var collection = figma.variables.getVariableCollectionById(variable.variableCollectionId);
     if (!collection) continue;
 
-    // Créer une clé stable : collectionName/variableName (comme dans les alias sémantiques)
+    // Clé principale : collectionName/variableName (comme dans les alias sémantiques)
     var key = collection.name + '/' + variable.name;
     byName.set(key, variable.id);
 
-    // Aussi ajouter la clé extraite (ex: Grayscale/50 pour gray-50)
+    // Clé avec catégorie normalisée (ex: gray/gray-50, brand/primary-3)
+    var category = getCategoryFromVariableCollection(collection.name);
+    if (category) {
+      var categoryKey = category + '/' + variable.name;
+      byName.set(categoryKey, variable.id);
+    }
+
+    // Clé extraite (ex: Grayscale/50 pour gray-50)
     var extractedKey = extractVariableKey(variable, collection.name);
     if (extractedKey && extractedKey !== variable.name) {
       var extractedFullKey = collection.name + '/' + extractedKey;
       byName.set(extractedFullKey, variable.id);
+      
+      // Aussi avec catégorie normalisée
+      if (category) {
+        var extractedCategoryKey = category + '/' + extractedKey;
+        byName.set(extractedCategoryKey, variable.id);
+      }
     }
 
-    // Aussi ajouter juste variable.name au cas où (pour compatibilité)
+    // Clé avec juste le nom de variable (pour compatibilité)
     if (!byName.has(variable.name)) {
       byName.set(variable.name, variable.id);
+    }
+    
+    // Clé avec juste la clé extraite (si différente du nom)
+    if (extractedKey && extractedKey !== variable.name && !byName.has(extractedKey)) {
+      byName.set(extractedKey, variable.id);
+    }
+    
+    // Clé avec format category-key (ex: gray-50, brand-3)
+    if (category && extractedKey) {
+      var categoryDashKey = category + '-' + extractedKey;
+      if (!byName.has(categoryDashKey)) {
+        byName.set(categoryDashKey, variable.id);
+      }
     }
   }
 
   console.log(`✅ Global variable map built: ${byName.size} variables mapped`);
   // Debug: montrer quelques clés
-  var keys = Array.from(byName.keys()).slice(0, 5);
+  var keys = Array.from(byName.keys()).slice(0, 10);
   console.log(`🔍 Sample keys: ${keys.join(', ')}`);
   return byName;
 }
 
-// Fonction pour résoudre les alias sémantiques en utilisant la map globale des variables
-function resolveSemanticAliasFromMap(semanticKey, allTokens, naming, globalVariableMap) {
+/**
+ * Fonction centralisée pour obtenir le mapping d'une clé sémantique selon la librairie
+ * @param {string} semanticKey - Clé sémantique (ex: 'bg.canvas')
+ * @param {string} lib - Type de librairie normalisé ('tailwind', 'ant', 'bootstrap', 'mui', 'chakra')
+ * @returns {Object|null} Mapping avec category et keys, ou null si non trouvé
+ */
+function getPrimitiveMappingForSemantic(semanticKey, lib) {
+  // Mapping centralisé pour toutes les librairies
+  // Les clés correspondent aux valeurs extraites par extractVariableKey
+  const mappings = {
+    tailwind: {
+      'bg.canvas': { category: 'gray', keys: ['50'] },
+      'bg.surface': { category: 'gray', keys: ['50'] },
+      'bg.elevated': { category: 'gray', keys: ['100'] },
+      'bg.muted': { category: 'gray', keys: ['100'] },
+      'bg.inverse': { category: 'gray', keys: ['950', '900'] },
+      'text.primary': { category: 'gray', keys: ['950', '900'] },
+      'text.secondary': { category: 'gray', keys: ['700', '600'] },
+      'text.muted': { category: 'gray', keys: ['500', '400'] },
+      'text.inverse': { category: 'gray', keys: ['50'] },
+      'text.disabled': { category: 'gray', keys: ['400', '300'] },
+      'border.default': { category: 'gray', keys: ['200'] },
+      'border.muted': { category: 'gray', keys: ['100'] },
+      'action.primary.default': { category: 'brand', keys: ['600', '500'] },
+      'action.primary.hover': { category: 'brand', keys: ['700', '600'] },
+      'action.primary.active': { category: 'brand', keys: ['800', '700'] },
+      'action.primary.disabled': { category: 'gray', keys: ['300'] },
+      'status.success': { category: 'system', keys: ['success'] },
+      'status.warning': { category: 'system', keys: ['warning'] },
+      'status.error': { category: 'system', keys: ['error'] },
+      'status.info': { category: 'system', keys: ['info'] },
+      'radius.sm': { category: 'radius', keys: ['sm', '4'] },
+      'radius.md': { category: 'radius', keys: ['md', '8'] },
+      'space.sm': { category: 'spacing', keys: ['sm', '4', '8'] },
+      'space.md': { category: 'spacing', keys: ['md', '8', '16'] },
+      'font.size.base': { category: 'typography', keys: ['base'] },
+      'font.weight.base': { category: 'typography', keys: ['regular'] }
+    },
+    ant: {
+      'bg.canvas': { category: 'gray', keys: ['1'] },
+      'bg.surface': { category: 'gray', keys: ['1'] },
+      'bg.elevated': { category: 'gray', keys: ['2'] },
+      'bg.muted': { category: 'gray', keys: ['2'] },
+      'bg.inverse': { category: 'gray', keys: ['10'] },
+      'text.primary': { category: 'gray', keys: ['10'] },
+      'text.secondary': { category: 'gray', keys: ['8', '9'] },
+      'text.muted': { category: 'gray', keys: ['6', '7'] },
+      'text.inverse': { category: 'gray', keys: ['1'] },
+      'text.disabled': { category: 'gray', keys: ['6'] },
+      'border.default': { category: 'gray', keys: ['4'] },
+      'border.muted': { category: 'gray', keys: ['3'] },
+      'action.primary.default': { category: 'brand', keys: ['3'] },
+      'action.primary.hover': { category: 'brand', keys: ['4'] },
+      'action.primary.active': { category: 'brand', keys: ['5'] },
+      'action.primary.disabled': { category: 'gray', keys: ['6'] },
+      'status.success': { category: 'system', keys: ['success', '6'] },
+      'status.warning': { category: 'system', keys: ['warning', '6'] },
+      'status.error': { category: 'system', keys: ['error', '6'] },
+      'status.info': { category: 'system', keys: ['info', '6'] },
+      'radius.sm': { category: 'radius', keys: ['sm', '4'] },
+      'radius.md': { category: 'radius', keys: ['md', '6'] },
+      'space.sm': { category: 'spacing', keys: ['sm', '8', 'small'] },
+      'space.md': { category: 'spacing', keys: ['md', '16', 'middle'] },
+      'font.size.base': { category: 'typography', keys: ['14'] },
+      'font.weight.base': { category: 'typography', keys: ['400'] }
+    },
+    bootstrap: {
+      'bg.canvas': { category: 'gray', keys: ['white', '100'] },
+      'bg.surface': { category: 'gray', keys: ['white', '100'] },
+      'bg.elevated': { category: 'gray', keys: ['100'] },
+      'bg.muted': { category: 'gray', keys: ['100'] },
+      'bg.inverse': { category: 'gray', keys: ['900', 'dark'] },
+      'text.primary': { category: 'gray', keys: ['900', 'dark'] },
+      'text.secondary': { category: 'gray', keys: ['600', 'secondary'] },
+      'text.muted': { category: 'gray', keys: ['500', 'muted'] },
+      'text.inverse': { category: 'gray', keys: ['white', 'light'] },
+      'text.disabled': { category: 'gray', keys: ['400', 'muted'] },
+      'border.default': { category: 'gray', keys: ['300'] },
+      'border.muted': { category: 'gray', keys: ['200'] },
+      'action.primary.default': { category: 'brand', keys: ['primary'] },
+      'action.primary.hover': { category: 'brand', keys: ['primary-hover', 'hover'] },
+      'action.primary.active': { category: 'brand', keys: ['primary-dark', 'dark'] },
+      'action.primary.disabled': { category: 'gray', keys: ['300'] },
+      'status.success': { category: 'system', keys: ['success'] },
+      'status.warning': { category: 'system', keys: ['warning'] },
+      'status.error': { category: 'system', keys: ['error'] },
+      'status.info': { category: 'system', keys: ['info'] },
+      'radius.sm': { category: 'radius', keys: ['sm', '2'] },
+      'radius.md': { category: 'radius', keys: ['md', '4'] },
+      'space.sm': { category: 'spacing', keys: ['sm', '2', '8'] },
+      'space.md': { category: 'spacing', keys: ['md', '3', '16'] },
+      'font.size.base': { category: 'typography', keys: ['base', '16'] },
+      'font.weight.base': { category: 'typography', keys: ['normal', '400'] }
+    },
+    mui: {
+      'bg.canvas': { category: 'gray', keys: ['50', 'white'] },
+      'bg.surface': { category: 'gray', keys: ['white', '50'] },
+      'bg.elevated': { category: 'gray', keys: ['100'] },
+      'bg.muted': { category: 'gray', keys: ['100'] },
+      'bg.inverse': { category: 'gray', keys: ['950', '900'] },
+      'text.primary': { category: 'gray', keys: ['950', '900'] },
+      'text.secondary': { category: 'gray', keys: ['700', '600'] },
+      'text.muted': { category: 'gray', keys: ['500', '400'] },
+      'text.inverse': { category: 'gray', keys: ['50', '100'] },
+      'text.disabled': { category: 'gray', keys: ['400', '300'] },
+      'border.default': { category: 'gray', keys: ['200', '300'] },
+      'border.muted': { category: 'gray', keys: ['100', '200'] },
+      'action.primary.default': { category: 'brand', keys: ['main', 'primary'] },
+      'action.primary.hover': { category: 'brand', keys: ['dark'] },
+      'action.primary.active': { category: 'brand', keys: ['dark'] },
+      'action.primary.disabled': { category: 'gray', keys: ['300', '400'] },
+      'status.success': { category: 'system', keys: ['success'] },
+      'status.warning': { category: 'system', keys: ['warning'] },
+      'status.error': { category: 'system', keys: ['error'] },
+      'status.info': { category: 'system', keys: ['info'] },
+      'radius.sm': { category: 'radius', keys: ['sm', '4'] },
+      'radius.md': { category: 'radius', keys: ['md', '8'] },
+      'space.sm': { category: 'spacing', keys: ['sm', '8', '2'] },
+      'space.md': { category: 'spacing', keys: ['md', '16', '4'] },
+      'font.size.base': { category: 'typography', keys: ['base', '16'] },
+      'font.weight.base': { category: 'typography', keys: ['regular', '400'] }
+    },
+    chakra: {
+      'bg.canvas': { category: 'gray', keys: ['50'] },
+      'bg.surface': { category: 'gray', keys: ['50'] },
+      'bg.elevated': { category: 'gray', keys: ['100'] },
+      'bg.muted': { category: 'gray', keys: ['100'] },
+      'bg.inverse': { category: 'gray', keys: ['900', '800'] },
+      'text.primary': { category: 'gray', keys: ['900', '800'] },
+      'text.secondary': { category: 'gray', keys: ['700', '600'] },
+      'text.muted': { category: 'gray', keys: ['500', '400'] },
+      'text.inverse': { category: 'gray', keys: ['50'] },
+      'text.disabled': { category: 'gray', keys: ['400', '300'] },
+      'border.default': { category: 'gray', keys: ['200'] },
+      'border.muted': { category: 'gray', keys: ['100'] },
+      'action.primary.default': { category: 'brand', keys: ['300'] },
+      'action.primary.hover': { category: 'brand', keys: ['400'] },
+      'action.primary.active': { category: 'brand', keys: ['500'] },
+      'action.primary.disabled': { category: 'gray', keys: ['300', '400'] },
+      'status.success': { category: 'system', keys: ['success', '500'] },
+      'status.warning': { category: 'system', keys: ['warning', '500'] },
+      'status.error': { category: 'system', keys: ['error', '500'] },
+      'status.info': { category: 'system', keys: ['info', 'success'] },
+      'radius.sm': { category: 'radius', keys: ['sm', '4'] },
+      'radius.md': { category: 'radius', keys: ['md', '8'] },
+      'space.sm': { category: 'spacing', keys: ['sm', '2', '8'] },
+      'space.md': { category: 'spacing', keys: ['md', '4', '16'] },
+      'font.size.base': { category: 'typography', keys: ['base', '16'] },
+      'font.weight.base': { category: 'typography', keys: ['normal', '400'] }
+    }
+  };
+  
+  return mappings[lib] && mappings[lib][semanticKey] || null;
+}
+
+/**
+ * Génère les clés de fallback pour la recherche dans la map globale
+ * @param {string} key - Clé de base
+ * @param {string} category - Catégorie (brand, gray, system, etc.)
+ * @returns {Array} Liste des clés de fallback possibles
+ */
+function generateFallbackKeysForMap(key, category) {
+  var fallbacks = [];
+  
+  // Pour les clés numériques pures
+  if (/^\d+$/.test(key)) {
+    if (category === 'gray') {
+      fallbacks.push('gray-' + key);
+      fallbacks.push('grey-' + key);
+      fallbacks.push('Grayscale/' + key);
+      fallbacks.push('Grayscale/gray-' + key);
+      fallbacks.push('gray/gray-' + key);
+    } else if (category === 'brand') {
+      fallbacks.push('primary-' + key);
+      fallbacks.push('brand-' + key);
+      fallbacks.push('Brand Colors/' + key);
+      fallbacks.push('Brand Colors/primary-' + key);
+      fallbacks.push('brand/primary-' + key);
+    }
+  }
+  
+  // Pour les clés avec tiret
+  if (key.includes('-')) {
+    var parts = key.split('-');
+    if (parts.length >= 2 && /^\d+$/.test(parts[parts.length - 1])) {
+      fallbacks.push(parts[parts.length - 1]); // Le numéro seul
+    }
+  }
+  
+  // Pour les clés brand spéciales
+  if (category === 'brand') {
+    if (key === 'primary') {
+      fallbacks.push('main', '500', 'base');
+    } else if (key === 'main') {
+      fallbacks.push('primary', '500', 'base');
+    } else if (key === '500') {
+      fallbacks.push('main', 'primary', 'base');
+    } else if (key === 'dark') {
+      fallbacks.push('primary-dark', '600', '700');
+    } else if (key === 'primary-dark') {
+      fallbacks.push('dark', '600', '700');
+    }
+  }
+  
+  return fallbacks;
+}
+
+/**
+ * Vérifie si une collection correspond à une catégorie donnée
+ * @param {string} collectionName - Nom de la collection
+ * @param {string} category - Catégorie recherchée
+ * @returns {boolean} True si la collection correspond à la catégorie
+ */
+function isCollectionCategory(collectionName, category) {
+  var c = (collectionName || '').toLowerCase();
+  if (category === 'brand') return c.includes('brand');
+  if (category === 'system') return c.includes('system');
+  if (category === 'gray') return c.includes('gray') || c.includes('grey') || c.includes('grayscale');
+  if (category === 'spacing') return c.includes('spacing');
+  if (category === 'radius') return c.includes('radius');
+  if (category === 'typography') return c.includes('typo') || c.includes('typography');
+  return false;
+}
+
+/**
+ * CONSERVER l'ancienne logique comme fallback de sécurité
+ */
+function resolveSemanticAliasFromMapLegacy(semanticKey, allTokens, naming, globalVariableMap) {
   // Utiliser la logique existante pour déterminer quelle primitive cibler
   var aliasInfo = resolveSemanticAliasInfo(semanticKey, allTokens, naming);
   if (!aliasInfo) {
@@ -4860,6 +5170,94 @@ function resolveSemanticAliasFromMap(semanticKey, allTokens, naming, globalVaria
   // Si la primitive n'existe pas encore, on ne crée pas d'alias cassé
   console.warn(`⚠️ [resolveSemanticAliasFromMap] Primitive not found for semantic ${semanticKey}: tried "${targetKey}" and "${aliasInfo.key}" (map has ${globalVariableMap.size} entries)`);
   return null;
+}
+
+// Fonction pour résoudre les alias sémantiques en utilisant la map globale des variables
+// VERSION AMÉLIORÉE avec fallback vers l'ancienne logique
+function resolveSemanticAliasFromMap(semanticKey, allTokens, naming, globalVariableMap) {
+  console.log(`🔍 [ALIAS_RESOLVE] Starting resolution for ${semanticKey} with ${naming}`);
+  
+  // NOUVELLE LOGIQUE : Utiliser directement la map globale avec mappings centralisés
+  try {
+    const lib = normalizeLibType(naming);
+    const mapping = getPrimitiveMappingForSemantic(semanticKey, lib);
+    
+    if (!mapping) {
+      console.warn(`⚠️ [ALIAS_RESOLVE] No mapping found for ${semanticKey} with ${naming}, using legacy method`);
+      // FALLBACK vers l'ancienne logique si pas de mapping
+      return resolveSemanticAliasFromMapLegacy(semanticKey, allTokens, naming, globalVariableMap);
+    }
+    
+    console.log(`🎯 [ALIAS_RESOLVE] Mapping: ${mapping.category} → [${mapping.keys.join(', ')}]`);
+    console.log(`📊 [ALIAS_RESOLVE] Global map has ${globalVariableMap.size} entries`);
+    
+    // Chercher directement dans la map globale avec toutes les variantes possibles
+    for (var i = 0; i < mapping.keys.length; i++) {
+      var targetKey = mapping.keys[i];
+      
+      // Générer toutes les clés possibles à chercher
+      var possibleKeys = [
+        mapping.category + '/' + targetKey,
+        targetKey,
+        mapping.category + '-' + targetKey
+      ];
+      
+      // Ajouter les fallbacks
+      var fallbacks = generateFallbackKeysForMap(targetKey, mapping.category);
+      for (var f = 0; f < fallbacks.length; f++) {
+        if (possibleKeys.indexOf(fallbacks[f]) === -1) {
+          possibleKeys.push(fallbacks[f]);
+        }
+      }
+      
+      // Chercher dans la map
+      for (var j = 0; j < possibleKeys.length; j++) {
+        var variableId = globalVariableMap.get(possibleKeys[j]);
+        if (variableId) {
+          var variable = figma.variables.getVariableById(variableId);
+          if (variable) {
+            // Vérifier que c'est bien la bonne collection
+            var collection = figma.variables.getVariableCollectionById(variable.variableCollectionId);
+            if (collection && isCollectionCategory(collection.name, mapping.category)) {
+              // ✅ VÉRIFICATION SUPPLÉMENTAIRE : s'assurer que la variable a une valeur valide dans au moins un mode
+              var hasValidValue = false;
+              if (collection.modes && collection.modes.length > 0) {
+                for (var m = 0; m < collection.modes.length; m++) {
+                  var checkModeId = collection.modes[m].modeId;
+                  var checkValue = variable.valuesByMode[checkModeId];
+                  if (checkValue !== undefined && checkValue !== null) {
+                    hasValidValue = true;
+                    break;
+                  }
+                }
+              }
+              
+              if (hasValidValue) {
+                console.log(`✅ [ALIAS_RESOLVE] Found via map: ${semanticKey} → ${possibleKeys[j]} (${variable.name})`);
+                return {
+                  variableId: variableId,
+                  collection: mapping.category,
+                  key: targetKey,
+                  cssName: generateCssName(mapping.category, targetKey)
+                };
+              } else {
+                console.warn(`⚠️ [ALIAS_RESOLVE] Variable ${variable.name} found but has no valid value in any mode, skipping`);
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    console.warn(`⚠️ [ALIAS_RESOLVE] Not found in map after trying ${mapping.keys.length} keys, trying legacy method`);
+    // FALLBACK vers l'ancienne logique si la nouvelle ne trouve rien
+    return resolveSemanticAliasFromMapLegacy(semanticKey, allTokens, naming, globalVariableMap);
+    
+  } catch (error) {
+    console.error(`❌ [ALIAS_RESOLVE] Error in new logic, falling back to legacy:`, error);
+    // FALLBACK vers l'ancienne logique en cas d'erreur
+    return resolveSemanticAliasFromMapLegacy(semanticKey, allTokens, naming, globalVariableMap);
+  }
 }
 
 var cachedTokens = null;
@@ -7133,7 +7531,8 @@ figma.ui.onmessage = function (msg) {
 
   if (msg.type === "generate") {
 
-    var naming = msg.naming || "custom";
+    var savedNaming = figma.root.getPluginData("tokenStarter.naming") || null;
+    var naming = msg.naming || savedNaming || "custom";
 
     console.log('🎨 Generating tokens for naming:', naming);
 
@@ -7227,6 +7626,7 @@ figma.ui.onmessage = function (msg) {
     });
 
     var semanticPreview = getSemanticPreviewRows(cachedTokens, naming);
+    saveNamingToFile(naming);
     figma.ui.postMessage({
       type: "tokens-generated",
       tokens: cachedTokens,
@@ -7691,6 +8091,47 @@ function getCategoryFromVariableCollection(collectionName) {
   else if (n === "typography" || n.includes('typo') || n.includes('typography')) return "typography";
 
   return "unknown";
+}
+
+// Fonction d'inférence du type de collection depuis son contenu (sécurisée)
+function inferCollectionTypeFromContent(collection) {
+  if (!collection || !collection.variableIds || collection.variableIds.length === 0) {
+    return null; // Sécurité : pas de variables = pas d'inférence
+  }
+
+  // Analyser seulement les 3 premières variables (performance + sécurité)
+  var sampleVars = collection.variableIds.slice(0, 3).map(function(id) {
+    return figma.variables.getVariableById(id);
+  }).filter(function(v) { return v; });
+
+  if (sampleVars.length === 0) return null;
+
+  // Compter les types de valeurs
+  var typeCounts = { COLOR: 0, FLOAT: 0, STRING: 0 };
+  sampleVars.forEach(function(v) {
+    if (v.resolvedType in typeCounts) {
+      typeCounts[v.resolvedType]++;
+    }
+  });
+
+  // Heuristiques très conservatrices basées sur le nom + contenu uniforme
+  var name = collection.name.toLowerCase();
+
+  // Seulement si tous les échantillons sont du même type ET que le nom contient un indice
+  if (typeCounts.COLOR === sampleVars.length && (name.includes('color') || name.includes('brand') || name.includes('theme'))) {
+    return "brand"; // Collection de couleurs
+  }
+  if (typeCounts.FLOAT === sampleVars.length && name.includes('spacing')) {
+    return "spacing";
+  }
+  if (typeCounts.FLOAT === sampleVars.length && name.includes('radius')) {
+    return "radius";
+  }
+  if (typeCounts.STRING === sampleVars.length && (name.includes('typo') || name.includes('font'))) {
+    return "typography";
+  }
+
+  return null; // Ne pas deviner si ambigu - sécurité maximale
 }
 
 // Fonction de diagnostic pour la résolution des alias sémantiques
