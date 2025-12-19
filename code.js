@@ -2220,6 +2220,27 @@ function extractVariableKey(variable, collectionName) {
     } else if (name === "brand") {
       return "primary"; // mapping fallback
     }
+
+    // NOUVEAU : Patterns étendus pour les noms de couleurs non standard
+    // Support pour les noms comme "blue-500", "red-600", "color-blue", etc.
+    if (name.match(/^(\w+)[-_](\d{1,3})$/)) {
+      // blue-500, red_600, green-300, etc. → garder le nom complet
+      return name;
+    }
+    if (name.match(/^color[_-]?(\w+)$/)) {
+      // color-blue, color_red, colorPrimary → garder le nom complet
+      return name;
+    }
+    if (name.match(/^(\w+)[-_]?color$/)) {
+      // blue-color, primary_color → garder le nom complet
+      return name;
+    }
+
+    // Fallback ultime : accepter n'importe quel nom non vide pour les collections brand
+    // Cela permet de reconnaître des variables avec des noms complètement personnalisés
+    if (name.length > 0 && name.length < 100) { // sécurité anti-noms trop longs
+      return name;
+    }
   } else if (isSystem) {
     return name;
   } else if (isGray) {
@@ -8083,24 +8104,42 @@ function mergeSemanticWithExistingAliases(generated, existing) {
 function getCategoryFromVariableCollection(collectionName) {
   const n = collectionName.toLowerCase().trim();
 
-  if (n === "brand colors" || n.includes('brand')) return "brand";
-  else if (n === "system colors" || n.includes('system')) return "system";
-  else if (n === "grayscale" || n.includes('gray') || n.includes('grey') || n.includes('grayscale')) return "gray";
-  else if (n === "spacing" || n.includes('spacing')) return "spacing";
-  else if (n === "radius" || n.includes('radius')) return "radius";
-  else if (n === "typography" || n.includes('typo') || n.includes('typography')) return "typography";
+  // Reconnaissance étendue pour les couleurs (brand, theme, ui, etc.)
+  if (n === "brand colors" || n.includes('brand') || n.includes('color') ||
+      n.includes('theme') || n.includes('palette') || n.includes('ui') ||
+      n === "colors" || n === "design tokens") return "brand";
+
+  // Reconnaissance étendue pour les couleurs système/status
+  else if (n === "system colors" || n.includes('system') || n.includes('status') ||
+           n.includes('state') || n.includes('semantic')) return "system";
+
+  // Reconnaissance étendue pour les nuances de gris
+  else if (n === "grayscale" || n.includes('gray') || n.includes('grey') ||
+           n.includes('grayscale') || n.includes('neutral')) return "gray";
+
+  // Reconnaissance étendue pour l'espacement
+  else if (n === "spacing" || n.includes('spacing') || n.includes('gap') ||
+           n.includes('margin') || n.includes('padding') || n.includes('space')) return "spacing";
+
+  // Reconnaissance étendue pour les rayons de bordure
+  else if (n === "radius" || n.includes('radius') || n.includes('corner') ||
+           n.includes('border-radius') || n.includes('round')) return "radius";
+
+  // Reconnaissance étendue pour la typographie
+  else if (n === "typography" || n.includes('typo') || n.includes('typography') ||
+           n.includes('font') || n.includes('text') || n.includes('type')) return "typography";
 
   return "unknown";
 }
 
-// Fonction d'inférence du type de collection depuis son contenu (sécurisée)
+// Fonction d'inférence du type de collection depuis son contenu (améliorée)
 function inferCollectionTypeFromContent(collection) {
   if (!collection || !collection.variableIds || collection.variableIds.length === 0) {
     return null; // Sécurité : pas de variables = pas d'inférence
   }
 
-  // Analyser seulement les 3 premières variables (performance + sécurité)
-  var sampleVars = collection.variableIds.slice(0, 3).map(function(id) {
+  // Analyser seulement les 5 premières variables (plus représentatif)
+  var sampleVars = collection.variableIds.slice(0, 5).map(function(id) {
     return figma.variables.getVariableById(id);
   }).filter(function(v) { return v; });
 
@@ -8114,24 +8153,38 @@ function inferCollectionTypeFromContent(collection) {
     }
   });
 
-  // Heuristiques très conservatrices basées sur le nom + contenu uniforme
+  // Heuristiques améliorées : utiliser des seuils plutôt que des exigences absolues
   var name = collection.name.toLowerCase();
+  var totalSamples = sampleVars.length;
 
-  // Seulement si tous les échantillons sont du même type ET que le nom contient un indice
-  if (typeCounts.COLOR === sampleVars.length && (name.includes('color') || name.includes('brand') || name.includes('theme'))) {
-    return "brand"; // Collection de couleurs
-  }
-  if (typeCounts.FLOAT === sampleVars.length && name.includes('spacing')) {
-    return "spacing";
-  }
-  if (typeCounts.FLOAT === sampleVars.length && name.includes('radius')) {
-    return "radius";
-  }
-  if (typeCounts.STRING === sampleVars.length && (name.includes('typo') || name.includes('font'))) {
-    return "typography";
+  // Si > 60% des variables sont des couleurs = collection de couleurs
+  if (typeCounts.COLOR > totalSamples * 0.6) {
+    return "brand";
   }
 
-  return null; // Ne pas deviner si ambigu - sécurité maximale
+  // Si > 60% des variables sont des nombres
+  if (typeCounts.FLOAT > totalSamples * 0.6) {
+    // Essayer de déterminer le sous-type basé sur le nom
+    if (name.includes('spacing') || name.includes('gap') || name.includes('margin') || name.includes('padding')) {
+      return "spacing";
+    }
+    if (name.includes('radius') || name.includes('corner') || name.includes('border-radius')) {
+      return "radius";
+    }
+    // Par défaut, si ce sont des nombres, c'est probablement du spacing
+    if (name.includes('space') || name.includes('size') || totalSamples > 2) {
+      return "spacing";
+    }
+  }
+
+  // Si > 60% des variables sont des chaînes = probablement typographie
+  if (typeCounts.STRING > totalSamples * 0.6) {
+    if (name.includes('typo') || name.includes('font') || name.includes('text') || name.includes('type')) {
+      return "typography";
+    }
+  }
+
+  return null; // Ne pas deviner si vraiment ambigu
 }
 
 // Fonction de diagnostic pour la résolution des alias sémantiques
