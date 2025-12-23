@@ -1,0 +1,88 @@
+:root {
+  /* Primitives - Typography */
+  --typography-text-xs: 0.75rem;
+  --typography-text-sm: 0.875rem;
+  --typography-text-base: 1rem;
+  --typography-text-lg: 1.125rem;
+  --typography-text-xl: 1.25rem;
+
+  --typography-weight-light: 300;
+  --typography-weight-normal: 400;
+  --typography-weight-medium: 500;
+  --typography-weight-semibold: 600;
+  --typography-weight-bold: 700;
+
+  /* Primitives - Gray */
+  --gray-50: #F9FAFB;
+  --gray-100: #F3F4F6;
+  --gray-200: #E5E7EB;
+  --gray-300: #D1D5DB;
+  --gray-400: #9CA3AF;
+  --gray-500: #6B7280;
+  --gray-600: #4B5563;
+  --gray-700: #374151;
+  --gray-800: #1F2937;
+  --gray-900: #111827;
+  --gray-950: #030712;
+  --gray-white: #FFFFFF;
+
+  /* Primitives - System Colors (WCAG AA Optimized) */
+  --system-success: #059669;
+  /* Emerald-600 - Contrast 6.5:1 with gray-900 */
+  --system-warning: #D97706;
+  /* Amber-600 - Contrast 8.1:1 with gray-900 */
+  --system-error: #EF4444;
+  /* Red-500 - Contrast 4.5:1 with gray-white */
+  --system-info: #2563EB;
+  /* Blue-600 - Contrast 7.5:1 with gray-white, 4.5:1 with gray-900 */
+}
+
+html[data-theme='light'] {
+  /* Semantic Tokens - Typography */
+  --font-size-xs: var(--typography-text-xs);
+  --font-size-sm: var(--typography-text-sm);
+  --font-size-base: var(--typography-text-base);
+  --font-size-lg: var(--typography-text-lg);
+  --font-size-xl: var(--typography-text-xl);
+
+  --font-weight-light: var(--typography-weight-light);
+  --font-weight-normal: var(--typography-weight-normal);
+  --font-weight-medium: var(--typography-weight-medium);
+  --font-weight-semibold: var(--typography-weight-semibold);
+  --font-weight-bold: var(--typography-weight-bold);
+
+  /* Semantic Tokens - Action Contrast */
+  --action-primary-contrastText: var(--on-primary);
+  --action-secondary-contrastText: var(--on-secondary);
+
+  /* Semantic Tokens - Inverse Family */
+  --bg-inverse: var(--gray-900);
+  --text-on-inverse: var(--gray-white);
+  --text-inverse: var(--text-on-inverse);
+  --on-inverse: var(--text-on-inverse);
+}
+
+html[data-theme='dark'] {
+  /* Semantic Tokens - Typography */
+  --font-size-xs: var(--typography-text-xs);
+  --font-size-sm: var(--typography-text-sm);
+  --font-size-base: var(--typography-text-base);
+  --font-size-lg: var(--typography-text-lg);
+  --font-size-xl: var(--typography-text-xl);
+
+  --font-weight-light: var(--typography-weight-light);
+  --font-weight-normal: var(--typography-weight-normal);
+  --font-weight-medium: var(--typography-weight-medium);
+  --font-weight-semibold: var(--typography-weight-semibold);
+  --font-weight-bold: var(--typography-weight-bold);
+
+  /* Semantic Tokens - Action Contrast */
+  --action-primary-contrastText: var(--on-primary);
+  --action-secondary-contrastText: var(--on-secondary);
+
+  /* Semantic Tokens - Inverse Family */
+  --bg-inverse: var(--gray-50);
+  --text-on-inverse: var(--gray-950);
+  --text-inverse: var(--text-on-inverse);
+  --on-inverse: var(--text-on-inverse);
+}

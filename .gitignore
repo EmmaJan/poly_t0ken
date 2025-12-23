@@ -1,5 +1,15 @@
-node_modules/
+# Coverage reports
+coverage/
+*.lcov
+
+# Test results
+test-results/
+
+# Jest cache
+.jest-cache/
+
+# Temporary test files
+*.test.tmp.js
+node_modules
 dist/
-.DS_Store
-*.log
-package-lock.json
+*.legacy

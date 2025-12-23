@@ -1,43 +1,25 @@
 
-
-
-// Plugin startup verification - verified manually: 0 occurrences of variable.scopes = assignments
+// Plugin startup verification
 (function () { return function () { } })() && console.log("✅ Plugin initialized: scopes use setScopes() method only");
 
 // ============================================================================
 // CONFIGURATION FLAGS
 // ============================================================================
-// DÉCISION 2025-12-22 : Approche conservatrice
-// - Legacy Engine : Actif, stable, production-ready
-// - Core Engine : Expérimental, nécessite validation
-// 
-// Pour basculer vers Core Engine :
-// 1. Changer USE_CORE_ENGINE = true
-// 2. Tester toutes les librairies (Tailwind, MUI, Ant, Bootstrap, Chakra)
-// 3. Vérifier semantic tokens et exports
-// 4. Valider pendant 1-2 semaines
-// 5. Supprimer Legacy si Core stable
-//
-// Voir LEGACY_ENGINE_DECISION.md pour détails
 const USE_CORE_ENGINE = false;
-const DEBUG = true; // Master debug flag (consolidates DEBUG_TOKENS + DEBUG_SCOPES_SCAN)
-
-// Legacy flags (kept for compatibility, but use DEBUG instead)
+const DEBUG = true;
 const DEBUG_TOKENS = DEBUG;
 const DEBUG_SCOPES_SCAN = DEBUG;
 
-// Self-test au démarrage (si DEBUG activé)
-// Note: validateScopesAndFiltering est défini plus bas (~ligne 4740)
 if (DEBUG && typeof validateScopesAndFiltering !== 'undefined') {
   try {
     validateScopesAndFiltering();
   } catch (e) {
-    console.warn('⚠️ Self-test skipped (function not yet defined):', e.message);
+    console.warn('⚠️ Self-test skipped:', e.message);
   }
 }
 
 // ============================================================================
-// UTILITY HELPERS
+// UTILITY HELPERS (RESTORED)
 // ============================================================================
 function safeStringify(obj, maxLen) {
   maxLen = maxLen || 6000;
@@ -52,6 +34,50 @@ function safeStringify(obj, maxLen) {
 function debugLog(label, payload) {
   if (!DEBUG) return;
   console.log('🔍 [DEBUG] ' + label + ':', safeStringify(payload, 3000));
+}
+
+// Normalisation des types de bibliothèque - fonction globale
+function normalizeLibType(naming) {
+  if (!naming) return 'tailwind';
+
+  var normalized = naming.toLowerCase().trim();
+
+  // Mapping des variantes vers les types canoniques
+  if (normalized === 'shadcn') return 'tailwind';
+  if (normalized === 'mui' || normalized === 'material-ui') return 'mui';
+  if (normalized === 'ant' || normalized === 'ant-design' || normalized === 'antd') return 'ant';
+  if (normalized === 'bootstrap' || normalized === 'bs') return 'bootstrap';
+  if (normalized === 'chakra' || normalized === 'chakra-ui') return 'chakra';
+
+  // Par défaut, considérer comme tailwind pour les inconnus
+  return 'tailwind';
+}
+
+function rgbToHex(c) {
+  var roundToPrecision = function (x) {
+    return Math.round(x * 1000000) / 1000000;
+  };
+  var r = roundToPrecision(Math.max(0, Math.min(1, c.r)));
+  var g = roundToPrecision(Math.max(0, Math.min(1, c.g)));
+  var b = roundToPrecision(Math.max(0, Math.min(1, c.b)));
+  var r255 = Math.round(r * 255);
+  var g255 = Math.round(g * 255);
+  var b255 = Math.round(b * 255);
+  var n = (r255 << 16) | (g255 << 8) | b255;
+  var hex = "#" + n.toString(16).padStart(6, "0").toUpperCase();
+  return hex;
+}
+
+// Fonction pour détecter les valeurs fallback UI qui ne doivent pas être sauvegardées
+function isUIFallbackValue(value, tokenType) {
+  if (!value) return false;
+  var stringValue = typeof value === 'string' ? value : String(value);
+  var uiFallbacks = {
+    'COLOR': ['#000000', '#ffffff', '#FFFFFF', '#000', '#fff'],
+    'FLOAT': ['0', 0]
+  };
+  var fallbacks = uiFallbacks[tokenType] || [];
+  return fallbacks.includes(stringValue) || fallbacks.includes(value);
 }
 
 // Legacy wrapper (kept for compatibility)
@@ -75,22 +101,7 @@ function postToUI(type, payload) {
   }
 }
 
-// Normalisation des types de bibliothèque - fonction globale
-function normalizeLibType(naming) {
-  if (!naming) return 'tailwind';
 
-  var normalized = naming.toLowerCase().trim();
-
-  // Mapping des variantes vers les types canoniques
-  if (normalized === 'shadcn') return 'tailwind';
-  if (normalized === 'mui' || normalized === 'material-ui') return 'mui';
-  if (normalized === 'ant' || normalized === 'ant-design' || normalized === 'antd') return 'ant';
-  if (normalized === 'bootstrap' || normalized === 'bs') return 'bootstrap';
-  if (normalized === 'chakra' || normalized === 'chakra-ui') return 'chakra';
-
-  // Par défaut, considérer comme tailwind pour les inconnus
-  return 'tailwind';
-}
 
 // États possibles pour un token sémantique (robustesse des alias)
 var TOKEN_STATE = {
@@ -395,70 +406,37 @@ function normalizeAliasTo(aliasTo, collections) {
  * @returns {object|null} {variableId, collection, key, cssName} ou null si non trouvé
  */
 function resolveVariableIdToAliasDescriptor(variableId, collections) {
-  if (!variableId) return null;
+  if (!variableId || !collections) return null;
 
-  try {
-    // 1. Tentative directe via API Figma (plus robuste)
-    var variable = figma.variables.getVariableById(variableId);
+  // Scanner toutes les collections pour trouver la variable
+  for (var collectionName in collections) {
+    if (!collections.hasOwnProperty(collectionName)) continue;
 
-    // 2. Si non trouvé via API (cas rare de suppression), fallback sur collections si format compatible
-    if (!variable && collections) {
-      // Logic legacy
-      for (var collectionName in collections) {
-        if (!collections.hasOwnProperty(collectionName)) continue;
-        var collection = collections[collectionName];
-        // Support format { variables: { id: var } } OU { id: var } direct
-        var vars = collection.variables || collection;
+    var collection = collections[collectionName];
+    if (!collection.variables) continue;
 
-        for (var key in vars) {
-          // Si format map { id: variable }
-          if (key === variableId) {
-            variable = vars[key];
-            break;
-          }
-          // Si format map { name: value } (incompatible pour lookup ID, donc on ignore)
-        }
-        if (variable) break;
+    for (var varId in collection.variables) {
+      if (!collection.variables.hasOwnProperty(varId)) continue;
+
+      if (varId === variableId) {
+        var variable = collection.variables[varId];
+        var key = variable.name;
+
+        // Appliquer les conventions de nommage CSS (même logique que existante)
+        var cssName = generateCssName(collectionName, key);
+
+        return {
+          variableId: variableId,
+          collection: collectionName,
+          key: key,
+          cssName: cssName
+        };
       }
     }
-
-    if (!variable) {
-      // (function () { return function () { } })() && console.warn('⚠️ resolveVariableIdToAliasDescriptor: variableId non trouvé:', variableId);
-      return null;
-    }
-
-    var collection = figma.variables.getVariableCollectionById(variable.variableCollectionId);
-    if (!collection) return null;
-
-    var collectionName = collection.name;
-    var key = variable.name;
-
-    // DÉTERMINATION CATÉGORIE
-    var category = "unknown";
-    var lowerName = collectionName.toLowerCase();
-
-    if (lowerName.includes("brand")) category = "brand";
-    else if (lowerName.includes("system")) category = "system";
-    else if (lowerName.includes("gray") || lowerName.includes("grey")) category = "gray";
-    else if (lowerName.includes("spacing")) category = "spacing";
-    else if (lowerName.includes("radius")) category = "radius";
-    else if (lowerName.includes("typography")) category = "typography";
-    else if (lowerName.includes("border")) category = "border";
-    else category = collectionName; // Fallback
-
-    var cssName = generateCssName(category, key);
-
-    return {
-      variableId: variableId,
-      collection: category, // On préfère la catégorie normalisée
-      key: key,
-      cssName: cssName
-    };
-
-  } catch (error) {
-    console.error("❌ Error in resolveVariableIdToAliasDescriptor:", error);
-    return null;
   }
+
+  console.warn('⚠️ resolveVariableIdToAliasDescriptor: variableId non trouvé dans les collections:', variableId);
+  return null;
 }
 
 /**
@@ -783,21 +761,7 @@ function convertFigmaValueToDisplay(figmaValue, tokenType) {
 }
 
 
-// Fonction pour détecter les valeurs fallback UI qui ne doivent pas être sauvegardées
-function isUIFallbackValue(value, tokenType) {
-  if (!value) return false;
 
-  var stringValue = typeof value === 'string' ? value : String(value);
-
-  // Valeurs considérées comme des fallbacks UI
-  var uiFallbacks = {
-    'COLOR': ['#000000', '#ffffff', '#FFFFFF', '#000', '#fff'],
-    'FLOAT': ['0', 0]
-  };
-
-  var fallbacks = uiFallbacks[tokenType] || [];
-  return fallbacks.includes(stringValue) || fallbacks.includes(value);
-}
 
 // Fonctions utilitaires pour extraire les métadonnées des clés sémantiques
 function getCategoryFromSemanticKey(semanticKey) {
@@ -1213,10 +1177,6 @@ function mapSemanticTokens(palettes, preset, options) {
   // Dark: Canvas < Surface < Elevated < Subtle < Muted < Accent < Inverse (Inverted Intensity)
 
   function getStandardMapping(key) {
-    // ⚠️ CRITICAL: This mapping is CANONICAL and WCAG AA validated
-    // See SEMANTIC_MAPPING_REFERENCE.md for the complete specification
-    // DO NOT MODIFY without validating contrast ratios (≥4.5:1 text, ≥3:1 UI)
-
     // Returns { category, lightRef, darkRef, type }
     // lightRef/darkRef are preferred keys in the primitive palette
 
@@ -1232,7 +1192,7 @@ function mapSemanticTokens(palettes, preset, options) {
     // --- TEXT ---
     if (key === 'text.primary') return { category: 'gray', light: '950', dark: '50', type: 'COLOR' };
     if (key === 'text.secondary') return { category: 'gray', light: '600', dark: '400', type: 'COLOR' };
-    if (key === 'text.muted') return { category: 'gray', light: '500', dark: '400', type: 'COLOR' };
+    if (key === 'text.muted') return { category: 'gray', light: '400', dark: '600', type: 'COLOR' };
     if (key === 'text.accent') return { category: 'brand', light: '600', dark: '400', type: 'COLOR' };
     if (key === 'text.link') return { category: 'brand', light: '500', dark: '300', type: 'COLOR' };
     if (key === 'text.disabled') return { category: 'gray', light: '300', dark: '700', type: 'COLOR' };
@@ -1255,7 +1215,7 @@ function mapSemanticTokens(palettes, preset, options) {
     if (key === 'action.primary.hover') return { category: 'brand', light: brandHover, dark: brandHover, type: 'COLOR' };
     if (key === 'action.primary.active') return { category: 'brand', light: brandActive, dark: brandActive, type: 'COLOR' };
     if (key === 'action.primary.disabled') return { category: 'gray', light: '300', dark: '800', type: 'COLOR' };
-    if (key === 'action.primary.text') return { category: 'gray', light: 'white', dark: 'white', type: 'COLOR' };
+    if (key === 'action.primary.text') return { category: 'gray', light: 'white', dark: '900', type: 'COLOR' };
 
     if (key === 'action.secondary.default') return { category: 'gray', light: '100', dark: '800', type: 'COLOR' };
     if (key === 'action.secondary.hover') return { category: 'gray', light: '200', dark: '700', type: 'COLOR' };
@@ -3950,22 +3910,12 @@ if (existingCollections.length > 0) {
     }
 
     if (existingTokens && hasTokens) {
-      // 🔍 DIAGNOSTIC: Log what we're sending to UI
-      console.log('📤 [EXTRACT_TO_UI] Sending tokens to UI:', {
-        hasBrand: !!existingTokens.tokens.brand,
-        brandCount: existingTokens.tokens.brand ? Object.keys(existingTokens.tokens.brand).length : 0,
-        brandKeys: existingTokens.tokens.brand ? Object.keys(existingTokens.tokens.brand).slice(0, 5) : [],
-        allCategories: Object.keys(existingTokens.tokens),
-        library: existingTokens.library
-      });
-
       figma.ui.postMessage({
         type: "existing-tokens",
         tokens: existingTokens.tokens,
         library: existingTokens.library
       });
     } else {
-      console.log('⚠️ [EXTRACT_TO_UI] No tokens found, sending empty object');
       figma.ui.postMessage({
         type: "existing-tokens",
         tokens: {},
@@ -4050,27 +4000,8 @@ function extractExistingTokens() {
 
       // Nettoyage du nom pour les primitives
       if (category !== "semantic") {
-        var cleanName = variable.name
+        cleanName = variable.name
           .replace(/^(primary|brand|gray|grey|system|spacing|radius|typo|border)-/i, "");
-
-        // 🛡️ PROTECTION CONTRE LA REGRESSION "SYSTEM IN BRAND"
-        // Si on est dans la catégorie 'brand' mais qu'on trouve des tokens système,
-        // on les RE-CATEGORISE vers 'system' au lieu de les ignorer
-        var effectiveCategory = category;
-        if (category === 'brand') {
-          var isSystemToken = /^(success|warning|error|info|danger)(\-|$)/i.test(cleanName);
-          console.log('🔍 [BRAND_FILTER] Processing:', {
-            originalName: variable.name,
-            cleanName: cleanName,
-            isSystemToken: isSystemToken,
-            willRecategorize: isSystemToken
-          });
-
-          if (isSystemToken) {
-            console.log('🔄 [BRAND_FILTER] Re-categorizing system token to "system":', cleanName);
-            effectiveCategory = 'system';
-          }
-        }
 
         // Scoring pour la détection de librairie (uniquement sur les primitives)
         if (cleanName.match(/^(50|100|200|300|400|500|600|700|800|900|950)$/)) libraryScores.tailwind++;
@@ -4147,33 +4078,13 @@ function extractExistingTokens() {
           formattedValue = String(value || "");
         }
 
-
-        // Re-catégorisation intelligente (UNIQUEMENT pour "unknown", pas pour "brand" ou "system")
-        // Les tokens Brand (50-950) et System (success, warning, etc.) ne doivent PAS être re-catégorisés
-        var finalCategory = effectiveCategory;
-        if (effectiveCategory === "unknown") {
-          if (isRadiusPattern(variable.name)) finalCategory = "radius";
-          else if (isSpacingPattern(variable.name)) finalCategory = "spacing";
-        }
+        // Re-catégorisation intelligente (inchangée)
+        var finalCategory = category;
+        if ((category === "brand" || category === "unknown") && isRadiusPattern(variable.name)) finalCategory = "radius";
+        else if ((category === "brand" || category === "unknown") && isSpacingPattern(variable.name)) finalCategory = "spacing";
 
         if (!tokens[finalCategory]) tokens[finalCategory] = {};
         tokens[finalCategory][cleanName] = formattedValue;
-
-        // 🔍 DIAGNOSTIC: Log storage for brand and system tokens
-        if (finalCategory === 'brand') {
-          console.log('💾 [BRAND_STORAGE] Stored:', {
-            cleanName: cleanName,
-            formattedValue: formattedValue,
-            currentBrandCount: Object.keys(tokens.brand).length
-          });
-        }
-        if (finalCategory === 'system') {
-          console.log('💾 [SYSTEM_STORAGE] Stored:', {
-            cleanName: cleanName,
-            formattedValue: formattedValue,
-            currentSystemCount: Object.keys(tokens.system).length
-          });
-        }
       }
     }
   }
@@ -4206,13 +4117,23 @@ function extractExistingTokens() {
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
 function hexToRgb(hex) {
-  // Si c'est déjà un objet RGB, le retourner tel quel
   if (hex && typeof hex === 'object' && hex.r !== undefined && hex.g !== undefined && hex.b !== undefined) {
     return hex;
   }
-
-  // Sinon, convertir depuis hex string
   if (typeof hex === 'string') {
     hex = hex.replace("#", "");
     if (hex.length === 3) {
@@ -4227,29 +4148,7 @@ function hexToRgb(hex) {
       };
     }
   }
-
-  // Valeur par défaut si format invalide
   return { r: 0, g: 0, b: 0 };
-}
-
-function rgbToHex(c) {
-
-  var roundToPrecision = function (x) {
-    return Math.round(x * 1000000) / 1000000;
-  };
-
-  var r = roundToPrecision(Math.max(0, Math.min(1, c.r)));
-  var g = roundToPrecision(Math.max(0, Math.min(1, c.g)));
-  var b = roundToPrecision(Math.max(0, Math.min(1, c.b)));
-
-
-  var r255 = Math.round(r * 255);
-  var g255 = Math.round(g * 255);
-  var b255 = Math.round(b * 255);
-
-  var n = (r255 << 16) | (g255 << 8) | b255;
-  var hex = "#" + n.toString(16).padStart(6, "0").toUpperCase();
-  return hex;
 }
 
 function hexToHsl(hex) {
@@ -4306,10 +4205,6 @@ function hslToHex(h, s, l) {
 
   return rgbToHex({ r: r, g: g, b: b });
 }
-
-
-
-
 
 function generateBrandColors(hex, naming) {
   var hsl = hexToHsl(hex);
@@ -5707,7 +5602,7 @@ async function createOrUpdateVariable(collection, name, type, value, category, o
 }
 
 async function importTokensToFigma(tokens, naming, overwrite) {
-  (function () { return function () { } })() && console.log('🔄 ENGINE SYNC: Starting importTokensToFigma (Refactored) - PATCH 747 ACTIVE');
+  (function () { return function () { } })() && console.log('🔄 ENGINE SYNC: Starting importTokensToFigma (Refactored)');
 
   // 🔍 DIAGNOSTIC: Vérifier la structure des tokens sémantiques reçus
   if (tokens && tokens.semantic) {
@@ -5844,18 +5739,20 @@ async function importTokensToFigma(tokens, naming, overwrite) {
     if (semanticCollection.modes.length === 1 && semanticCollection.modes[0].name === "Mode 1") {
       try { semanticCollection.renameMode(semanticCollection.modes[0].modeId, "Light"); } catch (e) { }
     }
-    var lightMode = semanticCollection.modes.find(function (m) { return m.name === "Light"; }) || semanticCollection.modes[0];
+    var lightMode = semanticCollection.modes.find(function (m) { return m.name === "Light"; });
     var darkMode = semanticCollection.modes.find(function (m) { return m.name === "Dark"; });
 
     if (!darkMode) {
       try {
-        var modeId = semanticCollection.addMode("Dark");
-        darkMode = semanticCollection.modes.find(function (m) { return m.modeId === modeId; });
-        (function () { return function () { } })() && console.log("✅ Created Dark mode:", darkMode.modeId);
+        semanticCollection.addMode("Dark");
+        darkMode = semanticCollection.modes.find(function (m) { return m.name === "Dark"; });
       } catch (e) {
-        console.error("❌ Failed to create Dark mode:", e);
+        console.warn(e);
       }
     }
+
+    var aliasCount = 0;
+    var rawCount = 0;
 
     // ✅ NOUVELLE LOGIQUE : Itérer sur les tokens, puis sur les modes
     // Structure attendue : { 'bg.canvas': { type: 'COLOR', modes: { light: {...}, dark: {...} } } }
@@ -5864,7 +5761,7 @@ async function importTokensToFigma(tokens, naming, overwrite) {
 
       var tokenData = tokens.semantic[key];
       // ✅ NOUVEAU : getFigmaSemanticName au lieu de getSemanticVariableName
-      var variableName = key.replace(/\./g, ' / ');
+      var variableName = getFigmaSemanticName(key);
       var variableType = tokenData.type || SEMANTIC_TYPE_MAP[key] || "COLOR";
 
       // Create variable once (shared across modes)
@@ -5895,67 +5792,55 @@ async function importTokensToFigma(tokens, naming, overwrite) {
         }
 
         if (!modeInfo.data) {
-          // 🛡️ FALLBACK ROBUSTE POUR LEGACY ENGINE
-          // Si le mode dark est manquant, on utilise les données light comme fallback
-          // Cela évite l'erreur "No data for ... in dark mode"
-          if (modeInfo.name === 'dark' && modesToProcess[0].data) {
-            modeInfo.data = modesToProcess[0].data; // Fallback to Light data
-            // On ne loggue pas en erreur pour ne pas spammer, un warn suffit
-            // (function () { return function () { } })() && console.warn(`⚠️ [SYNC_FALLBACK] Using Light data for Dark mode on ${key}`);
-          } else {
-            console.error(`❌ [SYNC_ERROR] No data for ${key} in ${modeInfo.name} mode! Token structure:`, JSON.stringify(tokenData, null, 2));
-            continue;
-          }
+          console.error(`❌ [SYNC_ERROR] No data for ${key} in ${modeInfo.name} mode! Token structure:`, JSON.stringify(tokenData, null, 2));
+          console.error(`❌ [SYNC_ERROR] Expected tokenData.modes.${modeInfo.name} to exist but got:`, modeInfo.data);
+          continue;
         }
 
         var modeData = modeInfo.data;
         var resolvedValue = modeData.resolvedValue;
         var aliasRef = modeData.aliasRef;
 
-        // 🔍 Résoudre l'ID de variable à partir de collection+key
-        var resolvedAliasTo = null;
-        if (aliasRef && aliasRef.category && aliasRef.key) {
-          // primitiveMap a une structure imbriquée: { category: { key: variableId } }
-          var foundVariableId = null;
+        var valueToSet = null;
 
-          if (primitiveMap[aliasRef.category] && primitiveMap[aliasRef.category][aliasRef.key]) {
-            foundVariableId = primitiveMap[aliasRef.category][aliasRef.key];
-            console.log(`✅ [ALIAS_RESOLVE] ${key} (${modeInfo.name}) → ${aliasRef.category}.${aliasRef.key} → variableId: ${foundVariableId}`);
+        // ✅ Try to create alias if ref exists
+        if (aliasRef && primitiveMap[aliasRef.category] && primitiveMap[aliasRef.category][aliasRef.key]) {
+          var primitiveId = primitiveMap[aliasRef.category][aliasRef.key];
+          var primitiveVar = figma.variables.getVariableById(primitiveId);
+          if (primitiveVar) {
+            valueToSet = figma.variables.createVariableAlias(primitiveVar);
+            aliasCount++;
+            (function () { return function () { } })() && console.log(`✅ [ALIAS_SUCCESS] ${key} (${modeInfo.name}) -> ${aliasRef.category}.${aliasRef.key}`);
           } else {
-            console.warn(`⚠️ [ALIAS_RESOLVE] ${key} (${modeInfo.name}) → ${aliasRef.category}.${aliasRef.key} NOT FOUND in primitiveMap.`, {
-              hasCategory: !!primitiveMap[aliasRef.category],
-              categoryKeys: primitiveMap[aliasRef.category] ? Object.keys(primitiveMap[aliasRef.category]).slice(0, 5) : [],
-              availableCategories: Object.keys(primitiveMap)
-            });
-          }
-
-          if (foundVariableId) {
-            resolvedAliasTo = { variableId: foundVariableId };
+            (function () { return function () { } })() && console.log(`❌ [ALIAS_FAIL] ${key} (${modeInfo.name}) -> primitive not found`);
           }
         }
 
-        // Tâche A — Application
-        var semanticValueData = {
-          resolvedValue: resolvedValue,
-          type: variableType,
-          aliasTo: resolvedAliasTo
-        };
+        // ✅ Fallback to raw value if no alias
+        if (!valueToSet) {
+          if (variableType === 'COLOR') {
+            valueToSet = hexToRgb(resolvedValue);
+          } else {
+            valueToSet = normalizeFloatValue(resolvedValue);
+          }
+          rawCount++;
+          (function () { return function () { } })() && console.log(`⚠️ [RAW_FALLBACK] ${key} (${modeInfo.name}) -> ${resolvedValue}`);
+        }
 
-        // 🔍 DIAGNOSTIC: Log what we're passing to applySemanticValue
-        console.log(`🔍 [APPLY_DATA] ${key} (${modeInfo.name}):`, {
-          hasAliasRef: !!aliasRef,
-          aliasRef: aliasRef,
-          aliasTo: semanticValueData.aliasTo,
-          resolvedValue: resolvedValue
-        });
-
-        // Appliquer via function dédiée (support aliases)
-        applySemanticValue(variable, semanticValueData, key, modeInfo.modeId);
+        // ✅ Apply value
+        if (valueToSet) {
+          try {
+            variable.setValueForMode(modeInfo.modeId, valueToSet);
+          } catch (e) {
+            console.error(`Failed to set mode value for ${key} (${modeInfo.name}):`, e);
+          }
+        }
       }
     }
+
+    figma.notify(`✅ Sync Complete: ${aliasCount} aliases, ${rawCount} raw values`);
   }
 
-  figma.notify("✅ Sync Complete!");
   figma.ui.postMessage({ type: 'import-completed' });
 }
 
@@ -6037,68 +5922,32 @@ function getPrimitiveMappingForSemantic(semanticKey, lib) {
   // Les clés correspondent aux valeurs extraites par extractVariableKey
   const mappings = {
     tailwind: {
-      // Background
       'bg.canvas': { category: 'gray', keys: ['50'], darkKeys: ['950'] },
       'bg.surface': { category: 'gray', keys: ['100'], darkKeys: ['900'] },
       'bg.elevated': { category: 'gray', keys: ['200'], darkKeys: ['800'] },
-      'bg.subtle': { category: 'gray', keys: ['300'], darkKeys: ['700'] },
-      'bg.muted': { category: 'gray', keys: ['400'], darkKeys: ['600'] },
-      'bg.accent': { category: 'brand', keys: ['500'], darkKeys: ['500'] },
+      'bg.muted': { category: 'gray', keys: ['300'], darkKeys: ['700'] },
       'bg.inverse': { category: 'gray', keys: ['950', '900'], darkKeys: ['50'] },
-
-      // Text
       'text.primary': { category: 'gray', keys: ['950', '900'], darkKeys: ['50'] },
-      'text.secondary': { category: 'gray', keys: ['600'], darkKeys: ['400'] },
-      'text.muted': { category: 'gray', keys: ['400'], darkKeys: ['600'] },
-      'text.accent': { category: 'brand', keys: ['600'], darkKeys: ['400'] },
-      'text.link': { category: 'brand', keys: ['500'], darkKeys: ['300'] },
+      'text.secondary': { category: 'gray', keys: ['700', '600'], darkKeys: ['400'] },
+      'text.muted': { category: 'gray', keys: ['500', '400'], darkKeys: ['500'] },
       'text.inverse': { category: 'gray', keys: ['50'], darkKeys: ['950'] },
-      'text.disabled': { category: 'gray', keys: ['300'], darkKeys: ['700'] },
-
-      // Border
+      'text.disabled': { category: 'gray', keys: ['400', '300'], darkKeys: ['700'] },
       'border.default': { category: 'gray', keys: ['200'], darkKeys: ['800'] },
       'border.muted': { category: 'gray', keys: ['100'], darkKeys: ['900'] },
-      'border.accent': { category: 'brand', keys: ['200'], darkKeys: ['500'] },
-      'border.focus': { category: 'brand', keys: ['500'], darkKeys: ['400'] },
-
-      // Action Primary
-      'action.primary.default': { category: 'brand', keys: ['500'], darkKeys: ['500'] },
-      'action.primary.hover': { category: 'brand', keys: ['600'], darkKeys: ['600'] },
-      'action.primary.active': { category: 'brand', keys: ['700'], darkKeys: ['700'] },
-      'action.primary.disabled': { category: 'gray', keys: ['300'], darkKeys: ['700'] },
-      'action.primary.text': { category: 'gray', keys: ['50'], darkKeys: ['50'] },
-
-      // Action Secondary
-      'action.secondary.default': { category: 'gray', keys: ['100'], darkKeys: ['800'] },
-      'action.secondary.hover': { category: 'gray', keys: ['200'], darkKeys: ['700'] },
-      'action.secondary.active': { category: 'gray', keys: ['300'], darkKeys: ['600'] },
-      'action.secondary.disabled': { category: 'gray', keys: ['100'], darkKeys: ['800'] },
-      'action.secondary.text': { category: 'gray', keys: ['900'], darkKeys: ['50'] },
-
-      // Status
+      'action.primary.default': { category: 'brand', keys: ['600', '500'], darkKeys: ['500'] },
+      'action.primary.hover': { category: 'brand', keys: ['700', '600'], darkKeys: ['400'] },
+      'action.primary.active': { category: 'brand', keys: ['800', '700'], darkKeys: ['600'] },
+      'action.primary.disabled': { category: 'gray', keys: ['300'], darkKeys: ['800'] },
       'status.success': { category: 'system', keys: ['success'] },
-      'status.success.text': { category: 'gray', keys: ['950'], darkKeys: ['50'] },
       'status.warning': { category: 'system', keys: ['warning'] },
-      'status.warning.text': { category: 'gray', keys: ['950'], darkKeys: ['50'] },
       'status.error': { category: 'system', keys: ['error'] },
-      'status.error.text': { category: 'gray', keys: ['950'], darkKeys: ['50'] },
       'status.info': { category: 'system', keys: ['info'] },
-      'status.info.text': { category: 'gray', keys: ['950'], darkKeys: ['50'] },
-
-      // Dimensions
       'radius.sm': { category: 'radius', keys: ['sm', '4'] },
       'radius.md': { category: 'radius', keys: ['md', '8'] },
-      'radius.lg': { category: 'radius', keys: ['lg', '12'] },
-      'space.xs': { category: 'spacing', keys: ['2', '4'] },
-      'space.sm': { category: 'spacing', keys: ['3', '8'] },
-      'space.md': { category: 'spacing', keys: ['4', '16'] },
-      'space.lg': { category: 'spacing', keys: ['6', '24'] },
-      'font.size.sm': { category: 'typography', keys: ['text-sm'] },
-      'font.size.base': { category: 'typography', keys: ['text-base'] },
-      'font.size.lg': { category: 'typography', keys: ['text-lg'] },
-      'font.weight.normal': { category: 'typography', keys: ['400'] },
-      'font.weight.medium': { category: 'typography', keys: ['500'] },
-      'font.weight.bold': { category: 'typography', keys: ['700'] }
+      'space.sm': { category: 'spacing', keys: ['sm', '4', '8'] },
+      'space.md': { category: 'spacing', keys: ['md', '8', '16'] },
+      'font.size.base': { category: 'typography', keys: ['base'] },
+      'font.weight.base': { category: 'typography', keys: ['regular'] }
     },
     ant: {
       'bg.canvas': { category: 'gray', keys: ['1'] },

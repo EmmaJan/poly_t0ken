@@ -5,8 +5,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- Chargement des modules -->
-  <script src="modules.js"></script>
+
   <style>
     /* ============================================
        POLYCEA THEME - Variables CSS
@@ -8708,24 +8707,10 @@
     }
 
     function handleMsg_existingTokens(msg) {
-      console.log('📥 [HANDLE_EXISTING_TOKENS] Received message:', {
-        hasTokens: !!(msg.tokens && Object.keys(msg.tokens).length > 0),
-        tokenCategories: msg.tokens ? Object.keys(msg.tokens) : [],
-        brandCount: msg.tokens && msg.tokens.brand ? Object.keys(msg.tokens.brand).length : 0,
-        library: msg.library
-      });
-
       if (msg.tokens && Object.keys(msg.tokens).length > 0) {
         hasExistingTokens = true;
         existingTokensData = msg.tokens;
         existingLibrary = msg.library || "tailwind";
-
-        console.log('✅ [HANDLE_EXISTING_TOKENS] Data stored:', {
-          hasExistingTokens: hasExistingTokens,
-          existingTokensDataKeys: Object.keys(existingTokensData),
-          existingTokensDataBrandCount: existingTokensData.brand ? Object.keys(existingTokensData.brand).length : 0
-        });
-
         if (existingTokensData.brand) {
           var detectedColor = detectPrimaryColorFromTokens(existingTokensData.brand);
           if (detectedColor) {
@@ -8749,7 +8734,6 @@
         for (var cat in msg.tokens) { if (msg.tokens.hasOwnProperty(cat)) totalTokens += Object.keys(msg.tokens[cat]).length; }
         existingTokensCount.textContent = totalTokens + " tokens disponibles";
       } else {
-        console.log('⚠️ [HANDLE_EXISTING_TOKENS] No tokens in message');
         hasExistingTokens = false;
         var sectionCreate = document.querySelector('.section-create');
         if (sectionCreate) sectionCreate.style.display = '';
@@ -9070,30 +9054,9 @@
     };
 
     function updatePreview() {
-      // 🔍 DIAGNOSTIC: Log what data we're using
-      console.log('🎨 [UPDATE_PREVIEW] Called with:', {
-        hasCurrentTokens: !!currentTokens,
-        hasExistingTokensData: !!existingTokensData,
-        activeCategory: activeCategory,
-        currentTokensKeys: currentTokens ? Object.keys(currentTokens) : [],
-        existingTokensDataKeys: existingTokensData ? Object.keys(existingTokensData) : []
-      });
+      if (!currentTokens) return;
 
-      // Use existingTokensData if we're managing existing tokens, otherwise use currentTokens (generated)
-      var tokensSource = existingTokensData || currentTokens;
-
-      if (!tokensSource) {
-        console.log('⚠️ [UPDATE_PREVIEW] No tokens source available');
-        return;
-      }
-
-      var categoryData = tokensSource[activeCategory];
-      console.log('🔍 [UPDATE_PREVIEW] Category data:', {
-        category: activeCategory,
-        hasCategoryData: !!categoryData,
-        categoryDataKeys: categoryData ? Object.keys(categoryData).slice(0, 5) : []
-      });
-
+      var categoryData = currentTokens[activeCategory];
       var previewData = categoryData;
 
       // Mélanger primitives + sémantiques selon la catégorie
@@ -9380,7 +9343,7 @@
       if (lang === 'js' || lang === 'tailwind') {
         return code
           .replace(/(\/\/.*)/g, '<span class="syn-comment">$1</span>')
-          .replace(/('.*?'|".*?")/g, '<span class="syn-string">$&</span>')
+          .replace(/('.*?')|(".*?")/g, '<span class="syn-string">$1</span>')
           .replace(/\b(module|exports|const|var|let|return|function|theme|extend)\b/g, '<span class="syn-kwd">$1</span>')
           .replace(/(\b\d+\b)/g, '<span class="syn-number">$1</span>');
       }
@@ -10246,7 +10209,6 @@
               raw: semanticToken,
               value: scalarResult.value,
               valueKind: scalarResult.valueKind,
-              aliasTo: scalarResult.meta.aliasTo || null,  // Ajouter l'info d'alias
               meta: scalarResult.meta
             });
 
@@ -10318,11 +10280,6 @@
 
       var lines = [];
 
-      // Helper pour nettoyer les clés (supprimer espaces, slashes, etc.)
-      function sanitizeKey(key) {
-        return key.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-      }
-
       // En-tête
       if (options.includeComments) {
         lines.push("/**\n * Design Tokens - CSS Variables\n * Robust & Consistent Export\n */\n");
@@ -10341,7 +10298,7 @@
           currentCategory = e.category;
           lines.push(options.indent + "/* " + e.category.toUpperCase() + " */");
         }
-        lines.push(options.indent + "--" + sanitizeKey(e.key) + ": " + e.value + ";");
+        lines.push(options.indent + "--" + e.key + ": " + e.value + ";");
       });
       lines.push("}\n");
 
@@ -10352,7 +10309,7 @@
           if (comment) lines.push("/* " + comment + " */");
           lines.push(selector + " {");
           blockEntries.sort((a, b) => a.key.localeCompare(b.key)).forEach(e => {
-            lines.push(options.indent + "--" + sanitizeKey(e.key) + ": " + e.value + ";");
+            lines.push(options.indent + "--" + e.key + ": " + e.value + ";");
           });
           lines.push("}\n");
         }
@@ -10431,11 +10388,6 @@
         $comment: "Design Tokens generated by PolyToken plugin. Usage: import tokens from './tokens.json'; const bgColor = tokens.semantic['bg.canvas'];"
       };
 
-      // Helper pour nettoyer les clés
-      function sanitizeKey(key) {
-        return key.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-      }
-
       if (!options.includeMetadata) {
         result.primitives = {};
         result.semantic = {};
@@ -10452,10 +10404,9 @@
           if (!result.primitives[entry.category]) {
             result.primitives[entry.category] = {};
           }
-          var cleanKey = sanitizeKey(entry.key.replace(entry.category + "-", ""));
-          result.primitives[entry.category][cleanKey] = entry.value;
+          result.primitives[entry.category][entry.key.replace(entry.category + "-", "")] = entry.value;
         } else if (entry.group === "semantic") {
-          var semanticKey = sanitizeKey(entry.key.replace(/^semantic-/, ""));
+          var semanticKey = entry.key.replace(/^semantic-/, "");
           var target = result.semantic;
 
           // Si theme présent, on crée une structure modes
@@ -10550,17 +10501,7 @@
         if (entry.group === "semantic" && processedKeys.has(entry.key)) continue;
         if (entry.group === "semantic") processedKeys.add(entry.key);
 
-        // Pour les sémantiques, utiliser l'alias vers la primitive si disponible
-        var scssValue;
-        if (entry.group === "semantic" && entry.aliasTo) {
-          // Créer une référence SCSS vers la primitive : $gray-50, $brand-500, etc.
-          var aliasCategory = entry.aliasTo.collection || entry.aliasTo.category;
-          var aliasKey = entry.aliasTo.key;
-          scssValue = "$" + aliasCategory + "-" + aliasKey;
-        } else {
-          // Pour les primitives, utiliser la valeur directe
-          scssValue = entry.value;
-        }
+        var scssValue = entry.group === "semantic" ? "var(--" + entry.key + ")" : entry.value;
 
         if (options.includeComments && options.sortByCategory && entry.category !== currentCategory) {
           if (currentCategory !== null) lines.push("");
@@ -10568,9 +10509,7 @@
           lines.push("// " + entry.category.toUpperCase());
         }
 
-        // Nettoyer le nom de la variable SCSS (remplacer tous les caractères non-alphanumériques par un seul tiret)
-        var scssVarName = entry.key.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-        lines.push(options.indent + "$" + scssVarName + ": " + scssValue + ";");
+        lines.push(options.indent + "$" + entry.key + ": " + scssValue + ";");
       }
 
       return lines.join("\n");
@@ -10625,11 +10564,6 @@
 
       var lines = [];
 
-      // Helper pour nettoyer les clés
-      function sanitizeKey(key) {
-        return key.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-      }
-
       // Ajouter en-tête avec documentation
       if (options.includeComments) {
         lines.push("/**");
@@ -10665,12 +10599,12 @@
         theme.colors = {};
         for (var i = 0; i < colorEntries.length; i++) {
           var entry = colorEntries[i];
-          var colorKey = sanitizeKey(entry.group === "primitive" ?
+          var colorKey = entry.group === "primitive" ?
             entry.key.replace(entry.category + "-", "") :
-            entry.key.replace(/^semantic-/, ""));
+            entry.key.replace(/^semantic-/, "");
 
           if (entry.group === "semantic") {
-            theme.colors[colorKey] = "var(--" + sanitizeKey(entry.key) + ")";
+            theme.colors[colorKey] = "var(--" + entry.key + ")";
           } else {
             theme.colors[colorKey] = entry.value;
           }
@@ -10682,8 +10616,8 @@
         theme.spacing = {};
         for (var i = 0; i < spacingEntries.length; i++) {
           var entry = spacingEntries[i];
-          var spacingKey = sanitizeKey(entry.group === "primitive" ? entry.key.replace("spacing-", "") : entry.key.replace(/^semantic-/, ""));
-          theme.spacing[spacingKey] = entry.group === "semantic" ? "var(--" + sanitizeKey(entry.key) + ")" : entry.value;
+          var spacingKey = entry.group === "primitive" ? entry.key.replace("spacing-", "") : entry.key.replace(/^semantic-/, "");
+          theme.spacing[spacingKey] = entry.group === "semantic" ? "var(--" + entry.key + ")" : entry.value;
         }
       }
 
@@ -10692,8 +10626,8 @@
         theme.borderRadius = {};
         for (var i = 0; i < radiusEntries.length; i++) {
           var entry = radiusEntries[i];
-          var radiusKey = sanitizeKey(entry.group === "primitive" ? entry.key.replace("radius-", "") : entry.key.replace(/^semantic-/, ""));
-          theme.borderRadius[radiusKey] = entry.group === "semantic" ? "var(--" + sanitizeKey(entry.key) + ")" : entry.value;
+          var radiusKey = entry.group === "primitive" ? entry.key.replace("radius-", "") : entry.key.replace(/^semantic-/, "");
+          theme.borderRadius[radiusKey] = entry.group === "semantic" ? "var(--" + entry.key + ")" : entry.value;
         }
       }
 
@@ -10702,8 +10636,8 @@
         theme.borderWidth = {};
         for (var i = 0; i < borderEntries.length; i++) {
           var entry = borderEntries[i];
-          var borderKey = sanitizeKey(entry.group === "primitive" ? entry.key.replace("border-", "") : entry.key.replace(/^semantic-/, ""));
-          theme.borderWidth[borderKey] = entry.group === "semantic" ? "var(--" + sanitizeKey(entry.key) + ")" : entry.value;
+          var borderKey = entry.group === "primitive" ? entry.key.replace("border-", "") : entry.key.replace(/^semantic-/, "");
+          theme.borderWidth[borderKey] = entry.group === "semantic" ? "var(--" + entry.key + ")" : entry.value;
         }
       }
 
@@ -10716,10 +10650,10 @@
 
         for (var i = 0; i < typographyEntries.length; i++) {
           var entry = typographyEntries[i];
-          var typoKey = sanitizeKey(entry.group === "primitive" ? entry.key.replace("typography-", "") : entry.key.replace(/^semantic-/, ""));
+          var typoKey = entry.group === "primitive" ? entry.key.replace("typography-", "") : entry.key.replace(/^semantic-/, "");
           typoKey = typoKey.toLowerCase();
 
-          var entryValue = entry.group === "semantic" ? "var(--" + sanitizeKey(entry.key) + ")" : entry.value;
+          var entryValue = entry.group === "semantic" ? "var(--" + entry.key + ")" : entry.value;
 
           // Classifier selon le nom de la clé
           if (typoKey.includes("weight")) {
@@ -10747,19 +10681,13 @@
 
       // Construire les lignes du thème avec commentaires
       var themeLines = [];
-
-      // 🔍 DEBUG: Voir ce qu'il y a dans theme
-      console.log('🔍 [TAILWIND_DEBUG] theme object:', theme);
-      console.log('🔍 [TAILWIND_DEBUG] theme.colors:', theme.colors);
-      console.log('🔍 [TAILWIND_DEBUG] Object.keys(theme):', Object.keys(theme));
-
       if (options.includeComments && Object.keys(theme).length > 0) {
         themeLines.push(options.indent + options.indent + options.indent + "// Theme tokens");
       }
 
       for (var key in theme) {
         if (!theme.hasOwnProperty(key)) continue;
-        var valueStr = JSON.stringify(theme[key], null, 4);
+        var valueStr = JSON.stringify(theme[key], null, options.indent.length);
         themeLines.push(options.indent + options.indent + options.indent + key + ": " + valueStr);
       }
 
@@ -10769,7 +10697,7 @@
         lines.push(options.indent + "}");
       } else {
         // Sans extend
-        var themeStr = JSON.stringify({ theme: theme }, null, 4);
+        var themeStr = JSON.stringify({ theme: theme }, null, options.indent.length);
         lines.push(themeStr.substring(1, themeStr.length - 1)); // Enlever les {}
       }
 

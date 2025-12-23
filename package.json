@@ -1,0 +1,29 @@
+{
+  "name": "emma-plugin-dev",
+  "version": "1.0.0",
+  "description": "> Plugin Figma professionnel pour la génération et gestion de design tokens accessibles et conformes aux standards des librairies UI modernes.",
+  "main": "code.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:verbose": "jest --verbose"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@figma/plugin-typings": "^1.121.0",
+    "cheerio": "^1.1.2",
+    "css-loader": "^7.1.2",
+    "html-inline-script-webpack-plugin": "^3.2.1",
+    "html-webpack-plugin": "^5.6.5",
+    "jest": "^30.2.0",
+    "style-loader": "^4.0.0",
+    "webpack": "^5.104.1",
+    "webpack-cli": "^6.0.1"
+  }
+}

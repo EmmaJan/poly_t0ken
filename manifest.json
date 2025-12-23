@@ -1,16 +1,13 @@
 {
   "name": "PolyToken by Emma",
-  "id": "token-starter-plugin",
+  "id": "polytoken-emma",
   "api": "1.0.0",
   "main": "code.js",
   "ui": "ui.html",
   "editorType": [
     "figma",
-    "figjam",
-    "dev"
+    "figjam"
   ],
-  "permissions": [],
-  "enableProposedApi": false,
   "networkAccess": {
     "allowedDomains": [
       "none"
