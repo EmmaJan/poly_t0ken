@@ -110,6 +110,86 @@ var VariableIndex = {
   isBuilt: false
 };
 
+// ============================================================================
+// ENUMS - Stable Type Definitions
+// ============================================================================
+
+/**
+ * PropertyKind: Type de propriété scannée
+ */
+var PropertyKind = {
+  FILL: 'FILL',
+  TEXT_FILL: 'TEXT_FILL',
+  STROKE: 'STROKE',
+  EFFECT_COLOR: 'EFFECT_COLOR',
+  GAP: 'GAP',
+  PADDING: 'PADDING',
+  CORNER_RADIUS: 'CORNER_RADIUS',
+  STROKE_WEIGHT: 'STROKE_WEIGHT',
+  FONT_SIZE: 'FONT_SIZE',
+  LINE_HEIGHT: 'LINE_HEIGHT',
+  LETTER_SPACING: 'LETTER_SPACING',
+  UNKNOWN: 'UNKNOWN'
+};
+
+/**
+ * TokenKind: Type de token (sémantique ou primitif)
+ */
+var TokenKind = {
+  SEMANTIC: 'SEMANTIC',
+  PRIMITIVE: 'PRIMITIVE'
+};
+
+/**
+ * IssueStatus: Statut d'une issue de scan
+ */
+var IssueStatus = {
+  UNBOUND: 'UNBOUND',           // Propriété non liée à une variable
+  NO_MATCH: 'NO_MATCH',         // Aucune suggestion trouvée
+  HAS_MATCHES: 'HAS_MATCHES'    // Suggestions disponibles
+};
+
+/**
+ * ValueType: Type de valeur
+ */
+var ValueType = {
+  COLOR: 'COLOR',
+  FLOAT: 'FLOAT'
+};
+
+
+// ============================================================================
+// SCOPE MAPPING HELPER
+// ============================================================================
+
+/**
+ * Maps PropertyKind to required Figma variable scopes
+ * @param {string} propertyKind 
+ * @returns {Array<string>} Required scopes
+ */
+function getScopesForPropertyKind(propertyKind) {
+  switch (propertyKind) {
+    case PropertyKind.FILL:
+      return ['ALL_FILLS', 'FRAME_FILL', 'SHAPE_FILL'];
+    case PropertyKind.TEXT_FILL:
+      return ['ALL_FILLS', 'TEXT_FILL'];
+    case PropertyKind.STROKE:
+      return ['STROKE_COLOR'];
+    case PropertyKind.EFFECT_COLOR:
+      return ['EFFECT_COLOR'];
+    case PropertyKind.GAP:
+    case PropertyKind.PADDING:
+      return ['GAP'];
+    case PropertyKind.CORNER_RADIUS:
+      return ['CORNER_RADIUS'];
+    case PropertyKind.STROKE_WEIGHT:
+      return ['STROKE_FLOAT'];
+    case PropertyKind.FONT_SIZE:
+      return ['FONT_SIZE'];
+    default:
+      return [];
+  }
+}
 
 // Naming persistence utilities (per-file)
 function saveNamingToFile(naming) {
@@ -5093,53 +5173,6 @@ function getPreferredModeIdForScan(collection) {
 }
 
 // ============================================================================
-// ENUMS - Stable Type Definitions
-// ============================================================================
-
-/**
- * PropertyKind: Type de propriété scannée
- */
-var PropertyKind = {
-  FILL: 'FILL',
-  TEXT_FILL: 'TEXT_FILL',
-  STROKE: 'STROKE',
-  EFFECT_COLOR: 'EFFECT_COLOR',
-  GAP: 'GAP',
-  PADDING: 'PADDING',
-  CORNER_RADIUS: 'CORNER_RADIUS',
-  STROKE_WEIGHT: 'STROKE_WEIGHT',
-  FONT_SIZE: 'FONT_SIZE',
-  LINE_HEIGHT: 'LINE_HEIGHT',
-  LETTER_SPACING: 'LETTER_SPACING',
-  UNKNOWN: 'UNKNOWN'
-};
-
-/**
- * TokenKind: Type de token (sémantique ou primitif)
- */
-var TokenKind = {
-  SEMANTIC: 'SEMANTIC',
-  PRIMITIVE: 'PRIMITIVE'
-};
-
-/**
- * IssueStatus: Statut d'une issue de scan
- */
-var IssueStatus = {
-  UNBOUND: 'UNBOUND',           // Propriété non liée à une variable
-  NO_MATCH: 'NO_MATCH',         // Aucune suggestion trouvée
-  HAS_MATCHES: 'HAS_MATCHES'    // Suggestions disponibles
-};
-
-/**
- * ValueType: Type de valeur
- */
-var ValueType = {
-  COLOR: 'COLOR',
-  FLOAT: 'FLOAT'
-};
-
-// ============================================================================
 // TOKEN NAME NORMALIZATION (CRITICAL FOR MATCHING)
 // ============================================================================
 
@@ -5163,6 +5196,26 @@ function normalizeTokenName(name) {
 // ============================================================================
 // DATA MODEL FACTORIES
 // ============================================================================
+
+/**
+ * Asserts that an object has no undefined fields
+ */
+function assertNoUndefined(obj, context) {
+  var requiredFields = ['nodeId', 'nodeName', 'nodeType', 'propertyKind', 'propertyKey', 'rawValue', 'status'];
+  if (!DEBUG) return;
+
+  for (var i = 0; i < requiredFields.length; i++) {
+    var field = requiredFields[i];
+    // Check if field exists in obj (even if null)
+    if (obj[field] === undefined) {
+      // Only warn for now to avoid crashing everything if legacy logic uses different fields
+      // But for V2 ScanIssue it should stem from createScanIssue so it should be fine
+      if (obj.propertyKind) { // Ensure it looks like a ScanIssue
+        console.error('[ASSERTION FAILED]', context, 'has undefined field:', field, obj);
+      }
+    }
+  }
+}
 
 /**
  * Creates a ScanIssue object with guaranteed non-undefined fields
@@ -5193,11 +5246,17 @@ function createScanIssue(params) {
  * @returns {Object} Suggestion
  */
 function createSuggestion(params) {
+  var id = params.variableId || params.id || '';
+  var name = params.variableName || params.name || 'Unknown';
+
   return {
-    variableId: params.variableId || params.id || '',
-    variableName: params.variableName || params.name || 'Unknown',
-    normalizedName: params.normalizedName || normalizeTokenName(params.variableName || params.name || ''),
+    id: id,                   // COMPAT
+    name: name,               // COMPAT
+    variableId: id,
+    variableName: name,
+    normalizedName: params.normalizedName || normalizeTokenName(name),
     resolvedValue: params.resolvedValue !== undefined ? params.resolvedValue : null,
+    hex: params.hex || (typeof params.resolvedValue === 'string' && params.resolvedValue.startsWith('#') ? params.resolvedValue : null),
     distance: params.distance !== undefined ? params.distance : 0,
     isExact: params.isExact !== undefined ? params.isExact : false,
     scopeMatch: params.scopeMatch !== undefined ? params.scopeMatch : true,
@@ -7615,6 +7674,119 @@ function findColorSuggestions(hexValue, valueToVariableMap, propertyType, contex
 
   return rankedSuggestions.slice(0, 3);
 }
+// ============================================================================
+// FIND NUMERIC SUGGESTIONS V2 (Using Mode-Aware Index)
+// ============================================================================
+
+/**
+ * Finds numeric suggestions using the new mode-aware index
+ * @param {number} targetValue - Target numeric value
+ * @param {string} contextModeId - Mode ID for context
+ * @param {Array<string>} requiredScopes - Required Figma scopes
+ * @param {string} propertyType - Property type for ranking
+ * @param {number} tolerance - Tolerance for approximate matching
+ * @returns {Array<Object>} Suggestions
+ */
+function findNumericSuggestionsV2(targetValue, contextModeId, requiredScopes, propertyType, tolerance) {
+  if (!VariableIndex.isBuilt) {
+    console.warn('[findNumericSuggestionsV2] Index not built yet!');
+    return [];
+  }
+
+  // Ensure targetValue is a number
+  var value = typeof targetValue === 'string' ? parseFloat(targetValue) : targetValue;
+  if (isNaN(value)) return [];
+
+  var suggestions = [];
+  var exactMatches = [];
+
+  // Step 1: Try exact match with mode
+  if (contextModeId) {
+    var exactKey = contextModeId + '|' + value;
+    var modeMatches = VariableIndex.floatExact.get(exactKey) || [];
+
+    modeMatches.forEach(function (meta) {
+      if (filterVariableByScopes(meta, requiredScopes)) {
+        exactMatches.push(meta);
+      }
+    });
+  }
+
+  // Step 2: Fallback to preferred match (no mode)
+  if (exactMatches.length === 0) {
+    var preferredMatches = VariableIndex.floatPreferred.get(value) || [];
+
+    preferredMatches.forEach(function (meta) {
+      if (filterVariableByScopes(meta, requiredScopes)) {
+        exactMatches.push(meta);
+      }
+    });
+  }
+
+  // Convert exact matches to suggestions
+  exactMatches.forEach(function (meta) {
+    suggestions.push(createSuggestion({
+      variableId: meta.id,
+      variableName: meta.name,
+      normalizedName: meta.normalizedName,
+      resolvedValue: meta.resolvedValue,
+      distance: 0,
+      isExact: true,
+      scopeMatch: true,
+      modeMatch: contextModeId ? (meta.modeId === contextModeId) : true,
+      debug: {
+        whyRank: 'exact_match',
+        whyIncluded: 'exact_numeric_match'
+      }
+    }));
+  });
+
+  // Step 3: Approximate matching if no exact matches
+  if (suggestions.length === 0 && tolerance > 0) {
+    var approximateMatches = [];
+
+    // Iterate through all float variables
+    VariableIndex.floatPreferred.forEach(function (metas, candidateValue) {
+      var diff = Math.abs(value - candidateValue);
+
+      if (diff <= tolerance) {
+        metas.forEach(function (meta) {
+          if (filterVariableByScopes(meta, requiredScopes)) {
+            approximateMatches.push({
+              meta: meta,
+              distance: diff
+            });
+          }
+        });
+      }
+    });
+
+    // Sort by distance
+    approximateMatches.sort(function (a, b) {
+      return a.distance - b.distance;
+    });
+
+    // Take top 3
+    approximateMatches.slice(0, 3).forEach(function (match) {
+      suggestions.push(createSuggestion({
+        variableId: match.meta.id,
+        variableName: match.meta.name,
+        normalizedName: match.meta.normalizedName,
+        resolvedValue: match.meta.resolvedValue,
+        distance: match.distance,
+        isExact: false,
+        scopeMatch: true,
+        modeMatch: contextModeId ? (match.meta.modeId === contextModeId) : true,
+        debug: {
+          whyRank: 'approximate_match',
+          whyIncluded: 'numeric_diff_' + match.distance.toFixed(2)
+        }
+      }));
+    });
+  }
+
+  return suggestions;
+}
 
 function findNumericSuggestions(targetValue, valueToVariableMap, tolerance, propertyType, contextModeId) {
 
@@ -8064,16 +8236,21 @@ function resolveVariableValueRecursively(variable, modeId, visitedIds) {
   }
 }
 
-function enrichSuggestionsWithRealValues(suggestions) {
+function enrichSuggestionsWithRealValues(suggestions, contextModeId) {
   // ============================================================================
   // DIAGNOSTIC: Trace UI enrichment
   // ============================================================================
   if (typeof traceUIEnrichment !== 'undefined') {
-    traceUIEnrichment(suggestions, null); // contextModeId not available here!
+    traceUIEnrichment(suggestions, contextModeId);
   }
 
   return suggestions.map(function (suggestion) {
     var enriched = Object.assign({}, suggestion);
+
+    // Si on a déjà les valeurs résolues (V2 Engine), pas besoin d'enrichir sauf si manquant
+    if (enriched.resolvedValue && (enriched.hex || enriched.resolvedValue.endsWith('px'))) {
+      return enriched;
+    }
 
     // Ensure name is preserved
     if (!enriched.name && suggestion.id) {
@@ -8096,7 +8273,13 @@ function enrichSuggestionsWithRealValues(suggestions) {
       }
 
       if (collection && collection.modes.length > 0) {
-        var modeId = (collection.modes && collection.modes.length > 0) ? collection.modes[0].modeId : 'default';
+        // PRIORITY: Use contextModeId if valid for this collection, otherwise fallback
+        var modeId = 'default';
+        if (contextModeId && collection.modes.find(m => m.modeId === contextModeId)) {
+          modeId = contextModeId;
+        } else {
+          modeId = (collection.modes && collection.modes.length > 0) ? collection.modes[0].modeId : 'default';
+        }
 
         // ============================================================================
         // DIAGNOSTIC: Warn about modes[0] usage for bg/inverse
@@ -8556,118 +8739,76 @@ function tracePipelineOverview() {
 
 function checkFillsSafely(node, valueToVariableMap, results) {
   try {
-    // ============================================================================
-    // DIAGNOSTIC: Trace pipeline overview (once per scan)
-    // ============================================================================
-    if (typeof tracePipelineOverview !== 'undefined') {
-      tracePipelineOverview();
-      traceCollectionFilters();
-    }
+    if (!node.fills || !Array.isArray(node.fills) || node.fills.length === 0) return;
 
-    // ===========================================================================
-    // NOUVEAU: Scanner le nœud parent lui-même AVANT ses enfants
-    // ===========================================================================
-    if (node.fills && Array.isArray(node.fills) && node.fills.length > 0) {
-      // Détecter le mode du node - RETOURNE DIRECTEMENT LE MODE ID
-      var parentContextModeId = detectNodeModeId(node);
-
-      console.log('🔍 [DEBUG] Detected modeId for parent:', parentContextModeId, 'node:', node.name);
-
-      // Scanner chaque fill du nœud parent
-      for (var pi = 0; pi < node.fills.length; pi++) {
-        try {
-          var parentFill = node.fills[pi];
-          if (!parentFill || parentFill.type !== CONFIG.types.SOLID || !parentFill.color) continue;
-
-          var parentIsBound = isPropertyBoundToVariable(node.boundVariables || {}, 'fills', pi);
-          if (parentIsBound) continue;
-
-          var parentHexValue = rgbToHex(parentFill.color);
-          if (!parentHexValue) continue;
-
-          var parentPropertyType = node.type === "TEXT" ? "Text" : "Fill";
-          var parentSuggestions = enrichSuggestionsWithRealValues(
-            findColorSuggestions(parentHexValue, valueToVariableMap, parentPropertyType, parentContextModeId, node.type)
-          );
-
-          if (parentSuggestions && parentSuggestions.length > 0) {
-            results.push({
-              nodeId: node.id,
-              nodeName: node.name,
-              propertyType: parentPropertyType,
-              currentValue: parentHexValue,
-              suggestions: parentSuggestions
-            });
-          }
-        } catch (parentErr) {
-          console.error('Error scanning parent node fill:', parentErr);
-        }
-      }
-    }
-
-    // ===========================================================================
-    // Continuer avec le scan des enfants (code existant)
-    // ===========================================================================
-    var fills = node.fills;
-    if (!Array.isArray(fills)) return;
-
-    // DÉTECTER LE MODE DU NODE - RETOURNE DIRECTEMENT LE MODE ID
+    // Detect mode (returns modeId directly)
     var contextModeId = detectNodeModeId(node);
-    console.log('🔍 [DEBUG] Detected modeId for children:', contextModeId, 'node:', node.name);
 
-    for (var i = 0; i < fills.length; i++) {
+    // Determine property kind
+    var propertyKind = node.type === "TEXT" ? PropertyKind.TEXT_FILL : PropertyKind.FILL;
+    var propertyType = node.type === "TEXT" ? "Text" : "Fill";
+
+    // Get required scopes
+    var requiredScopes = getScopesForPropertyKind(propertyKind);
+
+    for (var i = 0; i < node.fills.length; i++) {
       try {
-        var fill = fills[i];
+        var fill = node.fills[i];
         if (!fill || fill.type !== CONFIG.types.SOLID || !fill.color) continue;
 
-
+        // Check if bound
         var isBound = isPropertyBoundToVariable(node.boundVariables || {}, 'fills', i);
         if (isBound) continue;
 
         var hexValue = rgbToHex(fill.color);
         if (!hexValue) continue;
 
-        // ✅ FIX: Détecter si c'est un TextNode pour utiliser le bon type
-        var propertyType = node.type === "TEXT" ? "Text" : "Fill";
+        // SCAN with V2 Engine
+        var rawSuggestions = findColorSuggestionsV2(hexValue, contextModeId, requiredScopes, propertyType, node.type);
 
-        // PASSER LE CONTEXTE DE MODE
-        var suggestions = enrichSuggestionsWithRealValues(findColorSuggestions(hexValue, valueToVariableMap, propertyType, contextModeId, node.type));
+        // Enrich (pass contextModeId for correct resolution if needed)
+        var suggestions = enrichSuggestionsWithRealValues(rawSuggestions, contextModeId);
 
-        // ============================================================================
-        // DIAGNOSTIC: Check if bg/inverse is in final suggestions
-        // ============================================================================
-        if (typeof debugExplainWhyNotToken !== 'undefined') {
-          var tokenNeedles = ['bg/inverse', 'bg-inverse', 'bg / inverse', 'inverse'];
-          debugExplainWhyNotToken(tokenNeedles, 'FINAL_SUGGESTIONS_FROM_checkFillsSafely', suggestions, {
-            contextModeId: contextModeId,
-            detectedModeName: detectedModeName,
-            inputHex: hexValue,
-            propertyType: propertyType
-          });
-        }
+        var status = suggestions.length > 0 ? IssueStatus.HAS_MATCHES : IssueStatus.NO_MATCH;
 
-        // Toujours ajouter au résultat si pas de variable liée, même sans suggestion
-        results.push({
+        // Create Issue with robust factory
+        var issue = createScanIssue({
           nodeId: node.id,
-          layerName: node.name,
-          property: propertyType,
-          value: hexValue,
-          suggestedVariableId: suggestions.length > 0 ? suggestions[0].id : null,
-          suggestedVariableName: suggestions.length > 0 ? suggestions[0].name : null,
-          fillIndex: i,
-          colorSuggestions: suggestions,
-          isExact: suggestions.length > 0 ? (suggestions[0].isExact || false) : false,
-          detectedMode: detectedModeName, // Ajouter pour debug
-          contextModeId: contextModeId
+          nodeName: node.name,
+          nodeType: node.type,
+          propertyKind: propertyKind,
+          propertyKey: 'fills',
+          rawValue: hexValue,
+          rawValueType: ValueType.COLOR,
+          contextModeId: contextModeId,
+          isBound: false,
+          requiredScopes: requiredScopes,
+          suggestions: suggestions,
+          status: status
         });
-      } catch (fillError) {
 
+        // ADD COMPAT FIELDS FOR LEGACY UI
+        // The UI expects fields like layerName, property, value, suggestedVariableId, etc.
+        issue.layerName = issue.nodeName;
+        issue.property = propertyType;
+        issue.value = issue.rawValue;
+        issue.suggestedVariableId = suggestions.length > 0 ? suggestions[0].id : null;
+        issue.suggestedVariableName = suggestions.length > 0 ? suggestions[0].name : null;
+        issue.colorSuggestions = suggestions;
+        issue.isExact = suggestions.length > 0 ? (suggestions[0].isExact || false) : false;
+        issue.detectedMode = contextModeId; // Debug info
+        issue.fillIndex = i; // Useful for applying fix
+
+        results.push(issue);
+
+      } catch (fillErr) {
+        console.error('Error scanning fill index ' + i, fillErr);
       }
     }
-  } catch (fillsError) {
+  } catch (err) {
+    console.error('Error in checkFillsSafely', err);
   }
 }
-
 
 function checkStrokesSafely(node, valueToVariableMap, results) {
   try {
@@ -9155,6 +9296,11 @@ function finishScan(results) {
       progress: 100,
       status: "Analyse terminée"
     });
+
+    // Validate results before sending
+    if (DEBUG) {
+      results.forEach(function (r) { assertNoUndefined(r, 'scan result'); });
+    }
 
     figma.ui.postMessage({
       type: "scan-results",
