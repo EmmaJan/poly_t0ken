@@ -99,6 +99,17 @@ var TOKEN_STATE = {
   ALIAS_UNRESOLVED: "ALIAS_UNRESOLVED" // Alias présent mais non résolu (temporaire/async)
 };
 
+// ============================================================================
+// GLOBAL VARIABLE INDEX (Mode-Aware)
+// ============================================================================
+var VariableIndex = {
+  colorExact: new Map(),      // Map<modeId|hex, VariableMeta[]>
+  colorPreferred: new Map(),  // Map<hex, VariableMeta[]>
+  floatExact: new Map(),      // Map<modeId|value, VariableMeta[]>
+  floatPreferred: new Map(),  // Map<value, VariableMeta[]>
+  isBuilt: false
+};
+
 
 // Naming persistence utilities (per-file)
 function saveNamingToFile(naming) {
@@ -5201,17 +5212,6 @@ function createSuggestion(params) {
 // ============================================================================
 // MODE-AWARE VARIABLE INDEX
 // ============================================================================
-
-/**
- * Global variable index for fast matching
- */
-var VariableIndex = {
-  colorExact: new Map(),      // Map<modeId|hex, VariableMeta[]>
-  colorPreferred: new Map(),  // Map<hex, VariableMeta[]>
-  floatExact: new Map(),      // Map<modeId|value, VariableMeta[]>
-  floatPreferred: new Map(),  // Map<value, VariableMeta[]>
-  isBuilt: false
-};
 
 /**
  * Builds the mode-aware variable index
