@@ -4970,7 +4970,7 @@ function getRequiredScopesForScanResult(result) {
 function isSemanticVariable(variableName, variableOrMetadata) {
   if (!variableName) return false;
 
-  var normalized = normalizeKey(variableName);
+  var normalized = normalizeTokenName(variableName);
 
   // 1. SÉCURITÉ : Vérifier le nom de la collection si disponible
   if (variableOrMetadata) {
@@ -5074,6 +5074,27 @@ function getPreferredModeIdForScan(collection) {
 
   // Sinon, retourner le premier mode
   return collection.modes[0].modeId;
+}
+
+// ============================================================================
+// TOKEN NAME NORMALIZATION (CRITICAL FOR MATCHING)
+// ============================================================================
+
+/**
+ * Normalizes token names for consistent matching
+ * "bg.inverse", "bg/inverse", "bg / inverse", "bg - inverse" -> "bg-inverse"
+ * @param {string} name - Token name to normalize
+ * @returns {string} Normalized name
+ */
+function normalizeTokenName(name) {
+  if (!name) return '';
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/[\\/\\.]/g, '-')      // Replace /, \, . with -
+    .replace(/\s+/g, '-')            // Replace spaces with -
+    .replace(/-+/g, '-')             // Collapse multiple dashes
+    .replace(/^-|-$/g, '');          // Remove leading/trailing dashes
 }
 
 /**
