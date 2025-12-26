@@ -3547,7 +3547,12 @@ var Fixer = {
 
 
 
+// ============================================================================
+// PLUGIN INITIALIZATION
+// ============================================================================
 
+// Build the mode-aware variable index at startup
+buildVariableIndex();
 
 figma.showUI(__html__, { width: 800, height: 950, themeColors: true });
 
@@ -5191,6 +5196,128 @@ function createSuggestion(params) {
       whyIncluded: 'matched'
     }
   };
+}
+
+// ============================================================================
+// MODE-AWARE VARIABLE INDEX
+// ============================================================================
+
+/**
+ * Global variable index for fast matching
+ */
+var VariableIndex = {
+  colorExact: new Map(),      // Map<modeId|hex, VariableMeta[]>
+  colorPreferred: new Map(),  // Map<hex, VariableMeta[]>
+  floatExact: new Map(),      // Map<modeId|value, VariableMeta[]>
+  floatPreferred: new Map(),  // Map<value, VariableMeta[]>
+  isBuilt: false
+};
+
+/**
+ * Builds the mode-aware variable index
+ * This should be called once at plugin startup or when variables change
+ */
+function buildVariableIndex() {
+  console.log('🔨 [INDEX] Building mode-aware variable index...');
+
+  // Clear existing index
+  VariableIndex.colorExact.clear();
+  VariableIndex.colorPreferred.clear();
+  VariableIndex.floatExact.clear();
+  VariableIndex.floatPreferred.clear();
+
+  var collections = figma.variables.getLocalVariableCollections();
+  var totalVariables = 0;
+  var indexedVariables = 0;
+
+  collections.forEach(function (collection) {
+    var collectionName = collection.name;
+
+    collection.variableIds.forEach(function (variableId) {
+      var variable = figma.variables.getVariableById(variableId);
+      if (!variable) return;
+
+      totalVariables++;
+
+      // Determine token kind
+      var tokenKind = isSemanticVariable(variable.name, variable) ? TokenKind.SEMANTIC : TokenKind.PRIMITIVE;
+
+      // Index each mode
+      collection.modes.forEach(function (mode) {
+        var modeId = mode.modeId;
+        var resolvedValue = resolveVariableValueRecursively(variable, modeId);
+
+        if (!resolvedValue) return;
+
+        // Create VariableMeta
+        var meta = {
+          id: variable.id,
+          name: variable.name,
+          normalizedName: normalizeTokenName(variable.name),
+          resolvedType: variable.resolvedType,
+          tokenKind: tokenKind,
+          scopes: variable.scopes || [],
+          collectionName: collectionName,
+          modeId: modeId,
+          modeName: mode.name,
+          resolvedValue: resolvedValue
+        };
+
+        // Index by type
+        if (variable.resolvedType === 'COLOR') {
+          var hex = typeof resolvedValue === 'object' && resolvedValue.r !== undefined
+            ? rgbToHex(resolvedValue)
+            : resolvedValue;
+
+          if (hex) {
+            // Exact match with mode
+            var exactKey = modeId + '|' + hex;
+            if (!VariableIndex.colorExact.has(exactKey)) {
+              VariableIndex.colorExact.set(exactKey, []);
+            }
+            VariableIndex.colorExact.get(exactKey).push(meta);
+
+            // Preferred match without mode
+            if (!VariableIndex.colorPreferred.has(hex)) {
+              VariableIndex.colorPreferred.set(hex, []);
+            }
+            VariableIndex.colorPreferred.get(hex).push(meta);
+
+            indexedVariables++;
+          }
+        } else if (variable.resolvedType === 'FLOAT') {
+          var value = typeof resolvedValue === 'number' ? resolvedValue : parseFloat(resolvedValue);
+
+          if (!isNaN(value)) {
+            // Exact match with mode
+            var exactKey = modeId + '|' + value;
+            if (!VariableIndex.floatExact.has(exactKey)) {
+              VariableIndex.floatExact.set(exactKey, []);
+            }
+            VariableIndex.floatExact.get(exactKey).push(meta);
+
+            // Preferred match without mode
+            if (!VariableIndex.floatPreferred.has(value)) {
+              VariableIndex.floatPreferred.set(value, []);
+            }
+            VariableIndex.floatPreferred.get(value).push(meta);
+
+            indexedVariables++;
+          }
+        }
+      });
+    });
+  });
+
+  VariableIndex.isBuilt = true;
+
+  console.log('✅ [INDEX] Built successfully!');
+  console.log('   - Total variables:', totalVariables);
+  console.log('   - Indexed entries:', indexedVariables);
+  console.log('   - Color exact keys:', VariableIndex.colorExact.size);
+  console.log('   - Color preferred keys:', VariableIndex.colorPreferred.size);
+  console.log('   - Float exact keys:', VariableIndex.floatExact.size);
+  console.log('   - Float preferred keys:', VariableIndex.floatPreferred.size);
 }
 
 /**
