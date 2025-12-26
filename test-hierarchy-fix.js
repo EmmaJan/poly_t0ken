@@ -103,3 +103,4 @@ for (const lib in testMappings) {
 console.log('\n🎯 Expected hierarchy for backgrounds:');
 console.log('   canvas (lightest) → surface → elevated → muted (darkest)');
 console.log('   All should have unique primitive values!');
+

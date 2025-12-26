@@ -81,3 +81,4 @@ modes.forEach(mode => {
 console.log('🎯 Expected results:');
 console.log('Light: canvas=50, surface=100, elevated=200, muted=300, inverse=950');
 console.log('Dark:  canvas=950, surface=900, elevated=800, muted=700, inverse=50');
+

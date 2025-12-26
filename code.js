@@ -2989,6 +2989,16 @@ var Scanner = {
 
         // FILTRE SEMANTIC-ONLY: ne garder que les variables sémantiques
         if (!isSemanticVariable(variable.name, variable)) {
+          // ============================================================================
+          // DIAGNOSTIC: Check if bg/inverse is excluded here
+          // ============================================================================
+          if (variable.name.toLowerCase().indexOf('inverse') !== -1) {
+            console.log('⚠️ [SCANNER.INITMAP] Variable:', variable.name);
+            console.log('⚠️ [SCANNER.INITMAP] isSemanticVariable result:', false);
+            console.log('⚠️ [SCANNER.INITMAP] bg/inverse EXCLUDED from map!');
+            console.log('⚠️ [SCANNER.INITMAP] Collection:', variable.variableCollectionId);
+          }
+
           if (DEBUG_SCOPES_SCAN) {
             console.log('🚫 [SCAN_FILTER] Excluded primitive variable:', variable.name);
           }
@@ -5068,12 +5078,70 @@ function getPreferredModeIdForScan(collection) {
 
 /**
  * detectFrameMode: Détecte si une frame est en mode Light ou Dark
- * Basé sur la luminosité du background de la frame
+ * PRIORITÉ 1: Utilise le mode explicite de Figma (explicitVariableModes)
+ * PRIORITÉ 2: Fallback sur la luminosité du background
  * @param {FrameNode} node - Frame à analyser
  * @returns {string} 'light' ou 'dark'
  */
 function detectFrameMode(node) {
   if (!node) return 'light'; // Défaut
+
+  // ============================================================================
+  // PRIORITÉ 1: Utiliser le mode explicite de Figma
+  // ============================================================================
+  // Figma permet de définir explicitement le mode d'une frame via explicitVariableModes
+  // C'est LA source de vérité, pas la couleur du fond !
+
+  if (node.explicitVariableModes) {
+    // explicitVariableModes est un objet { collectionId: modeId }
+    // On cherche le premier mode défini
+    var collectionIds = Object.keys(node.explicitVariableModes);
+
+    if (collectionIds.length > 0) {
+      var firstCollectionId = collectionIds[0];
+      var modeId = node.explicitVariableModes[firstCollectionId];
+
+      // Récupérer le nom du mode depuis la collection
+      try {
+        var collection = figma.variables.getVariableCollectionById(firstCollectionId);
+        if (collection && collection.modes) {
+          var mode = collection.modes.find(function (m) { return m.modeId === modeId; });
+          if (mode) {
+            var modeName = mode.name.toLowerCase();
+
+            // Détecter si c'est light ou dark basé sur le nom
+            var isLight = modeName.indexOf('light') !== -1 || modeName.indexOf('clair') !== -1;
+            var isDark = modeName.indexOf('dark') !== -1 || modeName.indexOf('sombre') !== -1;
+
+            if (isLight || isDark) {
+              var detectedFromMode = isLight ? 'light' : 'dark';
+
+              if (DEBUG_SCOPES_SCAN) {
+                console.log('🌓 [MODE_DETECTION] Using explicit Figma mode:', {
+                  nodeName: node.name,
+                  nodeType: node.type,
+                  collectionId: firstCollectionId,
+                  modeId: modeId,
+                  modeName: mode.name,
+                  detectedMode: detectedFromMode,
+                  source: 'explicitVariableModes'
+                });
+              }
+
+              return detectedFromMode;
+            }
+          }
+        }
+      } catch (e) {
+        // Si erreur, continuer avec le fallback
+        console.warn('[MODE_DETECTION] Error reading explicitVariableModes:', e);
+      }
+    }
+  }
+
+  // ============================================================================
+  // PRIORITÉ 2: Fallback sur la luminosité (ancien comportement)
+  // ============================================================================
 
   // Essayer de récupérer la couleur de fond
   var backgroundColor = null;
@@ -5119,12 +5187,13 @@ function detectFrameMode(node) {
   var detectedMode = luminance < 0.5 ? 'dark' : 'light';
 
   if (DEBUG_SCOPES_SCAN) {
-    console.log('🌓 [MODE_DETECTION]', {
+    console.log('🌓 [MODE_DETECTION] Using luminance fallback:', {
       nodeName: node.name,
       nodeType: node.type,
       backgroundColor: backgroundColor,
       luminance: luminance.toFixed(3),
-      detectedMode: detectedMode
+      detectedMode: detectedMode,
+      source: 'luminance_fallback'
     });
   }
 
@@ -5144,8 +5213,15 @@ function getModeIdByName(collection, modeName) {
 
   for (var i = 0; i < collection.modes.length; i++) {
     var mode = collection.modes[i];
-    if (mode.name && mode.name.toLowerCase() === normalizedName) {
-      return mode.modeId;
+    if (mode.name) {
+      var modeNameLower = mode.name.toLowerCase();
+
+      // Match exact ou partiel
+      if (modeNameLower === normalizedName ||
+        (normalizedName === 'light' && (modeNameLower.indexOf('light') !== -1 || modeNameLower.indexOf('clair') !== -1)) ||
+        (normalizedName === 'dark' && (modeNameLower.indexOf('dark') !== -1 || modeNameLower.indexOf('sombre') !== -1))) {
+        return mode.modeId;
+      }
     }
   }
 
@@ -6853,6 +6929,39 @@ function rankSuggestionsByRelevance(suggestions, propertyType, nodeType) {
 
 function findColorSuggestions(hexValue, valueToVariableMap, propertyType, contextModeId, nodeType) {
 
+  // ============================================================================
+  // DIAGNOSTIC: Check if bg/inverse is in the map
+  // ============================================================================
+  if (typeof debugExplainWhyNotToken !== 'undefined') {
+    var foundInverse = false;
+    var inverseDetails = [];
+    valueToVariableMap.forEach(function (vars, key) {
+      if (vars && vars.length > 0) {
+        vars.forEach(function (v) {
+          if (v.name && v.name.toLowerCase().indexOf('inverse') !== -1) {
+            foundInverse = true;
+            inverseDetails.push({
+              name: v.name,
+              key: key,
+              id: v.id,
+              collection: v.collectionName
+            });
+          }
+        });
+      }
+    });
+
+    if (foundInverse) {
+      console.log('✅ [DIAGNOSTIC] bg/inverse FOUND in valueToVariableMap:');
+      inverseDetails.forEach(function (d) {
+        console.log('   -', d.name, '| key:', d.key, '| collection:', d.collection);
+      });
+    } else {
+      console.log('❌ [DIAGNOSTIC] bg/inverse NOT FOUND in valueToVariableMap!');
+      console.log('   Map size:', valueToVariableMap.size);
+    }
+  }
+
   var requiredScopes = getScopesForProperty(propertyType);
 
   // CHERCHER D'ABORD DANS LE MODE CONTEXTE (si fourni)
@@ -6889,10 +6998,30 @@ function findColorSuggestions(hexValue, valueToVariableMap, propertyType, contex
 
   (function () { return function () { } })() && console.log('🎨 [findColorSuggestions] Looking for:', hexValue, 'contextMode:', contextModeId || 'none', 'in map of size:', valueToVariableMap.size, 'Exact matches found:', exactMatches ? exactMatches.length : 0);
 
+  // ============================================================================
+  // DIAGNOSTIC: Check if bg/inverse is in exact matches
+  // ============================================================================
+  if (typeof debugExplainWhyNotToken !== 'undefined' && exactMatches) {
+    debugExplainWhyNotToken(['bg/inverse', 'bg-inverse'], 'EXACT_MATCHES_RAW', exactMatches, {
+      contextModeId: contextModeId,
+      searchKey: searchKey,
+      hexValue: hexValue
+    });
+  }
+
   if (exactMatches && exactMatches.length > 0) {
     // ÉTAPE 1: Filtrer par scopes
     var filteredExactMatches = filterVariablesByScopes(exactMatches, requiredScopes);
     (function () { return function () { } })() && console.log('   - After scope filtering:', filteredExactMatches.length);
+
+    // ============================================================================
+    // DIAGNOSTIC: After scope filter
+    // ============================================================================
+    if (typeof debugExplainWhyNotToken !== 'undefined') {
+      debugExplainWhyNotToken(['bg/inverse', 'bg-inverse'], 'AFTER_SCOPE_FILTER', filteredExactMatches, {
+        requiredScopes: requiredScopes
+      });
+    }
 
     // ÉTAPE 2: FILTRE SEMANTIC-ONLY STRICT (remplace le filtre par collection)
     var semanticExactMatches = filteredExactMatches.filter(function (v) {
@@ -6909,6 +7038,15 @@ function findColorSuggestions(hexValue, valueToVariableMap, propertyType, contex
     });
     (function () { return function () { } })() && console.log('   - After semantic-only filtering:', semanticExactMatches.length);
 
+    // ============================================================================
+    // DIAGNOSTIC: After semantic filter
+    // ============================================================================
+    if (typeof debugExplainWhyNotToken !== 'undefined') {
+      debugExplainWhyNotToken(['bg/inverse', 'bg-inverse'], 'AFTER_SEMANTIC_FILTER', semanticExactMatches, {
+        filterFunction: 'isSemanticVariable'
+      });
+    }
+
     // ÉTAPE 3: Vérifier resolvedType = COLOR
     var colorSemanticMatches = semanticExactMatches.filter(function (v) {
       var isColor = v.resolvedType === 'COLOR';
@@ -6924,6 +7062,15 @@ function findColorSuggestions(hexValue, valueToVariableMap, propertyType, contex
       return isColor;
     });
     (function () { return function () { } })() && console.log('   - After COLOR type filtering:', colorSemanticMatches.length);
+
+    // ============================================================================
+    // DIAGNOSTIC: After COLOR type filter
+    // ============================================================================
+    if (typeof debugExplainWhyNotToken !== 'undefined') {
+      debugExplainWhyNotToken(['bg/inverse', 'bg-inverse'], 'AFTER_COLOR_TYPE_FILTER', colorSemanticMatches, {
+        expectedType: 'COLOR'
+      });
+    }
 
     if (colorSemanticMatches.length > 0) {
       // ✅ CHANGEMENT: Retourner TOUTES les correspondances exactes, pas juste la première
@@ -6960,7 +7107,9 @@ function findColorSuggestions(hexValue, valueToVariableMap, propertyType, contex
   var minDistanceFound = Infinity;
   valueToVariableMap.forEach(function (vars, varHex) {
     if (vars && vars.length > 0) {
-      var distance = getColorDistance(hexValue, varHex);
+      // Extract hex from mode-prefixed keys (e.g., "1:16|#030712" → "#030712")
+      var actualHex = varHex.indexOf('|') !== -1 ? varHex.split('|')[1] : varHex;
+      var distance = getColorDistance(hexValue, actualHex);
       minDistanceFound = Math.min(minDistanceFound, distance);
 
       if (distance <= maxDistance) {
@@ -6993,7 +7142,9 @@ function findColorSuggestions(hexValue, valueToVariableMap, propertyType, contex
 
     valueToVariableMap.forEach(function (vars, varHex) {
       if (vars && vars.length > 0) {
-        var distance = getColorDistance(hexValue, varHex);
+        // Extract hex from mode-prefixed keys (e.g., "1:16|#030712" → "#030712")
+        var actualHex = varHex.indexOf('|') !== -1 ? varHex.split('|')[1] : varHex;
+        var distance = getColorDistance(hexValue, actualHex);
         if (distance <= maxDistance) {
 
           // Check semantic even for mismatch scope? Maybe not strict but better safe
@@ -7030,6 +7181,12 @@ function findColorSuggestions(hexValue, valueToVariableMap, propertyType, contex
 
 function findNumericSuggestions(targetValue, valueToVariableMap, tolerance, propertyType, contextModeId) {
 
+  // ============================================================================
+  // SCOPE-FIRST FILTERING
+  // ============================================================================
+  var expectedScope = getExpectedScope(propertyType);
+  console.log('[findNumericSuggestions] Property:', propertyType, '| Expected Scope:', expectedScope, '| Value:', targetValue);
+
   // ✅ Tolérance augmentée pour permettre plus de suggestions
   tolerance = tolerance !== undefined ? tolerance : (propertyType.indexOf('Spacing') !== -1 || propertyType.indexOf('Padding') !== -1 ? 16 : 8);
 
@@ -7037,7 +7194,9 @@ function findNumericSuggestions(targetValue, valueToVariableMap, tolerance, prop
   if (targetValue === 999 && propertyType && propertyType.indexOf('Radius') !== -1) {
     var fullMatches = valueToVariableMap.get(9999);
     if (fullMatches && fullMatches.length > 0) {
-      var filteredFullMatches = filterVariablesByScopes(fullMatches, getScopesForProperty(propertyType));
+      // ✅ SCOPE-FIRST: Filter by expected scope BEFORE other filters
+      var scopeFilteredFull = filterTokensByScope(fullMatches, expectedScope);
+      var filteredFullMatches = filterVariablesByScopes(scopeFilteredFull, getScopesForProperty(propertyType));
 
       // FILTRE SEMANTIC-ONLY STRICT
       var semanticFullMatches = filteredFullMatches.filter(function (v) {
@@ -7092,8 +7251,12 @@ function findNumericSuggestions(targetValue, valueToVariableMap, tolerance, prop
   (function () { return function () { } })() && console.log('🔢 [findNumericSuggestions] Looking for:', targetValue, 'contextMode:', contextModeId || 'none', 'Exact matches found:', exactMatches ? exactMatches.length : 0);
 
   if (exactMatches && exactMatches.length > 0) {
-    // ÉTAPE 1: Filtrer par scopes
-    var filteredExactMatches = filterVariablesByScopes(exactMatches, requiredScopes);
+    // ✅ SCOPE-FIRST: Filter by expected scope BEFORE other filters
+    var scopeFilteredExact = filterTokensByScope(exactMatches, expectedScope);
+    console.log('[findNumericSuggestions] After scope-first filter:', scopeFilteredExact.length, '/', exactMatches.length);
+
+    // ÉTAPE 1: Filtrer par scopes Figma
+    var filteredExactMatches = filterVariablesByScopes(scopeFilteredExact, requiredScopes);
     (function () { return function () { } })() && console.log('   - After scope filtering:', filteredExactMatches.length);
 
     // ÉTAPE 2: FILTRE SEMANTIC-ONLY STRICT (remplace le filtre par collection)
@@ -7163,8 +7326,10 @@ function findNumericSuggestions(targetValue, valueToVariableMap, tolerance, prop
   // ✅ NOUVEAU: Collecter TOUTES les valeurs numériques disponibles, pas seulement celles dans la tolérance
   valueToVariableMap.forEach(function (vars, varValue) {
     if (vars && vars.length > 0 && typeof varValue === 'number') {
+      // ✅ SCOPE-FIRST: Filter by expected scope BEFORE other filters
+      var scopeFiltered = filterTokensByScope(vars, expectedScope);
 
-      var filteredVars = filterVariablesByScopes(vars, requiredScopes);
+      var filteredVars = filterVariablesByScopes(scopeFiltered, requiredScopes);
 
       // FILTRE SEMANTIQUE PERMISSIF
       var semanticVars = filteredVars.filter(function (v) {
@@ -7242,6 +7407,213 @@ function resolveVariableValueRecursively(variable, modeId, visitedIds) {
       var aliasedVar = figma.variables.getVariableById(value.id);
       if (aliasedVar) {
         // Pour simplifier, on passe null pour le modeId pour laisser la fonction redécouvrir le mode par défaut de l'alias
+
+        // ============================================================================
+        // SCOPE-FIRST FILTERING SYSTEM
+        // ============================================================================
+        // Strict scope-based filtering BEFORE distance calculation
+        // No cross-scope suggestions (e.g., no font tokens for spacing)
+        // ============================================================================
+
+        /**
+         * Get expected scope category for a property
+         * @param {string} propertyKind - Property type (e.g., "Item Spacing", "Fill", "Font Size")
+         * @param {Object} nodeContext - Optional node context for additional info
+         * @returns {string} Scope category: "SPACING" | "SIZING" | "RADIUS" | "BORDER_WIDTH" | etc.
+         */
+        function getExpectedScope(propertyKind, nodeContext) {
+          var scopeMapping = {
+            // Spacing
+            'Item Spacing': 'SPACING',
+            'Padding Left': 'SPACING',
+            'Padding Right': 'SPACING',
+            'Padding Top': 'SPACING',
+            'Padding Bottom': 'SPACING',
+            'Gap': 'SPACING',
+
+            // Radius
+            'CORNER RADIUS': 'RADIUS',
+            'TOP LEFT RADIUS': 'RADIUS',
+            'TOP RIGHT RADIUS': 'RADIUS',
+            'BOTTOM LEFT RADIUS': 'RADIUS',
+            'BOTTOM RIGHT RADIUS': 'RADIUS',
+
+            // Typography
+            'Font Size': 'TYPO_SIZE',
+            'Font Weight': 'TYPO_WEIGHT',
+            'Line Height': 'TYPO_LINE_HEIGHT',
+            'Letter Spacing': 'TYPO_LETTER_SPACING',
+
+            // Colors
+            'Fill': 'COLOR',
+            'Stroke': 'COLOR',
+            'Text': 'COLOR',
+            'Background': 'COLOR',
+
+            // Sizing
+            'Width': 'SIZING',
+            'Height': 'SIZING',
+            'Min Width': 'SIZING',
+            'Max Width': 'SIZING',
+            'Min Height': 'SIZING',
+            'Max Height': 'SIZING',
+
+            // Border
+            'Stroke Weight': 'BORDER_WIDTH',
+            'Border Width': 'BORDER_WIDTH',
+
+            // Opacity
+            'Opacity': 'OPACITY'
+          };
+
+          var scope = scopeMapping[propertyKind];
+          if (!scope) {
+            console.warn('[getExpectedScope] Unknown propertyKind:', propertyKind, '- defaulting to UNKNOWN');
+            return 'UNKNOWN';
+          }
+
+          return scope;
+        }
+
+        /**
+         * Get scope category of a token based on Figma scopes or namespace fallback
+         * @param {Object} token - Token object with name, scopes, etc.
+         * @returns {string} Scope category
+         */
+        function getTokenScope(token) {
+          // Priority 1: Use Figma variable scopes if available
+          if (token.scopes && token.scopes.length > 0) {
+            var figmaScope = token.scopes[0]; // Use first scope as primary
+
+            // Map Figma scopes to our categories
+            var figmaScopeMapping = {
+              'GAP': 'SPACING',
+              'INDIVIDUAL_PADDING': 'SPACING',
+              'ALL_PADDING': 'SPACING',
+
+              'CORNER_RADIUS': 'RADIUS',
+
+              'FONT_SIZE': 'TYPO_SIZE',
+              'FONT_WEIGHT': 'TYPO_WEIGHT',
+              'LINE_HEIGHT': 'TYPO_LINE_HEIGHT',
+              'LETTER_SPACING': 'TYPO_LETTER_SPACING',
+
+              'ALL_FILLS': 'COLOR',
+              'FRAME_FILL': 'COLOR',
+              'SHAPE_FILL': 'COLOR',
+              'TEXT_FILL': 'COLOR',
+              'STROKE_COLOR': 'COLOR',
+
+              'WIDTH_HEIGHT': 'SIZING',
+              'MIN_WIDTH': 'SIZING',
+              'MAX_WIDTH': 'SIZING',
+              'MIN_HEIGHT': 'SIZING',
+              'MAX_HEIGHT': 'SIZING',
+
+              'STROKE_FLOAT': 'BORDER_WIDTH',
+
+              'OPACITY': 'OPACITY'
+            };
+
+            var mapped = figmaScopeMapping[figmaScope];
+            if (mapped) return mapped;
+          }
+
+          // Priority 2: Fallback to namespace classification
+          var name = token.name.toLowerCase();
+
+          // Spacing patterns
+          if (name.indexOf('space/') !== -1 ||
+            name.indexOf('spacing/') !== -1 ||
+            name.indexOf('gap/') !== -1 ||
+            name.indexOf('padding/') !== -1) {
+            return 'SPACING';
+          }
+
+          // Radius patterns
+          if (name.indexOf('radius/') !== -1 ||
+            name.indexOf('rounded/') !== -1 ||
+            name.indexOf('corner/') !== -1) {
+            return 'RADIUS';
+          }
+
+          // Typography patterns
+          if (name.indexOf('font/size') !== -1 ||
+            name.indexOf('text/size') !== -1 ||
+            name.indexOf('typo/size') !== -1) {
+            return 'TYPO_SIZE';
+          }
+
+          if (name.indexOf('font/weight') !== -1 ||
+            name.indexOf('text/weight') !== -1 ||
+            name.indexOf('typo/weight') !== -1) {
+            return 'TYPO_WEIGHT';
+          }
+
+          if (name.indexOf('font/line') !== -1 ||
+            name.indexOf('line-height') !== -1 ||
+            name.indexOf('leading') !== -1) {
+            return 'TYPO_LINE_HEIGHT';
+          }
+
+          if (name.indexOf('letter-spacing') !== -1 ||
+            name.indexOf('tracking') !== -1) {
+            return 'TYPO_LETTER_SPACING';
+          }
+
+          // Color patterns
+          if (name.indexOf('bg/') !== -1 ||
+            name.indexOf('text/') !== -1 ||
+            name.indexOf('border/') !== -1 ||
+            name.indexOf('color/') !== -1 ||
+            name.indexOf('action/') !== -1 ||
+            name.indexOf('status/') !== -1) {
+            return 'COLOR';
+          }
+
+          // Sizing patterns
+          if (name.indexOf('size/') !== -1 ||
+            name.indexOf('width/') !== -1 ||
+            name.indexOf('height/') !== -1) {
+            return 'SIZING';
+          }
+
+          // Border width patterns
+          if (name.indexOf('border/width') !== -1 ||
+            name.indexOf('stroke/') !== -1) {
+            return 'BORDER_WIDTH';
+          }
+
+          // Opacity patterns
+          if (name.indexOf('opacity/') !== -1 ||
+            name.indexOf('alpha/') !== -1) {
+            return 'OPACITY';
+          }
+
+          // Default: unknown
+          console.log('[getTokenScope] Could not determine scope for token:', token.name);
+          return 'UNKNOWN';
+        }
+
+        /**
+         * Filter tokens by expected scope BEFORE distance calculation
+         * @param {Array} tokens - All candidate tokens
+         * @param {string} expectedScope - Expected scope category
+         * @returns {Array} Filtered tokens matching the expected scope
+         */
+        function filterTokensByScope(tokens, expectedScope) {
+          var filtered = tokens.filter(function (token) {
+            var tokenScope = getTokenScope(token);
+            return tokenScope === expectedScope;
+          });
+
+          console.log('[filterTokensByScope] Expected:', expectedScope,
+            '| Before:', tokens.length,
+            '| After:', filtered.length);
+
+          return filtered;
+        }
+
         // (car les modes ne sont pas forcément les mêmes entre collections)
         return resolveVariableValueRecursively(aliasedVar, null, visitedIds);
       }
@@ -7256,6 +7628,13 @@ function resolveVariableValueRecursively(variable, modeId, visitedIds) {
 }
 
 function enrichSuggestionsWithRealValues(suggestions) {
+  // ============================================================================
+  // DIAGNOSTIC: Trace UI enrichment
+  // ============================================================================
+  if (typeof traceUIEnrichment !== 'undefined') {
+    traceUIEnrichment(suggestions, null); // contextModeId not available here!
+  }
+
   return suggestions.map(function (suggestion) {
     var enriched = Object.assign({}, suggestion);
 
@@ -7274,6 +7653,17 @@ function enrichSuggestionsWithRealValues(suggestions) {
 
       if (collection && collection.modes.length > 0) {
         var modeId = (collection.modes && collection.modes.length > 0) ? collection.modes[0].modeId : 'default';
+
+        // ============================================================================
+        // DIAGNOSTIC: Warn about modes[0] usage for bg/inverse
+        // ============================================================================
+        if (typeof traceAliasResolution !== 'undefined' && variable.name.toLowerCase().indexOf('inverse') !== -1) {
+          console.log('⚠️ [ENRICHMENT] Variable:', variable.name);
+          console.log('⚠️ [ENRICHMENT] Using modeId:', modeId, '(collection.modes[0])');
+          console.log('⚠️ [ENRICHMENT] Should use contextModeId instead!');
+          console.log('⚠️ [ENRICHMENT] Available modes:', collection.modes.map(function (m) { return m.name + ':' + m.modeId; }));
+        }
+
         // Utiliser une fonction helper pour résoudre la valeur (gère les alias)
         var resolvedVal = resolveVariableValueRecursively(variable, modeId);
 
@@ -7512,8 +7902,284 @@ function checkLocalStylesSafely(node, valueToVariableMap, results) {
 }
 
 
+
+// ============================================================================
+// DIAGNOSTIC SYSTEM FOR BG/INVERSE MISSING FROM SUGGESTIONS
+// ============================================================================
+// This code adds INSTRUMENTATION ONLY - no functional changes
+// Purpose: Understand why "bg/inverse" never appears in FILL suggestions
+// ============================================================================
+
+// Global flag to enable diagnostic
+var DIAGNOSTIC_BG_INVERSE = true;
+
+// ============================================================================
+// HELPER: Debug explain why a specific token is not in the list
+// ============================================================================
+function debugExplainWhyNotToken(tokenNeedles, stageLabel, tokenList, extraContext) {
+  if (!DIAGNOSTIC_BG_INVERSE) return;
+
+  // Normalize needles for comparison
+  var needles = tokenNeedles.map(function (n) { return n.toLowerCase().replace(/\s+/g, ''); });
+
+  // Search for token in list
+  var found = null;
+  if (tokenList && tokenList.length > 0) {
+    for (var i = 0; i < tokenList.length; i++) {
+      var token = tokenList[i];
+      var tokenName = (token.name || '').toLowerCase().replace(/\s+/g, '');
+
+      for (var j = 0; j < needles.length; j++) {
+        if (tokenName.indexOf(needles[j]) !== -1) {
+          found = token;
+          break;
+        }
+      }
+      if (found) break;
+    }
+  }
+
+  console.log('═══════════════════════════════════════════════════════════');
+  console.log('[WHY_NOT_BG_INVERSE] Stage:', stageLabel);
+  console.log('[WHY_NOT_BG_INVERSE] Looking for:', tokenNeedles.join(' OR '));
+  console.log('[WHY_NOT_BG_INVERSE] List size:', tokenList ? tokenList.length : 0);
+
+  if (found) {
+    console.log('[WHY_NOT_BG_INVERSE] ✅ FOUND:', found.name);
+    console.log('[WHY_NOT_BG_INVERSE] Details:', {
+      id: found.id,
+      name: found.name,
+      collectionName: found.collectionName || found.collection,
+      resolvedType: found.resolvedType,
+      scopes: found.scopes,
+      resolvedHex: found.resolvedHex || found.hex,
+      modeIdUsed: found.modeIdUsed,
+      fallback: found.fallback,
+      aliasChain: found.aliasChain
+    });
+
+    if (extraContext && extraContext.contextModeId) {
+      console.log('[WHY_NOT_BG_INVERSE] Context Mode:', extraContext.contextModeId);
+    }
+  } else {
+    console.log('[WHY_NOT_BG_INVERSE] ❌ NOT FOUND');
+    console.log('[WHY_NOT_BG_INVERSE] Possible reason:', stageLabel);
+
+    if (extraContext) {
+      console.log('[WHY_NOT_BG_INVERSE] Extra context:', extraContext);
+    }
+
+    // Show first 10 tokens for reference
+    if (tokenList && tokenList.length > 0) {
+      console.log('[WHY_NOT_BG_INVERSE] First 10 tokens in list:');
+      for (var k = 0; k < Math.min(10, tokenList.length); k++) {
+        console.log('  -', tokenList[k].name || tokenList[k].id);
+      }
+    }
+  }
+  console.log('═══════════════════════════════════════════════════════════');
+}
+
+// ============================================================================
+// TRACE: Candidates for FILL
+// ============================================================================
+function traceCandidatesForFill(inputHex, contextModeId, candidates, filterStages) {
+  if (!DIAGNOSTIC_BG_INVERSE) return;
+
+  console.log('┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓');
+  console.log('┃ TRACE_CANDIDATES_FOR_FILL                               ┃');
+  console.log('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
+  console.log('[TRACE] Input Hex:', inputHex);
+  console.log('[TRACE] Context Mode ID:', contextModeId);
+
+  if (filterStages) {
+    console.log('[TRACE] Filter Stages:');
+    for (var key in filterStages) {
+      console.log('  - ' + key + ':', filterStages[key]);
+    }
+  }
+
+  console.log('[TRACE] Final Candidates Count:', candidates ? candidates.length : 0);
+
+  if (candidates && candidates.length > 0) {
+    console.log('[TRACE] First 30 candidates:');
+    for (var i = 0; i < Math.min(30, candidates.length); i++) {
+      var c = candidates[i];
+      console.log('  ' + (i + 1) + '.', c.name, '|', c.id, '|', c.collectionName || c.collection);
+    }
+  }
+  console.log('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
+}
+
+// ============================================================================
+// TRACE: UI Enrichment (verify mode usage)
+// ============================================================================
+function traceUIEnrichment(suggestions, contextModeId) {
+  if (!DIAGNOSTIC_BG_INVERSE) return;
+
+  console.log('┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓');
+  console.log('┃ TRACE_UI_ENRICHMENT                                     ┃');
+  console.log('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
+  console.log('[TRACE] Context Mode ID:', contextModeId);
+  console.log('[TRACE] Suggestions Count:', suggestions ? suggestions.length : 0);
+
+  if (suggestions && suggestions.length > 0) {
+    console.log('[TRACE] Enriched Suggestions:');
+    for (var i = 0; i < suggestions.length; i++) {
+      var s = suggestions[i];
+      console.log('  ' + (i + 1) + '.', {
+        name: s.name,
+        modeIdUsed: s.modeIdUsed,
+        resolvedHex: s.hex || s.resolvedHex,
+        fallback: s.fallback
+      });
+    }
+  }
+  console.log('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
+}
+
+// ============================================================================
+// TRACE: Alias Resolution
+// ============================================================================
+function traceAliasResolution(variableName, aliasChain, finalValue, contextModeId) {
+  if (!DIAGNOSTIC_BG_INVERSE) return;
+
+  var needles = ['bg/inverse', 'bg-inverse', 'inverse'];
+  var normalized = variableName.toLowerCase().replace(/\s+/g, '');
+  var isTarget = false;
+
+  for (var i = 0; i < needles.length; i++) {
+    if (normalized.indexOf(needles[i]) !== -1) {
+      isTarget = true;
+      break;
+    }
+  }
+
+  if (!isTarget) return;
+
+  console.log('┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓');
+  console.log('┃ TRACE_ALIAS_RESOLUTION: ' + variableName);
+  console.log('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
+  console.log('[TRACE] Variable:', variableName);
+  console.log('[TRACE] Context Mode:', contextModeId);
+  console.log('[TRACE] Alias Chain:', aliasChain);
+  console.log('[TRACE] Final Value:', finalValue);
+
+  if (!finalValue) {
+    console.log('[TRACE] ⚠️ RESOLUTION FAILED - Final value is null/undefined');
+  }
+  console.log('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
+}
+
+// ============================================================================
+// TRACE: Collection/Semantic Filters
+// ============================================================================
+function traceCollectionFilters() {
+  if (!DIAGNOSTIC_BG_INVERSE) return;
+
+  console.log('┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓');
+  console.log('┃ TRACE_COLLECTION_FILTERS                                ┃');
+  console.log('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
+
+  // Check for any hardcoded whitelist/blacklist
+  console.log('[TRACE] Checking for semantic filters...');
+  console.log('[TRACE] isSemanticVariable function exists:', typeof isSemanticVariable !== 'undefined');
+
+  // Check for bg-specific filters
+  console.log('[TRACE] Checking for bg-specific filters...');
+  console.log('[TRACE] Looking for patterns like: allowedBgTokens, bgWhitelist, etc.');
+
+  console.log('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
+}
+
+// ============================================================================
+// TRACE: Pipeline Overview
+// ============================================================================
+function tracePipelineOverview() {
+  if (!DIAGNOSTIC_BG_INVERSE) return;
+
+  console.log('┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓');
+  console.log('┃ FILL SUGGESTION PIPELINE OVERVIEW                       ┃');
+  console.log('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
+  console.log('[PIPELINE] 1. checkFillsSafely - Detects hardcoded FILL');
+  console.log('[PIPELINE] 2. findColorSuggestions - Finds candidate variables');
+  console.log('[PIPELINE] 3. buildColorCandidatesIndex - Builds index (if using new engine)');
+  console.log('[PIPELINE] 4. suggestClosestVariables - Ranks by OKLab distance (if using new engine)');
+  console.log('[PIPELINE] 5. enrichSuggestionsWithRealValues - Resolves values for UI');
+  console.log('[PIPELINE] 6. UI Display - Shows suggestions to user');
+  console.log('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
+}
+
 function checkFillsSafely(node, valueToVariableMap, results) {
   try {
+    // ============================================================================
+    // DIAGNOSTIC: Trace pipeline overview (once per scan)
+    // ============================================================================
+    if (typeof tracePipelineOverview !== 'undefined') {
+      tracePipelineOverview();
+      traceCollectionFilters();
+    }
+
+    // ===========================================================================
+    // NOUVEAU: Scanner le nœud parent lui-même AVANT ses enfants
+    // ===========================================================================
+    if (node.fills && Array.isArray(node.fills) && node.fills.length > 0) {
+      // Détecter le mode du node
+      var parentDetectedModeName = detectFrameMode(node);
+      var parentContextModeId = null;
+
+      // Trouver le modeId correspondant UNIQUEMENT dans les collections sémantiques
+      var parentCollections = FigmaService.getCollections();
+      if (parentCollections && parentCollections.length > 0) {
+        console.log('🔍 [DEBUG] Searching for mode:', parentDetectedModeName, 'in', parentCollections.length, 'collections');
+        for (var pc = 0; pc < parentCollections.length; pc++) {
+          var col = parentCollections[pc];
+          console.log('🔍 [DEBUG] Collection:', col.name, '| Modes:', col.modes ? col.modes.map(function (m) { return m.name + ':' + m.modeId; }).join(', ') : 'none');
+          // Ne chercher que dans les collections sémantiques
+          if (col.name && (col.name.toLowerCase().indexOf('semantic') !== -1 ||
+            col.name.toLowerCase().indexOf('sémantique') !== -1)) {
+            parentContextModeId = getModeIdByName(col, parentDetectedModeName);
+            console.log('🔍 [DEBUG] Found modeId:', parentContextModeId, 'for mode:', parentDetectedModeName);
+            if (parentContextModeId) break;
+          }
+        }
+      }
+
+      // Scanner chaque fill du nœud parent
+      for (var pi = 0; pi < node.fills.length; pi++) {
+        try {
+          var parentFill = node.fills[pi];
+          if (!parentFill || parentFill.type !== CONFIG.types.SOLID || !parentFill.color) continue;
+
+          var parentIsBound = isPropertyBoundToVariable(node.boundVariables || {}, 'fills', pi);
+          if (parentIsBound) continue;
+
+          var parentHexValue = rgbToHex(parentFill.color);
+          if (!parentHexValue) continue;
+
+          var parentPropertyType = node.type === "TEXT" ? "Text" : "Fill";
+          var parentSuggestions = enrichSuggestionsWithRealValues(
+            findColorSuggestions(parentHexValue, valueToVariableMap, parentPropertyType, parentContextModeId, node.type)
+          );
+
+          if (parentSuggestions && parentSuggestions.length > 0) {
+            results.push({
+              nodeId: node.id,
+              nodeName: node.name,
+              propertyType: parentPropertyType,
+              currentValue: parentHexValue,
+              suggestions: parentSuggestions
+            });
+          }
+        } catch (parentErr) {
+          console.error('Error scanning parent node fill:', parentErr);
+        }
+      }
+    }
+
+    // ===========================================================================
+    // Continuer avec le scan des enfants (code existant)
+    // ===========================================================================
     var fills = node.fills;
     if (!Array.isArray(fills)) return;
 
@@ -7521,13 +8187,17 @@ function checkFillsSafely(node, valueToVariableMap, results) {
     var detectedModeName = detectFrameMode(node);
     var contextModeId = null;
 
-    // Trouver le modeId correspondant dans les collections
+    // Trouver le modeId correspondant UNIQUEMENT dans les collections sémantiques
     var collections = FigmaService.getCollections();
     if (collections && collections.length > 0) {
-      // Chercher dans la première collection (ou celle qui contient des sémantiques)
       for (var c = 0; c < collections.length; c++) {
-        contextModeId = getModeIdByName(collections[c], detectedModeName);
-        if (contextModeId) break; // Trouvé
+        var col = collections[c];
+        // Ne chercher que dans les collections sémantiques
+        if (col.name && (col.name.toLowerCase().indexOf('semantic') !== -1 ||
+          col.name.toLowerCase().indexOf('sémantique') !== -1)) {
+          contextModeId = getModeIdByName(col, detectedModeName);
+          if (contextModeId) break;
+        }
       }
     }
 
@@ -7549,6 +8219,18 @@ function checkFillsSafely(node, valueToVariableMap, results) {
         // PASSER LE CONTEXTE DE MODE
         var suggestions = enrichSuggestionsWithRealValues(findColorSuggestions(hexValue, valueToVariableMap, propertyType, contextModeId, node.type));
 
+        // ============================================================================
+        // DIAGNOSTIC: Check if bg/inverse is in final suggestions
+        // ============================================================================
+        if (typeof debugExplainWhyNotToken !== 'undefined') {
+          var tokenNeedles = ['bg/inverse', 'bg-inverse', 'bg / inverse', 'inverse'];
+          debugExplainWhyNotToken(tokenNeedles, 'FINAL_SUGGESTIONS_FROM_checkFillsSafely', suggestions, {
+            contextModeId: contextModeId,
+            detectedModeName: detectedModeName,
+            inputHex: hexValue,
+            propertyType: propertyType
+          });
+        }
 
         // Toujours ajouter au résultat si pas de variable liée, même sans suggestion
         results.push({

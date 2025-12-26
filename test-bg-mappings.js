@@ -37,3 +37,4 @@ modes.forEach(mode => {
 console.log('🎯 Expected unique values:');
 console.log('Light: 50, 100, 200, 300, 950 (all different)');
 console.log('Dark:  950, 900, 800, 700, 50 (all different)');
+

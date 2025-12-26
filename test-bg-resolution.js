@@ -77,3 +77,4 @@ console.log('bg.elevated should prioritize: gray/200');
 console.log('bg.muted should prioritize: gray/300');
 console.log('');
 console.log('✅ No overlapping keys between different backgrounds!');
+

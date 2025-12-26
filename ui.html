@@ -1070,12 +1070,14 @@
       font-weight: 600;
       color: var(--poly-text-muted);
       text-transform: uppercase;
-      border-bottom: 2px solid var(--poly-border-subtle);
+      border-bottom: 2px solid #1F3A25;
+      /* Couleur en dur pour garantir l'affichage */
     }
 
     .token-table td {
       padding: 6px 8px;
-      border-bottom: 1px solid var(--poly-border-subtle);
+      border-bottom: 1px solid #1F3A25;
+      /* Couleur en dur pour garantir l'affichage */
       font-size: 12px;
       vertical-align: middle;
     }
@@ -3702,6 +3704,191 @@
       color: var(--poly-text-muted);
       border: 1px solid var(--poly-border-subtle);
     }
+
+    /* ============================================
+       APERÇU ACCESSIBILITÉ RGAA
+       ============================================ */
+    .a11y-badge {
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .a11y-badge.success {
+      background: rgba(16, 185, 129, 0.15);
+      color: #10B981;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .a11y-badge.warning {
+      background: rgba(245, 158, 11, 0.15);
+      color: #F59E0B;
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .a11y-badge.error {
+      background: rgba(239, 68, 68, 0.15);
+      color: #EF4444;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .a11y-preview-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 0;
+      font-size: 12px;
+      border-bottom: 1px solid var(--poly-border-subtle);
+    }
+
+    .a11y-preview-item:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    .a11y-preview-item:first-child {
+      padding-top: 0;
+    }
+
+    .a11y-preview-label {
+      color: var(--poly-text);
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .a11y-preview-value {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+    }
+
+    .a11y-ratio {
+      font-family: 'Monaco', 'Courier New', monospace;
+      color: var(--poly-text);
+      font-size: 11px;
+    }
+
+    .a11y-level {
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 9px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+
+    .a11y-level.success {
+      background: rgba(16, 185, 129, 0.15);
+      color: #10B981;
+    }
+
+    .a11y-level.warning {
+      background: rgba(245, 158, 11, 0.15);
+      color: #F59E0B;
+    }
+
+    .a11y-level.error {
+      background: rgba(239, 68, 68, 0.15);
+      color: #EF4444;
+    }
+
+    .btn-link {
+      background: transparent;
+      border: none;
+      color: var(--poly-accent);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      padding: 8px 0;
+      transition: all 0.2s ease;
+    }
+
+    .btn-link:hover {
+      color: var(--poly-accent-hover);
+      text-decoration: underline;
+    }
+
+    /* ============================================
+       TOKEN BADGES (Aperçu pédagogique)
+       ============================================ */
+    .token-badge {
+      position: absolute;
+      background: rgba(0, 0, 0, 0.75);
+      color: #ffffff;
+      font-size: 9px;
+      padding: 3px 6px;
+      border-radius: 4px;
+      font-family: 'Monaco', 'Menlo', 'Courier New', monospace;
+      font-weight: 500;
+      letter-spacing: 0.3px;
+      backdrop-filter: blur(4px);
+      pointer-events: none;
+      z-index: 10;
+      white-space: nowrap;
+    }
+
+    .token-badge-dark {
+      background: rgba(255, 255, 255, 0.9);
+      color: #111827;
+    }
+
+    /* ============================================
+       THEME MODE RADIO BUTTONS
+       ============================================ */
+    .theme-mode-radio-group {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .radio-option {
+      flex: 1;
+      position: relative;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 16px;
+      background: var(--poly-surface);
+      border: 1px solid var(--poly-border-subtle);
+      border-radius: 6px;
+      transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    }
+
+    .radio-option:hover {
+      background: var(--poly-surface-soft);
+      border-color: var(--poly-accent);
+    }
+
+    .radio-option.active {
+      background: var(--poly-accent);
+      border-color: var(--poly-accent);
+      box-shadow: 0 0 0 2px rgba(138, 213, 63, 0.2);
+    }
+
+    .radio-option input[type="radio"] {
+      position: absolute;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .radio-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--poly-text);
+      transition: color 0.2s ease;
+    }
+
+    .radio-option.active .radio-label {
+      color: var(--poly-bg);
+      font-weight: 600;
+    }
   </style>
 </head>
 
@@ -3950,11 +4137,11 @@
       <div id="wizardStep2" class="wizard-step">
         <div class="card">
           <h3>Définissez votre identité de marque</h3>
-          <p style="margin-bottom: 16px;">Cette couleur servira de pivot pour générer toutes vos nuances sémantiques et
+          <p style="margin-bottom: 8px;">Cette couleur servira de pivot pour générer toutes vos nuances sémantiques et
             vos états (hover, active, etc.)</p>
 
           <label>Primary Color</label>
-          <div class="color-input-group" style="margin-bottom: 24px;">
+          <div class="color-input-group" style="margin-bottom: 12px;">
             <div class="color-preview">
               <div class="color-preview-bg" id="colorPreviewBg"></div>
               <input type="color" id="colorPicker" value="#6366F1">
@@ -3965,14 +4152,141 @@
             <button class="btn-secondary" id="randomBtn">Random</button>
           </div>
 
-          <label>Theme Mode</label>
-          <div class="tabs" id="themeModeSelector" style="margin-bottom: 8px;">
-            <div class="tab active" data-mode="light">Light</div>
-            <div class="tab" data-mode="dark">Dark</div>
-            <div class="tab" data-mode="both">Both</div>
+          <!-- Theme Mode - MASQUÉ (déplacé dans Aperçu) -->
+          <div style="display: none;">
+            <label>Theme Mode</label>
+            <div class="theme-mode-radio-group" id="themeModeSelector" style="margin-bottom: 8px;">
+              <label class="radio-option active">
+                <input type="radio" name="themeMode" value="light" checked>
+                <span class="radio-label">Light</span>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="themeMode" value="dark">
+                <span class="radio-label">Dark</span>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="themeMode" value="both">
+                <span class="radio-label">Both</span>
+              </label>
+            </div>
+            <p style="font-size: 11px; color: var(--poly-text-muted); margin-top: 0;">Select 'Both' to generate a
+              dual-theme system (Light + Dark).</p>
           </div>
-          <p style="font-size: 11px; color: var(--poly-text-muted); margin-top: 0;">Select 'Both' to generate a
-            dual-theme system (Light + Dark).</p>
+
+        </div>
+
+        <!-- ============================================
+             APERÇU VISUEL DES TOKENS
+             ============================================ -->
+        <div class="card" style="margin-top: 12px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <label
+              style="text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px; color: var(--poly-text-muted); font-weight: 600; margin: 0;">
+              Aperçu
+            </label>
+            <span id="a11yBadgePreview" class="a11y-badge" style="display: none;"></span>
+          </div>
+
+          <!-- Sélecteur de mode (compact) -->
+          <div style="display: flex; gap: 6px; margin-bottom: 12px;">
+            <label class="radio-option active" style="flex: 1; padding: 6px 12px; font-size: 12px;">
+              <input type="radio" name="themeMode" value="light" checked>
+              <span class="radio-label">Light</span>
+            </label>
+            <label class="radio-option" style="flex: 1; padding: 6px 12px; font-size: 12px;">
+              <input type="radio" name="themeMode" value="dark">
+              <span class="radio-label">Dark</span>
+            </label>
+            <label class="radio-option" style="flex: 1; padding: 6px 12px; font-size: 12px;">
+              <input type="radio" name="themeMode" value="both">
+              <span class="radio-label">Both</span>
+            </label>
+          </div>
+
+          <!-- Container pour 1 ou 2 cards selon le mode -->
+          <div id="previewCardsContainer"
+            style="display: flex; gap: 12px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);">
+
+            <!-- Card Light Mode -->
+            <div id="previewCardLight" class="preview-card"
+              style="flex: 1; background: #FFFFFF; border: 1px solid #E5E7EB; border-radius: 8px; overflow: hidden; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);">
+
+              <!-- Image Placeholder (bg.elevated) -->
+              <div id="previewImageLight"
+                style="position: relative; height: 60px; background: #F3F4F6; transition: background 0.3s ease;">
+                <span class="token-badge" style="top: 4px; right: 4px;">bg.elevated</span>
+              </div>
+
+              <!-- Content -->
+              <div style="padding: 10px;">
+                <!-- Title -->
+                <h3 id="previewTitleLight"
+                  style="margin: 0 0 6px 0; font-size: 15px; font-weight: 600; color: #111827; line-height: 1.3;">
+                  Premium Subscription
+                  <span class="token-badge" style="position: relative; top: -2px; margin-left: 6px;">text.primary</span>
+                </h3>
+
+                <!-- Description -->
+                <p id="previewDescLight" style="margin: 0 0 10px 0; font-size: 12px; color: #6B7280; line-height: 1.4;">
+                  Get access to all features and premium content
+                  <span class="token-badge"
+                    style="position: relative; top: -1px; margin-left: 4px;">text.secondary</span>
+                </p>
+
+                <!-- Button -->
+                <button id="previewBtnPrimaryLight"
+                  style="position: relative; width: 100%; padding: 8px; border: none; border-radius: 6px; font-weight: 500; font-size: 13px; cursor: pointer; transition: background 0.2s ease;">
+                  Cliquez ici
+                  <span class="token-badge"
+                    style="top: 50%; right: 4px; transform: translateY(-50%);">action.primary</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Card Dark Mode (cachée par défaut) -->
+            <div id="previewCardDark" class="preview-card"
+              style="display: none; flex: 1; background: #1F2937; border: 1px solid #374151; border-radius: 8px; overflow: hidden; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);">
+
+              <!-- Image Placeholder (bg.elevated) -->
+              <div id="previewImageDark"
+                style="position: relative; height: 60px; background: #374151; transition: background 0.3s ease;">
+                <span class="token-badge token-badge-dark" style="top: 4px; right: 4px;">bg.elevated</span>
+              </div>
+
+              <!-- Content -->
+              <div style="padding: 10px;">
+                <!-- Title -->
+                <h3 id="previewTitleDark"
+                  style="margin: 0 0 6px 0; font-size: 15px; font-weight: 600; color: #F9FAFB; line-height: 1.3;">
+                  Premium Subscription
+                  <span class="token-badge token-badge-dark"
+                    style="position: relative; top: -2px; margin-left: 6px;">text.primary</span>
+                </h3>
+
+                <!-- Description -->
+                <p id="previewDescDark" style="margin: 0 0 10px 0; font-size: 12px; color: #D1D5DB; line-height: 1.4;">
+                  Get access to all features and premium content
+                  <span class="token-badge token-badge-dark"
+                    style="position: relative; top: -1px; margin-left: 4px;">text.secondary</span>
+                </p>
+
+                <!-- Button -->
+                <button id="previewBtnPrimaryDark"
+                  style="position: relative; width: 100%; padding: 8px; border: none; border-radius: 6px; font-weight: 500; font-size: 13px; cursor: pointer; transition: background 0.2s ease;">
+                  Cliquez ici
+                  <span class="token-badge token-badge-dark"
+                    style="top: 50%; right: 4px; transform: translateY(-50%);">action.primary</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Bouton détails RGAA (affiché seulement si problèmes) -->
+          <button class="btn-secondary" id="a11yDetailsBtn"
+            style="display: none; width: 100%; margin-top: 12px; font-size: 12px;">
+            🔍 Voir les détails RGAA
+          </button>
         </div>
 
         <!-- Sticky Footer for Vue 2 -->
@@ -4002,7 +4316,8 @@
             <div class="mini-color-control" style="display: flex; align-items: center; gap: 10px;">
               <div class="color-preview" style="width: 32px; height: 32px; border-radius: 6px;">
                 <div class="color-preview-bg" id="dashboardColorPreviewBg"
-                  style="background-color: var(--poly-accent);"></div>
+                  style="background-color: var(--poly-accent);">
+                </div>
                 <input type="color" id="dashboardColorPicker">
               </div>
               <div>
@@ -4241,6 +4556,25 @@
         <div class="modal-actions">
           <button class="btn-secondary" onclick="closeModal()" style="flex: 1;">Cancel</button>
           <button id="modalSaveBtn" onclick="saveToken()" style="flex: 1;">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal for Accessibility Details -->
+    <div id="a11yModal" class="modal">
+      <div class="modal-content" style="max-width: 600px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <h3 style="margin: 0;">🎯 Détails Accessibilité RGAA</h3>
+          <button class="btn-secondary" onclick="closeA11yModal()"
+            style="padding: 4px 12px; font-size: 12px;">×</button>
+        </div>
+
+        <div id="a11yModalContent">
+          <!-- Contenu injecté dynamiquement -->
+        </div>
+
+        <div class="modal-actions" style="margin-top: 24px;">
+          <button class="btn-primary" onclick="closeA11yModal()" style="width: 100%;">Fermer</button>
         </div>
       </div>
     </div>
@@ -4580,6 +4914,11 @@
           colorInput.value = currentColor;
           updateColorPreview(currentColor);
         }
+
+        // ✨ Initialiser l'aperçu accessibilité RGAA
+        updateA11yPreview(currentColor);
+        // ✨ Initialiser l'aperçu des tokens
+        updateTokenPreview(currentColor);
       } else if (stepNumber === 3) {
         wizardStep3.classList.add("active");
         // Afficher le toggle sur Vue 3
@@ -4653,6 +4992,557 @@
 
       // Go back to step 0
       switchStep(0);
+    }
+
+    // ============================================
+    // ACCESSIBILITÉ RGAA - Calcul et Vérification
+    // ============================================
+
+    var a11yIssues = []; // Stockage des problèmes détectés
+    var a11yFixes = {}; // Corrections sélectionnées {tokenKey: newValue}
+    var lastA11yColor = null; // ✨ Tracking de la dernière couleur vérifiée (pour synchronisation)
+
+    // Calcul du ratio de contraste WCAG
+    function calculateContrastRatio(foreground, background) {
+      function hexToRgb(hex) {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? {
+          r: parseInt(result[1], 16),
+          g: parseInt(result[2], 16),
+          b: parseInt(result[3], 16)
+        } : { r: 0, g: 0, b: 0 };
+      }
+
+      function getLuminance(rgb) {
+        const rsRGB = rgb.r / 255;
+        const gsRGB = rgb.g / 255;
+        const bsRGB = rgb.b / 255;
+
+        const r = rsRGB <= 0.03928 ? rsRGB / 12.92 : Math.pow((rsRGB + 0.055) / 1.055, 2.4);
+        const g = gsRGB <= 0.03928 ? gsRGB / 12.92 : Math.pow((gsRGB + 0.055) / 1.055, 2.4);
+        const b = bsRGB <= 0.03928 ? bsRGB / 12.92 : Math.pow((bsRGB + 0.055) / 1.055, 2.4);
+
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      }
+
+      const rgb1 = hexToRgb(foreground);
+      const rgb2 = hexToRgb(background);
+
+      const lum1 = getLuminance(rgb1);
+      const lum2 = getLuminance(rgb2);
+
+      const lighter = Math.max(lum1, lum2);
+      const darker = Math.min(lum1, lum2);
+
+      return (lighter + 0.05) / (darker + 0.05);
+    }
+
+    // ============================================
+    // HELPERS - Détection et Manipulation de Couleurs
+    // ============================================
+
+    // Déterminer si une couleur est claire ou foncée
+    function isColorLight(hex) {
+      const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+      if (!result) return true;
+
+      const r = parseInt(result[1], 16);
+      const g = parseInt(result[2], 16);
+      const b = parseInt(result[3], 16);
+
+      const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+      return luminance > 0.5;
+    }
+
+    // ✨ Déterminer intelligemment si une couleur doit avoir du texte blanc ou noir
+    // Basé sur le contraste réel, pas sur un seuil arbitraire
+    function shouldUseWhiteText(backgroundColor) {
+      const contrastWithWhite = calculateContrastRatio('#FFFFFF', backgroundColor);
+      const contrastWithBlack = calculateContrastRatio('#000000', backgroundColor);
+
+      console.log('🎨 shouldUseWhiteText pour', backgroundColor);
+      console.log('  Contraste avec blanc:', contrastWithWhite.toFixed(2));
+      console.log('  Contraste avec noir:', contrastWithBlack.toFixed(2));
+
+      // Si le contraste avec blanc est meilleur, utiliser texte blanc
+      const useWhite = contrastWithWhite > contrastWithBlack;
+      console.log('  → Utiliser texte', useWhite ? 'BLANC' : 'NOIR');
+
+      return useWhite;
+    }
+
+    // Assombrir une couleur
+    function darkenColor(hex, percent) {
+      const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+      if (!result) return hex;
+
+      const factor = 1 - (percent / 100);
+      const r = Math.max(0, Math.floor(parseInt(result[1], 16) * factor));
+      const g = Math.max(0, Math.floor(parseInt(result[2], 16) * factor));
+      const b = Math.max(0, Math.floor(parseInt(result[3], 16) * factor));
+
+      return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+    }
+
+    // Éclaircir une couleur
+    function lightenColor(hex, percent) {
+      const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+      if (!result) return hex;
+
+      const factor = percent / 100;
+      const r = Math.min(255, Math.floor(parseInt(result[1], 16) + (255 - parseInt(result[1], 16)) * factor));
+      const g = Math.min(255, Math.floor(parseInt(result[2], 16) + (255 - parseInt(result[2], 16)) * factor));
+      const b = Math.min(255, Math.floor(parseInt(result[3], 16) + (255 - parseInt(result[3], 16)) * factor));
+
+      return '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
+    }
+
+    // Générer une palette de couleurs foncées
+    function getDarkColorPalette(baseColor) {
+      console.log('🎨 getDarkColorPalette pour', baseColor);
+
+      const palette = [
+        darkenColor(baseColor, 15),
+        darkenColor(baseColor, 30),
+        darkenColor(baseColor, 45),
+        darkenColor(baseColor, 60),
+        darkenColor(baseColor, 75),
+        darkenColor(baseColor, 90),
+        // Grays de secours (au cas où la couleur primaire ne donne pas de bons résultats)
+        '#1F2937', '#374151', '#4B5563', '#6B7280', '#111827'
+      ];
+
+      // Dédupliquer
+      const uniquePalette = [...new Set(palette)];
+      console.log('  → Palette générée:', uniquePalette.slice(0, 6));
+
+      return uniquePalette;
+    }
+
+    // Générer une palette de couleurs claires
+    function getLightColorPalette(baseColor) {
+      const palette = [
+        lightenColor(baseColor, 20),
+        lightenColor(baseColor, 40),
+        lightenColor(baseColor, 60),
+        '#9CA3AF', '#D1D5DB', '#E5E7EB', '#F3F4F6' // Grays de secours
+      ];
+      return [...new Set(palette)];
+    }
+
+    // Détection intelligente du type de token
+    function detectTokenType(tokenKey, foreground, background) {
+      // Cas 1 : Boutons primaires / Statut - DÉTECTION INTELLIGENTE
+      if (tokenKey.includes('action.primary') || tokenKey.includes('status.')) {
+        const useWhiteText = shouldUseWhiteText(background);
+
+        if (useWhiteText) {
+          // Le texte blanc a un bon contraste → garder texte blanc, changer fond si besoin
+          return {
+            type: 'button-primary-dark',
+            whatToChange: 'background',
+            textColor: '#FFFFFF',
+            needsDarker: true
+          };
+        } else {
+          // Le texte noir a un meilleur contraste → garder fond, changer texte
+          return {
+            type: 'button-primary-light',
+            whatToChange: 'foreground',
+            backgroundColor: background,
+            needsDarker: true // Texte foncé
+          };
+        }
+      }
+
+      // Cas 2 : Boutons secondaires
+      if (tokenKey.includes('action.secondary')) {
+        const isLightText = isColorLight(foreground);
+        return {
+          type: 'button-secondary',
+          whatToChange: isLightText ? 'background' : 'foreground',
+          textColor: foreground,
+          needsDarker: !isLightText
+        };
+      }
+
+      // Cas 3 : Texte
+      if (tokenKey.includes('text.')) {
+        return {
+          type: 'text',
+          whatToChange: 'foreground',
+          backgroundColor: background,
+          needsDarker: isColorLight(background)
+        };
+      }
+
+      // Cas 4 : Autres
+      return {
+        type: 'other',
+        whatToChange: 'foreground',
+        needsDarker: isColorLight(background)
+      };
+    }
+
+    // Mise à jour de l'aperçu accessibilité
+    function updateA11yPreview(primaryColor) {
+      if (!primaryColor || !primaryColor.startsWith('#')) {
+        primaryColor = currentColor || '#6366F1';
+      }
+
+      // ✨ Mémoriser la couleur vérifiée
+      lastA11yColor = primaryColor;
+
+      // Simuler les tokens critiques qui seront générés
+      const previewTokens = {
+        'text.primary': '#111827',    // gray.900
+        'text.secondary': '#4B5563',  // gray.700
+        'text.muted': '#6B7280',      // gray.600
+        'bg.surface': '#FFFFFF',      // Fond blanc
+        'action.primary': primaryColor
+      };
+
+      // Vérifications critiques
+      const checks = [
+        {
+          label: 'Texte principal',
+          foreground: previewTokens['text.primary'],
+          background: previewTokens['bg.surface'],
+          minRatio: 4.5,
+          tokenKey: 'text.primary'
+        },
+        {
+          label: 'Boutons primaires',
+          foreground: shouldUseWhiteText(primaryColor) ? '#FFFFFF' : '#111827', // ✨ Détection intelligente
+          background: primaryColor,
+          minRatio: 4.5,
+          tokenKey: 'action.primary.contrastText'
+        },
+        {
+          label: 'Texte secondaire',
+          foreground: previewTokens['text.muted'],
+          background: previewTokens['bg.surface'],
+          minRatio: 4.5,
+          tokenKey: 'text.muted'
+        }
+      ];
+
+      // Générer le HTML
+      let html = '';
+      let compliantCount = 0;
+      let warningCount = 0;
+      let errorCount = 0;
+      a11yIssues = []; // Reset
+
+      checks.forEach(check => {
+        const ratio = calculateContrastRatio(check.foreground, check.background);
+
+        const level = ratio >= 7.0 ? 'AAA' :
+          ratio >= 4.5 ? 'AA' :
+            ratio >= 3.0 ? 'AA Large' : 'Fail';
+
+        const icon = ratio >= 4.5 ? '✅' :
+          ratio >= 3.0 ? '⚠️' : '❌';
+
+        const cssClass = ratio >= 4.5 ? 'success' :
+          ratio >= 3.0 ? 'warning' : 'error';
+
+        // Compteurs
+        if (ratio >= 4.5) {
+          compliantCount++;
+        } else if (ratio >= 3.0) {
+          warningCount++;
+          a11yIssues.push({
+            ...check,
+            ratio: ratio,
+            level: 'AA_LARGE',
+            severity: 'warning'
+          });
+        } else {
+          errorCount++;
+          a11yIssues.push({
+            ...check,
+            ratio: ratio,
+            level: 'FAIL',
+            severity: 'error'
+          });
+        }
+
+        html += `
+          <div class="a11y-preview-item">
+            <span class="a11y-preview-label">${icon} ${check.label}</span>
+            <span class="a11y-preview-value">
+              <span class="a11y-ratio">${ratio.toFixed(1)}:1</span>
+              <span class="a11y-level ${cssClass}">${level}</span>
+            </span>
+          </div>
+        `;
+      });
+
+      // Mettre à jour le contenu
+      const content = document.getElementById('a11yPreviewContent');
+      if (content) content.innerHTML = html;
+
+      // Mettre à jour le badge (ancien bloc RGAA - on garde pour compatibilité)
+      const badge = document.getElementById('a11yBadge');
+      const badgePreview = document.getElementById('a11yBadgePreview'); // ✨ Nouveau badge dans l'aperçu
+
+      const badgeText = errorCount > 0
+        ? `${errorCount} problème${errorCount > 1 ? 's' : ''}`
+        : warningCount > 0
+          ? `${warningCount} avertissement${warningCount > 1 ? 's' : ''}`
+          : 'RGAA Conforme';
+
+      const badgeClass = errorCount > 0 ? 'a11y-badge error'
+        : warningCount > 0 ? 'a11y-badge warning'
+          : 'a11y-badge success';
+
+      if (badge) {
+        badge.textContent = badgeText;
+        badge.className = badgeClass;
+        badge.style.display = 'inline-block';
+      }
+
+      // ✨ Mettre à jour le badge dans l'aperçu
+      if (badgePreview) {
+        badgePreview.textContent = badgeText;
+        badgePreview.className = badgeClass;
+        badgePreview.style.display = 'inline-block';
+      }
+
+      // ✨ Afficher/masquer le bouton détails
+      const detailsBtn = document.getElementById('a11yDetailsBtn');
+      if (detailsBtn) {
+        detailsBtn.style.display = (warningCount > 0 || errorCount > 0) ? 'block' : 'none';
+      }
+    }
+
+    // Ouvrir la modale de détails
+    function openA11yModal() {
+      // ✨ DEBUG
+      console.log('🔍 openA11yModal - lastA11yColor:', lastA11yColor, 'currentColor:', currentColor);
+
+      // ✨ Recalculer si la couleur a changé
+      if (lastA11yColor !== currentColor) {
+        console.log('🔄 Couleur changée, recalcul...');
+        updateA11yPreview(currentColor);
+        console.log('✅ Recalcul terminé, a11yIssues:', a11yIssues.length);
+      } else {
+        console.log('✅ Couleur inchangée');
+      }
+
+      if (a11yIssues.length === 0) {
+        alert('Aucun problème d\'accessibilité détecté !');
+        return;
+      }
+
+      // Générer le contenu de la modale
+      let html = `
+        <div style="background: var(--poly-surface-soft); border: 1px solid var(--poly-border-subtle); border-radius: 8px; padding: 16px; margin-bottom: 16px;">
+          <h4 style="margin: 0 0 8px 0; font-size: 14px;">📊 Résumé</h4>
+          <p style="margin: 0 0 8px 0; font-size: 12px; color: var(--poly-text-muted);">
+            ${a11yIssues.length} token${a11yIssues.length > 1 ? 's' : ''} avec un contraste insuffisant pour le RGAA (≥ 4.5:1)
+          </p>
+          <p style="margin: 0; font-size: 11px; color: var(--poly-text-muted);">
+            Couleur primaire : <span style="font-family: monospace; color: var(--poly-accent); font-weight: 600;">${currentColor}</span>
+          </p>
+        </div>
+        
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+      `;
+
+      a11yIssues.forEach((issue, index) => {
+        const suggestions = generateA11ySuggestions(issue);
+        const icon = issue.severity === 'error' ? '❌' : '⚠️';
+
+        // Déterminer le type d'aperçu (bouton ou texte)
+        const isButton = issue.tokenKey.includes('action') || issue.tokenKey.includes('button');
+
+        html += `
+          <div style="background: var(--poly-surface-soft); border: 1px solid var(--poly-border-subtle); border-radius: 8px; padding: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <strong style="font-size: 13px;">${icon} ${issue.label}</strong>
+              <span style="font-size: 11px; color: var(--poly-text-muted);">${issue.tokenKey}</span>
+            </div>
+            
+            <div style="background: var(--poly-surface); border-radius: 6px; padding: 12px; margin-bottom: 12px;">
+              <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
+                <span style="color: var(--poly-text-muted);">Actuel :</span>
+                <span style="font-family: monospace;">${issue.foreground}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px;">
+                <span style="color: var(--poly-text-muted);">Fond :</span>
+                <span style="font-family: monospace;">${issue.background}</span>
+              </div>
+              <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 12px;">
+                <span style="color: var(--poly-text-muted);">Contraste :</span>
+                <span style="color: ${issue.severity === 'error' ? '#EF4444' : '#F59E0B'}; font-weight: 600;">
+                  ${issue.ratio.toFixed(1)}:1 ${issue.level === 'FAIL' ? '❌' : '⚠️'}
+                </span>
+              </div>
+              
+              <!-- Aperçu visuel -->
+              <div style="margin-top: 12px;">
+                <div style="font-size: 11px; color: var(--poly-text-muted); margin-bottom: 6px;">Aperçu :</div>
+                ${isButton ? `
+                  <div style="display: inline-block; padding: 10px 20px; background: ${issue.background}; color: ${issue.foreground}; border-radius: 6px; font-size: 13px; font-weight: 500; border: 1px solid rgba(255,255,255,0.1);">
+                    Button Text
+                  </div>
+                ` : `
+                  <div style="padding: 12px; background: ${issue.background}; color: ${issue.foreground}; border-radius: 6px; font-size: 13px; line-height: 1.5; border: 1px solid var(--poly-border-subtle);">
+                    Lorem ipsum dolor sit amet, consectetur adipiscing elit.
+                  </div>
+                `}
+              </div>
+            </div>
+          </div>
+        `;
+      });
+
+      html += '</div>';
+
+      // Injecter le contenu
+      document.getElementById('a11yModalContent').innerHTML = html;
+
+      // Afficher la modale
+      document.getElementById('a11yModal').classList.add('active');
+    }
+
+
+    function closeA11yModal() {
+      document.getElementById('a11yModal').classList.remove('active');
+    }
+
+    // Générer des suggestions de correction (VERSION INTELLIGENTE)
+    function generateA11ySuggestions(issue) {
+      const suggestions = [];
+
+      // ✨ Détection intelligente du type de token
+      const tokenType = detectTokenType(issue.tokenKey, issue.foreground, issue.background);
+
+      console.log('🎨 generateA11ySuggestions pour', issue.tokenKey, '- Type:', tokenType.type, '- Change:', tokenType.whatToChange);
+
+      if (tokenType.whatToChange === 'background') {
+        // ========================================
+        // CAS 1 : On doit changer le FOND (boutons)
+        // ========================================
+        const textColor = tokenType.textColor || '#FFFFFF';
+
+        // Générer des variantes plus foncées de la couleur primaire
+        const darkVariants = getDarkColorPalette(issue.background);
+
+        darkVariants.forEach(color => {
+          const ratio = calculateContrastRatio(textColor, color);
+          if (ratio >= 4.5 && color !== issue.background) {
+            suggestions.push({
+              value: color,
+              ratio: ratio,
+              level: ratio >= 7.0 ? 'AAA' : 'AA',
+              type: 'background'
+            });
+          }
+        });
+
+        console.log('  → Suggestions trouvées:', suggestions.length, suggestions.map(s => s.value));
+
+        // Si pas assez de suggestions, ajouter des couleurs génériques foncées
+        if (suggestions.length < 3) {
+          console.log('  ⚠️ Pas assez, ajout de fallbacks...');
+          const fallbackColors = ['#1F2937', '#374151', '#4B5563', '#6B7280', '#1E40AF', '#166534'];
+          fallbackColors.forEach(color => {
+            const ratio = calculateContrastRatio(textColor, color);
+            if (ratio >= 4.5 && !suggestions.find(s => s.value === color)) {
+              suggestions.push({
+                value: color,
+                ratio: ratio,
+                level: ratio >= 7.0 ? 'AAA' : 'AA',
+                type: 'background'
+              });
+            }
+          });
+        }
+
+      } else {
+        // ========================================
+        // CAS 2 : On doit changer le TEXTE
+        // ========================================
+        const bgColor = tokenType.backgroundColor || issue.background;
+        const isLightBg = isColorLight(bgColor);
+
+        if (isLightBg) {
+          // Fond clair → chercher des textes foncés
+          const darkGrays = ['#111827', '#1F2937', '#374151', '#4B5563', '#6B7280'];
+          darkGrays.forEach(color => {
+            const ratio = calculateContrastRatio(color, bgColor);
+            if (ratio >= 4.5 && color !== issue.foreground) {
+              suggestions.push({
+                value: color,
+                ratio: ratio,
+                level: ratio >= 7.0 ? 'AAA' : 'AA',
+                type: 'foreground'
+              });
+            }
+          });
+        } else {
+          // Fond foncé → chercher des textes clairs
+          const lightGrays = ['#F9FAFB', '#F3F4F6', '#E5E7EB', '#D1D5DB', '#9CA3AF'];
+          lightGrays.forEach(color => {
+            const ratio = calculateContrastRatio(color, bgColor);
+            if (ratio >= 4.5 && color !== issue.foreground) {
+              suggestions.push({
+                value: color,
+                ratio: ratio,
+                level: ratio >= 7.0 ? 'AAA' : 'AA',
+                type: 'foreground'
+              });
+            }
+          });
+        }
+      }
+
+      // Trier par ratio de contraste (du meilleur au moins bon)
+      suggestions.sort((a, b) => b.ratio - a.ratio);
+
+      // Edge case : Aucune suggestion trouvée
+      if (suggestions.length === 0) {
+        console.warn('⚠️ Aucune suggestion trouvée pour', issue.tokenKey);
+        // Retourner une suggestion par défaut
+        return [{
+          value: tokenType.whatToChange === 'background' ? '#1F2937' : '#111827',
+          ratio: 10.0,
+          level: 'AAA',
+          type: tokenType.whatToChange,
+          fallback: true
+        }];
+      }
+
+      return suggestions.slice(0, 3); // Top 3
+    }
+
+
+    // Appliquer les corrections
+    function applyA11yFixes() {
+      if (Object.keys(a11yFixes).length === 0) {
+        alert('Aucune correction sélectionnée');
+        return;
+      }
+
+      console.log('🔧 Application des corrections RGAA:', a11yFixes);
+
+      // Envoyer au plugin pour régénération
+      parent.postMessage({
+        pluginMessage: {
+          type: 'apply-a11y-fixes',
+          fixes: a11yFixes,
+          primaryColor: currentColor,
+          library: currentNaming
+        }
+      }, '*');
+
+      closeA11yModal();
+
+      // Afficher un message de confirmation
+      alert(`✅ ${Object.keys(a11yFixes).length} correction(s) appliquée(s) ! Les tokens vont être régénérés.`);
     }
 
     // ============================================
@@ -4737,6 +5627,20 @@
     });
 
     // ============================================
+    // EASTER EGG - URLs de design inspiration
+    // ============================================
+    const easterEggUrls = [
+      // À définir plus tard par l'utilisateur
+      'https://dribbble.com/tags/design-system',
+      'https://www.awwwards.com/',
+      'https://coolors.co/',
+      'https://designsystemsrepo.com/design-systems',
+      'https://www.refactoringui.com/',
+      'https://m3.material.io/'
+    ];
+    let easterEggIndex = 0; // Index de rotation
+
+    // ============================================
     // VUE 1: LIBRAIRIE - Event Listeners
     // ============================================
     libraryOptions.forEach(function (option) {
@@ -4779,16 +5683,131 @@
       colorPreviewBg.style.backgroundColor = color;
     }
 
+    // ============================================
+    // MISE À JOUR DE L'APERÇU VISUEL DES TOKENS
+    // ============================================
+    // MISE À JOUR DE L'APERÇU VISUEL DES TOKENS (VERSION COMPLÈTE)
+    // ============================================
+
+    function updateTokenPreview(primaryColor) {
+      if (!primaryColor || !primaryColor.startsWith('#')) {
+        primaryColor = currentColor || '#6366F1';
+      }
+
+      // Déterminer le mode actuel (Light/Dark/Both)
+      const checkedMode = document.querySelector('input[name="themeMode"]:checked');
+      let currentMode = checkedMode ? checkedMode.value : 'light'; // Par défaut light
+
+      // Afficher/masquer les cards selon le mode
+      const cardLight = document.getElementById('previewCardLight');
+      const cardDark = document.getElementById('previewCardDark');
+
+      if (currentMode === 'both') {
+        if (cardLight) cardLight.style.display = 'block';
+        if (cardDark) cardDark.style.display = 'block';
+      } else if (currentMode === 'dark') {
+        if (cardLight) cardLight.style.display = 'none';
+        if (cardDark) cardDark.style.display = 'block';
+      } else {
+        if (cardLight) cardLight.style.display = 'block';
+        if (cardDark) cardDark.style.display = 'none';
+      }
+
+      // ============================================
+      // CALCULER LES TOKENS
+      // ============================================
+
+      const useWhiteText = shouldUseWhiteText(primaryColor);
+      const btnPrimaryText = useWhiteText ? '#FFFFFF' : '#111827';
+      const btnPrimaryHover = darkenColor(primaryColor, 10);
+
+      // ============================================
+      // METTRE À JOUR CARD LIGHT
+      // ============================================
+
+      // Image (bg.elevated)
+      const imgLight = document.getElementById('previewImageLight');
+      if (imgLight) {
+        imgLight.style.background = lightenColor(primaryColor, 85); // Très clair
+      }
+
+
+
+      // Bouton Primary
+      const btnPrimaryLight = document.getElementById('previewBtnPrimaryLight');
+      if (btnPrimaryLight) {
+        btnPrimaryLight.style.background = primaryColor;
+        btnPrimaryLight.style.color = btnPrimaryText;
+
+        btnPrimaryLight.onmouseover = function () {
+          this.style.background = btnPrimaryHover; // Token: action.primary.hover
+        };
+        btnPrimaryLight.onmouseout = function () {
+          this.style.background = primaryColor; // Token: action.primary.default
+        };
+
+        // 🎨 Easter Egg - Rotation des URLs à chaque clic
+        btnPrimaryLight.onclick = function () {
+          window.open(easterEggUrls[easterEggIndex], '_blank');
+          easterEggIndex = (easterEggIndex + 1) % easterEggUrls.length;
+        };
+      }
+
+
+
+      // ============================================
+      // METTRE À JOUR CARD DARK
+      // ============================================
+
+      // Card background (bg.surface dark) - Réutilise la variable déclarée plus haut
+      if (cardDark) {
+        cardDark.style.background = darkenColor(primaryColor, 90); // Très très foncé
+      }
+
+      // Image (bg.elevated)
+      const imgDark = document.getElementById('previewImageDark');
+      if (imgDark) {
+        imgDark.style.background = darkenColor(primaryColor, 70); // Très foncé
+      }
+
+
+
+      // Bouton Primary
+      const btnPrimaryDark = document.getElementById('previewBtnPrimaryDark');
+      if (btnPrimaryDark) {
+        btnPrimaryDark.style.background = primaryColor;
+        btnPrimaryDark.style.color = btnPrimaryText;
+
+        btnPrimaryDark.onmouseover = function () {
+          this.style.background = btnPrimaryHover; // Token: action.primary.hover
+        };
+        btnPrimaryDark.onmouseout = function () {
+          this.style.background = primaryColor; // Token: action.primary.default
+        };
+
+        // 🎨 Easter Egg - Rotation des URLs à chaque clic
+        btnPrimaryDark.onclick = function () {
+          window.open(easterEggUrls[easterEggIndex], '_blank');
+          easterEggIndex = (easterEggIndex + 1) % easterEggUrls.length;
+        };
+      }
+
+    }
+
     colorPicker.addEventListener("input", function () {
       currentColor = colorPicker.value.toUpperCase();
       colorInput.value = currentColor;
       updateColorPreview(currentColor);
+      updateA11yPreview(currentColor); // ✨ Mise à jour aperçu RGAA
+      updateTokenPreview(currentColor); // ✨ Mise à jour aperçu tokens
     });
 
     colorInput.addEventListener("input", function () {
       currentColor = colorInput.value.toUpperCase();
       colorPicker.value = currentColor;
       updateColorPreview(currentColor);
+      updateA11yPreview(currentColor); // ✨ Mise à jour aperçu RGAA
+      updateTokenPreview(currentColor); // ✨ Mise à jour aperçu tokens
     });
 
     randomBtn.addEventListener("click", function () {
@@ -4797,7 +5816,25 @@
       colorInput.value = randomColor;
       colorPicker.value = randomColor;
       updateColorPreview(randomColor);
+      updateA11yPreview(randomColor); // ✨ Mise à jour aperçu RGAA
+      updateTokenPreview(randomColor); // ✨ Mise à jour aperçu tokens
     });
+
+    // ✨ Event listeners pour les changements de mode (Light/Dark/Both)
+    const themeModeRadios = document.querySelectorAll('input[name="themeMode"]');
+    themeModeRadios.forEach(radio => {
+      radio.addEventListener('change', function () {
+        updateTokenPreview(currentColor); // Mettre à jour l'aperçu selon le nouveau mode
+      });
+    });
+
+    // Event listener pour le bouton "Voir les détails"
+    var a11yDetailsBtn = document.getElementById('a11yDetailsBtn');
+    if (a11yDetailsBtn) {
+      a11yDetailsBtn.addEventListener('click', function () {
+        openA11yModal();
+      });
+    }
 
     step2Back.addEventListener("click", function () {
       // Si on a des tokens existants, revenir à l'accueil au lieu de la sélection de librairie
@@ -4808,24 +5845,37 @@
       }
     });
 
-    if (themeModeSelector) {
-      themeModeSelector.querySelectorAll(".tab").forEach(function (tab) {
-        tab.addEventListener("click", function () {
-          themeModeSelector.querySelectorAll(".tab").forEach(function (t) { t.classList.remove("active"); });
-          tab.classList.add("active");
-          currentThemeMode = tab.getAttribute("data-mode");
-          console.log("🌓 Theme Mode switched to:", currentThemeMode);
 
-          // Save immediately
-          parent.postMessage({
-            pluginMessage: {
-              type: 'save-theme-mode',
-              themeMode: currentThemeMode
-            }
-          }, "*");
+    // ✨ Event listeners pour TOUS les radio buttons du theme mode (anciens + nouveaux)
+    document.querySelectorAll('input[name="themeMode"]').forEach(function (radio) {
+      radio.addEventListener('change', function () {
+        // Mettre à jour les classes active sur TOUS les radio buttons themeMode
+        document.querySelectorAll('input[name="themeMode"]').forEach(function (r) {
+          if (r.parentElement) {
+            r.parentElement.classList.remove('active');
+          }
         });
+
+        // Ajouter active sur tous les boutons avec la même valeur
+        document.querySelectorAll(`input[name="themeMode"][value="${radio.value}"]`).forEach(function (r) {
+          if (r.parentElement) {
+            r.parentElement.classList.add('active');
+          }
+        });
+
+        // Mettre à jour le theme mode
+        currentThemeMode = radio.value;
+        console.log('🌓 Theme Mode switched to:', currentThemeMode);
+
+        // Sauvegarder immédiatement
+        parent.postMessage({
+          pluginMessage: {
+            type: 'save-theme-mode',
+            themeMode: currentThemeMode
+          }
+        }, '*');
       });
-    }
+    });
 
     step2Generate.addEventListener("click", function () {
       // Send message to plugin to generate tokens
@@ -5685,8 +6735,8 @@
           var hasConflicts = group.suggestions && group.suggestions.length > 1;
           var bestSuggestion = group.suggestions && group.suggestions.length > 0 ? group.suggestions[0] : null;
           var layerCount = group.originalIndices ? group.originalIndices.length : 0;
-          // ✅ FIX: AUTO seulement si 1 suggestion ET exacte
-          var isAutoFixable = group.suggestions && group.suggestions.length === 1 && group.suggestions[0].isExact;
+          // ✅ AUTO si exactement 1 suggestion (peu importe isExact)
+          var isAutoFixable = group.suggestions && group.suggestions.length === 1;
           var isOrphan = !group.suggestions || group.suggestions.length === 0;
 
           // Classes CSS pour les filtres
@@ -5758,9 +6808,23 @@
           html += '<div style="display: flex; align-items: center; gap: 8px;">';
           if ((group.property === 'Fill' || group.property === 'Stroke' || group.property === 'Local Fill Style' || group.property === 'Local Stroke Style') && typeof displayValue === 'string' && displayValue.startsWith('#')) {
             html += '<div style="width: 20px; height: 20px; border-radius: 4px; background-color: ' + displayValue + '; border: 1px solid var(--poly-border-subtle);"></div>';
-            html += '<div style="display: flex; flex-direction: column;"><span style="font-family: monospace; font-size: 11px; color: var(--poly-text);">' + displayValue + '</span><span style="font-size: 10px; color: var(--poly-text-muted);">' + layerCount + ' calque(s)</span></div>';
+            html += '<div style="display: flex; flex-direction: column;">';
+            html += '<span style="font-family: monospace; font-size: 11px; color: var(--poly-text);">' + displayValue + '</span>';
+            // Afficher le token suggéré si disponible
+            if (bestSuggestion && !isOrphan && !hasConflicts) {
+              html += '<span style="font-size: 10px; color: var(--poly-accent); font-weight: 600;">→ ' + bestSuggestion.name + '</span>';
+            }
+            html += '<span style="font-size: 10px; color: var(--poly-text-muted);">' + layerCount + ' calque(s)</span>';
+            html += '</div>';
           } else {
-            html += '<div style="display: flex; flex-direction: column; overflow: hidden;"><span style="font-family: monospace; font-size: 11px; color: var(--poly-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">' + displayValue + '</span><span style="font-size: 10px; color: var(--poly-text-muted);">' + layerCount + ' calque(s)</span></div>';
+            html += '<div style="display: flex; flex-direction: column; overflow: hidden;">';
+            html += '<span style="font-family: monospace; font-size: 11px; color: var(--poly-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">' + displayValue + '</span>';
+            // Afficher le token suggéré si disponible
+            if (bestSuggestion && !isOrphan && !hasConflicts) {
+              html += '<span style="font-size: 10px; color: var(--poly-accent); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">→ ' + bestSuggestion.name + '</span>';
+            }
+            html += '<span style="font-size: 10px; color: var(--poly-text-muted);">' + layerCount + ' calque(s)</span>';
+            html += '</div>';
           }
           html += '</div>'; // Fin Valeur Actuelle wrapper
           html += '</div>'; // Fin Valeur Actuelle Container
@@ -8683,9 +9747,15 @@
           currentThemeMode = msg.themeMode;
           previewTheme = (currentThemeMode === 'both') ? 'light' : currentThemeMode;
           if (themeModeSelector) {
-            themeModeSelector.querySelectorAll(".tab").forEach(function (t) {
-              t.classList.remove("active");
-              if (t.getAttribute("data-mode") === currentThemeMode) t.classList.add("active");
+            // Mettre à jour les radio buttons
+            themeModeSelector.querySelectorAll('.radio-option').forEach(function (opt) {
+              opt.classList.remove('active');
+            });
+            themeModeSelector.querySelectorAll('input[type="radio"]').forEach(function (radio) {
+              if (radio.value === currentThemeMode) {
+                radio.checked = true;
+                radio.parentElement.classList.add('active');
+              }
             });
           }
         }
