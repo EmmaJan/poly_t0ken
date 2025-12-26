@@ -7233,6 +7233,137 @@ function rankSuggestionsByRelevance(suggestions, propertyType, nodeType) {
   });
 }
 
+// ============================================================================
+// FIND COLOR SUGGESTIONS V2 (Using Mode-Aware Index)
+// ============================================================================
+
+/**
+ * Finds color suggestions using the new mode-aware index
+ * @param {string} hexValue - Hex color value
+ * @param {string} contextModeId - Mode ID for context
+ * @param {Array<string>} requiredScopes - Required Figma scopes
+ * @param {string} propertyType - Property type for ranking
+ * @param {string} nodeType - Node type for ranking
+ * @returns {Array<Object>} Suggestions
+ */
+function findColorSuggestionsV2(hexValue, contextModeId, requiredScopes, propertyType, nodeType) {
+  if (!VariableIndex.isBuilt) {
+    console.warn('[findColorSuggestionsV2] Index not built yet!');
+    return [];
+  }
+
+  var suggestions = [];
+  var exactMatches = [];
+
+  // Step 1: Try exact match with mode
+  if (contextModeId) {
+    var exactKey = contextModeId + '|' + hexValue;
+    var modeMatches = VariableIndex.colorExact.get(exactKey) || [];
+
+    modeMatches.forEach(function (meta) {
+      // Filter by scopes
+      if (filterVariableByScopes(meta, requiredScopes)) {
+        exactMatches.push(meta);
+      }
+    });
+  }
+
+  // Step 2: Fallback to preferred match (no mode)
+  if (exactMatches.length === 0) {
+    var preferredMatches = VariableIndex.colorPreferred.get(hexValue) || [];
+
+    preferredMatches.forEach(function (meta) {
+      // Filter by scopes
+      if (filterVariableByScopes(meta, requiredScopes)) {
+        exactMatches.push(meta);
+      }
+    });
+  }
+
+  // Convert exact matches to suggestions
+  exactMatches.forEach(function (meta) {
+    suggestions.push(createSuggestion({
+      variableId: meta.id,
+      variableName: meta.name,
+      normalizedName: meta.normalizedName,
+      resolvedValue: meta.resolvedValue,
+      distance: 0,
+      isExact: true,
+      scopeMatch: true,
+      modeMatch: contextModeId ? (meta.modeId === contextModeId) : true,
+      debug: {
+        whyRank: 'exact_match',
+        whyIncluded: 'exact_color_match'
+      }
+    }));
+  });
+
+  // Step 3: Approximate matching if no exact matches
+  if (suggestions.length === 0) {
+    var threshold = 150; // OKLab distance threshold
+    var approximateMatches = [];
+
+    // Iterate through all color variables
+    VariableIndex.colorPreferred.forEach(function (metas, candidateHex) {
+      var distance = getColorDistance(hexValue, candidateHex);
+
+      if (distance <= threshold) {
+        metas.forEach(function (meta) {
+          // Filter by scopes
+          if (filterVariableByScopes(meta, requiredScopes)) {
+            approximateMatches.push({
+              meta: meta,
+              distance: distance
+            });
+          }
+        });
+      }
+    });
+
+    // Sort by distance
+    approximateMatches.sort(function (a, b) {
+      return a.distance - b.distance;
+    });
+
+    // Take top 5
+    approximateMatches.slice(0, 5).forEach(function (match) {
+      suggestions.push(createSuggestion({
+        variableId: match.meta.id,
+        variableName: match.meta.name,
+        normalizedName: match.meta.normalizedName,
+        resolvedValue: match.meta.resolvedValue,
+        distance: match.distance,
+        isExact: false,
+        scopeMatch: true,
+        modeMatch: contextModeId ? (match.meta.modeId === contextModeId) : true,
+        debug: {
+          whyRank: 'approximate_match',
+          whyIncluded: 'color_distance_' + match.distance.toFixed(0)
+        }
+      }));
+    });
+  }
+
+  return suggestions;
+}
+
+/**
+ * Helper: Filter a single variable by scopes
+ */
+function filterVariableByScopes(meta, requiredScopes) {
+  if (!requiredScopes || requiredScopes.length === 0) return true;
+  if (!meta.scopes || meta.scopes.length === 0) return false;
+
+  // Check if variable has at least one required scope
+  for (var i = 0; i < requiredScopes.length; i++) {
+    if (meta.scopes.indexOf(requiredScopes[i]) !== -1) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function findColorSuggestions(hexValue, valueToVariableMap, propertyType, contextModeId, nodeType) {
 
   // ============================================================================
