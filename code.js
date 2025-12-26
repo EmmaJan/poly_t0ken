@@ -5077,6 +5077,53 @@ function getPreferredModeIdForScan(collection) {
 }
 
 // ============================================================================
+// ENUMS - Stable Type Definitions
+// ============================================================================
+
+/**
+ * PropertyKind: Type de propriété scannée
+ */
+var PropertyKind = {
+  FILL: 'FILL',
+  TEXT_FILL: 'TEXT_FILL',
+  STROKE: 'STROKE',
+  EFFECT_COLOR: 'EFFECT_COLOR',
+  GAP: 'GAP',
+  PADDING: 'PADDING',
+  CORNER_RADIUS: 'CORNER_RADIUS',
+  STROKE_WEIGHT: 'STROKE_WEIGHT',
+  FONT_SIZE: 'FONT_SIZE',
+  LINE_HEIGHT: 'LINE_HEIGHT',
+  LETTER_SPACING: 'LETTER_SPACING',
+  UNKNOWN: 'UNKNOWN'
+};
+
+/**
+ * TokenKind: Type de token (sémantique ou primitif)
+ */
+var TokenKind = {
+  SEMANTIC: 'SEMANTIC',
+  PRIMITIVE: 'PRIMITIVE'
+};
+
+/**
+ * IssueStatus: Statut d'une issue de scan
+ */
+var IssueStatus = {
+  UNBOUND: 'UNBOUND',           // Propriété non liée à une variable
+  NO_MATCH: 'NO_MATCH',         // Aucune suggestion trouvée
+  HAS_MATCHES: 'HAS_MATCHES'    // Suggestions disponibles
+};
+
+/**
+ * ValueType: Type de valeur
+ */
+var ValueType = {
+  COLOR: 'COLOR',
+  FLOAT: 'FLOAT'
+};
+
+// ============================================================================
 // TOKEN NAME NORMALIZATION (CRITICAL FOR MATCHING)
 // ============================================================================
 
@@ -5095,6 +5142,55 @@ function normalizeTokenName(name) {
     .replace(/\s+/g, '-')            // Replace spaces with -
     .replace(/-+/g, '-')             // Collapse multiple dashes
     .replace(/^-|-$/g, '');          // Remove leading/trailing dashes
+}
+
+// ============================================================================
+// DATA MODEL FACTORIES
+// ============================================================================
+
+/**
+ * Creates a ScanIssue object with guaranteed non-undefined fields
+ * @param {Object} params - Issue parameters
+ * @returns {Object} ScanIssue
+ */
+function createScanIssue(params) {
+  return {
+    nodeId: params.nodeId || '',
+    nodeName: params.nodeName || 'Unknown',
+    nodeType: params.nodeType || 'UNKNOWN',
+    propertyKind: params.propertyKind || PropertyKind.UNKNOWN,
+    propertyKey: params.propertyKey || '',
+    rawValue: params.rawValue !== undefined ? params.rawValue : null,
+    rawValueType: params.rawValueType || ValueType.COLOR,
+    contextModeName: params.contextModeName || 'light',
+    contextModeId: params.contextModeId || null,
+    isBound: params.isBound || false,
+    requiredScopes: params.requiredScopes || [],
+    suggestions: params.suggestions || [],
+    status: params.status || IssueStatus.UNBOUND
+  };
+}
+
+/**
+ * Creates a Suggestion object with guaranteed non-undefined fields
+ * @param {Object} params - Suggestion parameters
+ * @returns {Object} Suggestion
+ */
+function createSuggestion(params) {
+  return {
+    variableId: params.variableId || params.id || '',
+    variableName: params.variableName || params.name || 'Unknown',
+    normalizedName: params.normalizedName || normalizeTokenName(params.variableName || params.name || ''),
+    resolvedValue: params.resolvedValue !== undefined ? params.resolvedValue : null,
+    distance: params.distance !== undefined ? params.distance : 0,
+    isExact: params.isExact !== undefined ? params.isExact : false,
+    scopeMatch: params.scopeMatch !== undefined ? params.scopeMatch : true,
+    modeMatch: params.modeMatch !== undefined ? params.modeMatch : true,
+    debug: params.debug || {
+      whyRank: 'default',
+      whyIncluded: 'matched'
+    }
+  };
 }
 
 /**
