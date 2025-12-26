@@ -7700,6 +7700,13 @@ function enrichSuggestionsWithRealValues(suggestions) {
   return suggestions.map(function (suggestion) {
     var enriched = Object.assign({}, suggestion);
 
+    // Ensure name is preserved
+    if (!enriched.name && suggestion.id) {
+      var variable = figma.variables.getVariableById(suggestion.id);
+      if (variable) {
+        enriched.name = variable.name;
+      }
+    }
 
     var variable = figma.variables.getVariableById(suggestion.id);
     if (variable) {
