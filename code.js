@@ -5077,6 +5077,68 @@ function getPreferredModeIdForScan(collection) {
 }
 
 /**
+ * detectNodeModeId: Détecte le modeId d'un node
+ * PRIORITÉ 1: Mode explicite du node
+ * PRIORITÉ 2: Mode explicite du parent
+ * PRIORITÉ 3: Mode Light par défaut de la collection Semantic
+ * @param {SceneNode} node - Node à analyser
+ * @returns {string|null} modeId ou null
+ */
+function detectNodeModeId(node) {
+  if (!node) return null;
+
+  // Priority 1: Explicit mode on the node itself
+  if (node.explicitVariableModes) {
+    var collectionIds = Object.keys(node.explicitVariableModes);
+    if (collectionIds.length > 0) {
+      // Find the Semantic collection
+      var collections = figma.variables.getLocalVariableCollections();
+      for (var i = 0; i < collections.length; i++) {
+        var col = collections[i];
+        var colName = col.name.toLowerCase();
+        if (colName.indexOf('semantic') !== -1 || colName.indexOf('sémantique') !== -1) {
+          var modeId = node.explicitVariableModes[col.id];
+          if (modeId) {
+            return modeId;
+          }
+        }
+      }
+
+      // Fallback: use first collection's mode
+      return node.explicitVariableModes[collectionIds[0]];
+    }
+  }
+
+  // Priority 2: Inherit from parent
+  if (node.parent && node.parent.explicitVariableModes) {
+    return detectNodeModeId(node.parent);
+  }
+
+  // Priority 3: Find default Light mode from Semantic collection
+  var collections = figma.variables.getLocalVariableCollections();
+  for (var i = 0; i < collections.length; i++) {
+    var col = collections[i];
+    var colName = col.name.toLowerCase();
+    if (colName.indexOf('semantic') !== -1 || colName.indexOf('sémantique') !== -1) {
+      // Find Light mode
+      for (var j = 0; j < col.modes.length; j++) {
+        var mode = col.modes[j];
+        var modeName = mode.name.toLowerCase();
+        if (modeName.indexOf('light') !== -1 || modeName.indexOf('clair') !== -1) {
+          return mode.modeId;
+        }
+      }
+      // Fallback: first mode
+      if (col.modes.length > 0) {
+        return col.modes[0].modeId;
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
  * detectFrameMode: Détecte si une frame est en mode Light ou Dark
  * PRIORITÉ 1: Utilise le mode explicite de Figma (explicitVariableModes)
  * PRIORITÉ 2: Fallback sur la luminosité du background
@@ -8124,26 +8186,10 @@ function checkFillsSafely(node, valueToVariableMap, results) {
     // NOUVEAU: Scanner le nœud parent lui-même AVANT ses enfants
     // ===========================================================================
     if (node.fills && Array.isArray(node.fills) && node.fills.length > 0) {
-      // Détecter le mode du node
-      var parentDetectedModeName = detectFrameMode(node);
-      var parentContextModeId = null;
+      // Détecter le mode du node - RETOURNE DIRECTEMENT LE MODE ID
+      var parentContextModeId = detectNodeModeId(node);
 
-      // Trouver le modeId correspondant UNIQUEMENT dans les collections sémantiques
-      var parentCollections = FigmaService.getCollections();
-      if (parentCollections && parentCollections.length > 0) {
-        console.log('🔍 [DEBUG] Searching for mode:', parentDetectedModeName, 'in', parentCollections.length, 'collections');
-        for (var pc = 0; pc < parentCollections.length; pc++) {
-          var col = parentCollections[pc];
-          console.log('🔍 [DEBUG] Collection:', col.name, '| Modes:', col.modes ? col.modes.map(function (m) { return m.name + ':' + m.modeId; }).join(', ') : 'none');
-          // Ne chercher que dans les collections sémantiques
-          if (col.name && (col.name.toLowerCase().indexOf('semantic') !== -1 ||
-            col.name.toLowerCase().indexOf('sémantique') !== -1)) {
-            parentContextModeId = getModeIdByName(col, parentDetectedModeName);
-            console.log('🔍 [DEBUG] Found modeId:', parentContextModeId, 'for mode:', parentDetectedModeName);
-            if (parentContextModeId) break;
-          }
-        }
-      }
+      console.log('🔍 [DEBUG] Detected modeId for parent:', parentContextModeId, 'node:', node.name);
 
       // Scanner chaque fill du nœud parent
       for (var pi = 0; pi < node.fills.length; pi++) {
@@ -8183,23 +8229,9 @@ function checkFillsSafely(node, valueToVariableMap, results) {
     var fills = node.fills;
     if (!Array.isArray(fills)) return;
 
-    // DÉTECTER LE MODE DU NODE (Light ou Dark)
-    var detectedModeName = detectFrameMode(node);
-    var contextModeId = null;
-
-    // Trouver le modeId correspondant UNIQUEMENT dans les collections sémantiques
-    var collections = FigmaService.getCollections();
-    if (collections && collections.length > 0) {
-      for (var c = 0; c < collections.length; c++) {
-        var col = collections[c];
-        // Ne chercher que dans les collections sémantiques
-        if (col.name && (col.name.toLowerCase().indexOf('semantic') !== -1 ||
-          col.name.toLowerCase().indexOf('sémantique') !== -1)) {
-          contextModeId = getModeIdByName(col, detectedModeName);
-          if (contextModeId) break;
-        }
-      }
-    }
+    // DÉTECTER LE MODE DU NODE - RETOURNE DIRECTEMENT LE MODE ID
+    var contextModeId = detectNodeModeId(node);
+    console.log('🔍 [DEBUG] Detected modeId for children:', contextModeId, 'node:', node.name);
 
     for (var i = 0; i < fills.length; i++) {
       try {
