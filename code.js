@@ -193,6 +193,13 @@ function getScopesForPropertyKind(propertyKind) {
       return ['STROKE_FLOAT'];
     case PropertyKind.FONT_SIZE:
       return ['FONT_SIZE'];
+    case PropertyKind.LINE_HEIGHT:
+      return ['LINE_HEIGHT', 'FONT_SIZE']; // Fallback FONT_SIZE pour compatibilité
+    case PropertyKind.LETTER_SPACING:
+      return ['LETTER_SPACING'];
+    case PropertyKind.FONT_WEIGHT:
+      // Pas de scope officiel variable fontWeight nativement supporté PARTOUT, mais on peut le faire
+      return ['FONT_WEIGHT'];
     default:
       return [];
   }
@@ -5025,8 +5032,9 @@ function generateRadius(naming) {
   return { "sm": "2", "md": "4", "lg": "8", "xl": "12", "2xl": "16", "full": "9999" };
 }
 
-function generateTypography(naming) {
-  if (naming === "shadcn") {
+// NOUVEAU GÉNÉRATEURS TYPOGRAPHIE SCALAIRES (V2)
+function generateFontSizes(naming) {
+  if (naming === "shadcn" || naming === "tailwind") {
     return {
       "xs": "0.75rem",
       "sm": "0.875rem",
@@ -5036,16 +5044,28 @@ function generateTypography(naming) {
       "2xl": "1.5rem",
       "3xl": "1.875rem",
       "4xl": "2.25rem",
-      "5xl": "3rem"
+      "5xl": "3rem",
+      "6xl": "3.75rem",
+      "7xl": "4.5rem",
+      "8xl": "6rem",
+      "9xl": "8rem"
     };
   }
   if (naming === "mui") {
+    // Échelle MUI par défaut convertie en px ou rem
     return {
-      "h1": "96px / 700",
-      "h2": "60px / 700",
-      "h3": "48px / 600",
-      "body1": "16px / 400",
-      "body2": "14px / 400"
+      "h1": "96px",
+      "h2": "60px",
+      "h3": "48px",
+      "h4": "34px",
+      "h5": "24px",
+      "h6": "20px",
+      "subtitle1": "16px",
+      "subtitle2": "14px",
+      "body1": "16px",
+      "body2": "14px",
+      "caption": "12px",
+      "overline": "12px"
     };
   }
   if (naming === "bootstrap") {
@@ -5053,16 +5073,138 @@ function generateTypography(naming) {
       "h1": "2.5rem",
       "h2": "2rem",
       "h3": "1.75rem",
-      "body": "1rem",
-      "lead": "1.25rem"
+      "h4": "1.5rem",
+      "h5": "1.25rem",
+      "h6": "1rem",
+      "display-1": "6rem",
+      "display-2": "5.5rem",
+      "display-3": "4.5rem",
+      "display-4": "3.5rem",
+      "lead": "1.25rem",
+      "small": "0.875rem"
     };
   }
+  // Default / "Standard"
   return {
-    "text-xs": "0.75rem",
-    "text-sm": "0.875rem",
-    "text-base": "1rem",
-    "text-lg": "1.125rem",
-    "text-xl": "1.25rem"
+    "xs": "0.75rem",
+    "sm": "0.875rem",
+    "base": "1rem",
+    "lg": "1.125rem",
+    "xl": "1.25rem",
+    "2xl": "1.5rem",
+    "3xl": "1.875rem",
+    "4xl": "2.25rem"
+  };
+}
+
+function generateLineHeights(naming) {
+  // Tailwind/Shadcn defaults
+  if (naming === "shadcn" || naming === "tailwind") {
+    return {
+      "none": "1",
+      "tight": "1.25",
+      "snug": "1.375",
+      "normal": "1.5",
+      "relaxed": "1.625",
+      "loose": "2",
+      "3": ".75rem",
+      "4": "1rem",
+      "5": "1.25rem",
+      "6": "1.5rem",
+      "7": "1.75rem",
+      "8": "2rem",
+      "9": "2.25rem",
+      "10": "2.5rem"
+    };
+  }
+  if (naming === "mui") {
+    // MUI line heights are unitless usually
+    return {
+      "h1": "1.167",
+      "h2": "1.2",
+      "h3": "1.167",
+      "h4": "1.235",
+      "h5": "1.334",
+      "h6": "1.6",
+      "subtitle1": "1.75",
+      "body1": "1.5",
+      "body2": "1.43",
+      "button": "1.75"
+    };
+  }
+  if (naming === "bootstrap") {
+    return {
+      "base": "1.5",
+      "sm": "1.25",
+      "lg": "2",
+      "heading": "1.2"
+    };
+  }
+  // Fallback
+  return {
+    "none": "1",
+    "tight": "1.25",
+    "normal": "1.5",
+    "relaxed": "1.625",
+    "loose": "2"
+  };
+}
+
+function generateFontWeights(naming) {
+  // Common weights
+  return {
+    "thin": 100,
+    "extralight": 200,
+    "light": 300,
+    "normal": 400,
+    "medium": 500,
+    "semibold": 600,
+    "bold": 700,
+    "extrabold": 800,
+    "black": 900
+  };
+}
+
+function generateLetterSpacings(naming) {
+  if (naming === "shadcn" || naming === "tailwind") {
+    return {
+      "tighter": "-0.05em",
+      "tight": "-0.025em",
+      "normal": "0em",
+      "wide": "0.025em",
+      "wider": "0.05em",
+      "widest": "0.1em"
+    };
+  }
+  if (naming === "mui") {
+    return {
+      "h1": "-0.01562em",
+      "h2": "-0.00833em",
+      "h3": "0em",
+      "h4": "0.00735em",
+      "h5": "0em",
+      "h6": "0.0075em",
+      "body1": "0.00938em",
+      "body2": "0.01071em",
+      "button": "0.02857em"
+    };
+  }
+  // Default is minimal
+  return {
+    "tight": "-0.025em",
+    "normal": "0em",
+    "wide": "0.025em"
+  };
+}
+
+function generateTypography(naming) {
+  // RETOURNE UN OBJET STRUCTURÉ (BREAKING CHANGE GÉRÉ PAR UI COMPAT)
+  // tokens.typography = { fontSize: {}, fontWeight: {}, lineHeight: {}, letterSpacing: {} }
+  return {
+    fontSize: generateFontSizes(naming),
+    fontWeight: generateFontWeights(naming),
+    lineHeight: generateLineHeights(naming),
+    letterSpacing: generateLetterSpacings(naming)
   };
 }
 
@@ -5369,6 +5511,16 @@ function getRequiredScopesForScanResult(result) {
     figmaProperty === 'strokeTopWeight' || figmaProperty === 'strokeBottomWeight' ||
     figmaProperty === 'strokeLeftWeight' || figmaProperty === 'strokeRightWeight') {
     return ['STROKE_FLOAT'];
+  }
+
+  // Line Height
+  if (property === 'Line Height' || figmaProperty === 'lineHeight') {
+    return ['LINE_HEIGHT', 'FONT_SIZE']; // Fallback
+  }
+
+  // Letter Spacing
+  if (property === 'Letter Spacing' || figmaProperty === 'letterSpacing') {
+    return ['LETTER_SPACING'];
   }
 
   return [];
@@ -12322,7 +12474,9 @@ var CORE_PRESET_V1 = {
     radius: ['none', 'sm', 'md', 'lg', 'xl', 'full'],
     borderWidth: ['0', '1', '2', '4', '8'],
     fontSize: ['xs', 'sm', 'base', 'lg', 'xl', '2xl', '3xl', '4xl'],
-    fontWeight: ['thin', 'light', 'normal', 'medium', 'semibold', 'bold', 'extrabold', 'black']
+    fontWeight: ['thin', 'light', 'normal', 'medium', 'semibold', 'bold', 'extrabold', 'black'],
+    lineHeight: ['none', 'tight', 'snug', 'normal', 'relaxed', 'loose'],
+    letterSpacing: ['tighter', 'tight', 'normal', 'wide', 'wider', 'widest']
   },
 
   // Schema sémantique: clés extraites de SEMANTIC_TYPE_MAP existant
@@ -12349,7 +12503,9 @@ var CORE_PRESET_V1 = {
     'radius.sm', 'radius.md', 'radius.lg',
     'space.xs', 'space.sm', 'space.md', 'space.lg',
     'font.size.sm', 'font.size.base', 'font.size.lg',
-    'font.weight.normal', 'font.weight.medium', 'font.weight.bold'
+    'font.weight.normal', 'font.weight.medium', 'font.weight.bold',
+    'font.lineHeight.normal', 'font.lineHeight.relaxed',
+    'font.letterSpacing.normal', 'font.letterSpacing.wide'
   ],
 
   // Règles de mapping sémantique (light/dark modes)
@@ -12498,6 +12654,22 @@ var CORE_PRESET_V1 = {
       light: { category: 'system.error', ref: '600' },
       dark: { category: 'system.error', ref: '500' }
     },
+
+    // Typography Semantics (Mapped to 'typography' category with specific prefixes)
+    'font.size.sm': { light: { category: 'typography', ref: 'font-size-sm' }, dark: { category: 'typography', ref: 'font-size-sm' } },
+    'font.size.base': { light: { category: 'typography', ref: 'font-size-base' }, dark: { category: 'typography', ref: 'font-size-base' } },
+    'font.size.lg': { light: { category: 'typography', ref: 'font-size-lg' }, dark: { category: 'typography', ref: 'font-size-lg' } },
+
+    'font.weight.normal': { light: { category: 'typography', ref: 'font-weight-normal' }, dark: { category: 'typography', ref: 'font-weight-normal' } },
+    'font.weight.medium': { light: { category: 'typography', ref: 'font-weight-medium' }, dark: { category: 'typography', ref: 'font-weight-medium' } },
+    'font.weight.bold': { light: { category: 'typography', ref: 'font-weight-bold' }, dark: { category: 'typography', ref: 'font-weight-bold' } },
+
+    'font.lineHeight.normal': { light: { category: 'typography', ref: 'line-height-normal' }, dark: { category: 'typography', ref: 'line-height-normal' } },
+    'font.lineHeight.relaxed': { light: { category: 'typography', ref: 'line-height-relaxed' }, dark: { category: 'typography', ref: 'line-height-relaxed' } },
+
+    'font.letterSpacing.normal': { light: { category: 'typography', ref: 'letter-spacing-normal' }, dark: { category: 'typography', ref: 'letter-spacing-normal' } },
+    'font.letterSpacing.wide': { light: { category: 'typography', ref: 'letter-spacing-wide' }, dark: { category: 'typography', ref: 'letter-spacing-wide' } },
+
     'status.error.text': {
       light: { category: 'gray', ref: '50' },
       dark: { category: 'gray', ref: '900' }

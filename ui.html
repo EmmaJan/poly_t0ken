@@ -11354,6 +11354,41 @@
           if (!categoryTokens.hasOwnProperty(key)) continue;
 
           var primitiveValue = categoryTokens[key];
+
+          // ✅ RECURSIVE SEARCH (pour typography.fontSize, etc.)
+          if (typeof primitiveValue === 'object' && primitiveValue !== null) {
+            for (var subKey in primitiveValue) {
+              if (!primitiveValue.hasOwnProperty(subKey)) continue;
+
+              var subValue = primitiveValue[subKey];
+              var scalarSub = toScalar(subValue);
+
+              if (scalarSub === null) continue;
+
+              // Check match
+              var isMatch = false;
+              if (isColor) {
+                if (typeof scalarSub === "string" && isHexColor(scalarSub)) {
+                  var normalizedSub = scalarSub.trim().toUpperCase();
+                  if (normalizedSub.length === 4) {
+                    normalizedSub = "#" + normalizedSub[1] + normalizedSub[1] + normalizedSub[2] + normalizedSub[2] + normalizedSub[3] + normalizedSub[3];
+                  }
+                  if (normalizedSub === normalizedSearch) isMatch = true;
+                }
+              } else {
+                if (scalarSub === searchValue) isMatch = true;
+              }
+
+              if (isMatch) {
+                // Construct flattened key: fontSize + xs -> font-size-xs
+                var prefix = key.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+                var flatKey = prefix + "-" + subKey;
+                return { category: category, key: flatKey };
+              }
+            }
+            continue;
+          }
+
           var scalarValue = toScalar(primitiveValue);
 
           if (scalarValue === null) continue;
@@ -11532,6 +11567,52 @@
             if (!categoryTokens.hasOwnProperty(key)) continue;
 
             var primitiveValue = categoryTokens[key];
+
+            // ✅ RECURSIVE FLATTENING (pour typography.fontSize, etc.)
+            if (typeof primitiveValue === 'object' && primitiveValue !== null) {
+              // Si on tombe sur un sous-objet (ex: typography.fontSize)
+              // On aplatit en préfixant la clé : fontSize.sm -> font-size-sm
+              for (var subKey in primitiveValue) {
+                if (!primitiveValue.hasOwnProperty(subKey)) continue;
+
+                var subValue = primitiveValue[subKey];
+                var scalarSubValue = toScalar(subValue);
+
+                if (scalarSubValue === null) continue;
+
+                // Conversion CamelCase -> kebab-case pour le préfixe (fontSize -> font-size)
+                var prefix = key.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+                var normalizedSubKey = prefix + "-" + subKey; // font-size-sm
+
+                // Utiliser le préfixe primitif si fourni (global), sinon utiliser category-normalizedSubKey
+                // Note: category est 'typography'
+                var flatKey = options.primitivePrefix ?
+                  (options.primitivePrefix + category + "-" + normalizedSubKey) :
+                  (category + "-" + normalizedSubKey); // typography-font-size-sm
+
+                // HACK: Pour l'affichage UI et le mapping semantic, on veut parfois ignorer le prefix "typography-"
+                // si l'outil attend "font-size-sm". Mais pour l'export CSS global, "spacing-4" est bon.
+                // Dans le doute, on suit la convention existante: category-key.
+                // Mais ici key est composée.
+
+                // Correction: les mapping rules dans code.js réfèrent à category="typography", ref="font-size-sm".
+                // AliasToStringRef avec collection="typography" et key="font-size-sm" -> "typography-font-size-sm".
+                // Donc on est bon sur l'alignement.
+
+                entries.push({
+                  key: flatKey,
+                  group: "primitive",
+                  category: category,
+                  type: typeof scalarSubValue === "number" ? "FLOAT" : "STRING",
+                  raw: subValue,
+                  value: scalarSubValue,
+                  valueKind: "literal",
+                  meta: { subCategory: key }
+                });
+              }
+              continue; // On a traité l'objet, on passe à la clé suivante
+            }
+
             var scalarValue = toScalar(primitiveValue);
 
             if (scalarValue === null) {

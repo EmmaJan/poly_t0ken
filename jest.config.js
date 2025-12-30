@@ -1,8 +1,11 @@
 module.exports = {
     testEnvironment: 'node',
     testMatch: ['**/tests/**/*.test.js'],
+    collectCoverage: true,
     collectCoverageFrom: [
-        'code.js',
+        'TokenService.js',
+        'StateManager.js',
+        'MessageBus.js',
         '!**/node_modules/**',
         '!**/tests/**'
     ],

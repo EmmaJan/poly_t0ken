@@ -216,6 +216,10 @@ class TokenService {
             throw new Error('Invalid tokens structure');
         }
 
+        if (!tokens.primitives && !tokens.semantics) {
+            throw new Error('Invalid tokens');
+        }
+
         // Validate primitives
         if (tokens.primitives) {
             const requiredCategories = ['brand', 'gray', 'system'];
