@@ -2385,44 +2385,7 @@
       color: white;
     }
 
-    /* Améliorations pour les sélecteurs manuels */
-    .manual-select {
-      transition: all 0.3s cubic-bezier(0.4, 0.0, 0.2, 1);
-      position: relative;
-    }
 
-    .manual-select:focus {
-      outline: none;
-      border-color: var(--poly-accent);
-      box-shadow: 0 0 0 3px rgba(138, 213, 63, 0.15);
-      /* Poly Accent Alpha */
-      transform: scale(1.02);
-      background: var(--poly-surface);
-    }
-
-    .manual-select:not(:disabled):hover {
-      border-color: var(--poly-accent);
-      box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.1);
-    }
-
-    /* Animation de pulsation pour attirer l'attention */
-    @keyframes manualFocusPulse {
-
-      0%,
-      100% {
-        box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.3);
-        transform: scale(1);
-      }
-
-      50% {
-        box-shadow: 0 0 0 6px rgba(99, 102, 241, 0);
-        transform: scale(1.01);
-      }
-    }
-
-    .manual-select.manual-focus-attention {
-      animation: manualFocusPulse 2.5s infinite;
-    }
 
     /* Animation pour les notifications */
     @keyframes slideInRight {
@@ -2917,19 +2880,7 @@
        VARIABLE SELECTOR STYLES
        ============================================ */
 
-    .variable-selector {
-      transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    }
 
-    .variable-selector:hover {
-      opacity: 0.9;
-    }
-
-    .variable-selector:focus {
-      outline: none;
-      border-color: var(--poly-accent);
-      box-shadow: 0 0 0 3px rgba(138, 213, 63, 0.15);
-    }
 
     /* ============================================
        BADGES EXACT / APPROX (Premium UX)
@@ -6126,148 +6077,7 @@
       return Object.values(groups);
     }
 
-    // New helper functions for manual conflict handling with preview
-    window.handleConflictSelectChange = function (indices, variableId, selectElement) {
-      // 1. Send preview
-      if (variableId) {
-        // Store selected variable ID on the button's parent or accessible place
-        selectElement.dataset.selectedVariable = variableId;
 
-        // Show apply button
-        var container = selectElement.parentElement; // We will wrap in a div
-        var applyBtn = container.querySelector('.btn-apply-manual');
-        if (applyBtn) {
-          applyBtn.style.display = 'inline-block';
-          // Store indices and variable on button for easy access
-          applyBtn.dataset.indices = JSON.stringify(indices);
-          applyBtn.dataset.variableId = variableId;
-        }
-
-        // Preview
-        if (typeof sendPreviewFix === 'function') {
-          sendPreviewFix(indices, variableId);
-        } else {
-          console.warn("sendPreviewFix not found");
-        }
-      } else {
-        // Hide apply button if cleared
-        var container = selectElement.parentElement;
-        var applyBtn = container.querySelector('.btn-apply-manual');
-        if (applyBtn) applyBtn.style.display = 'none';
-      }
-    };
-
-    window.applyManualFix = function (btnElement) {
-      var indices = JSON.parse(btnElement.dataset.indices || '[]');
-      var variableId = btnElement.dataset.variableId;
-      if (indices.length > 0 && variableId) {
-        applyGroupFix(indices, variableId);
-        // Hide button after apply (optional, or rely on re-render)
-        btnElement.style.display = 'none';
-        btnElement.textContent = 'Applied';
-      }
-    };
-
-    function renderCompactRow(group) {
-      var hasConflicts = group.suggestions.length > 1;
-      var bestSuggestion = group.suggestions[0];
-
-      // Fonction helper pour obtenir l'icône SVG selon le type de propriété
-      function getPropertyIcon(property) {
-        var p = (property || '').toUpperCase();
-        switch (p) {
-          case 'FILL':
-          case 'TEXT_FILL':
-            return '<span class="property-label">FILL</span>';
-          case 'STROKE':
-            return '<span class="property-label">Contour</span>';
-          case 'STYLE LOCAL':
-          case 'LOCAL_FILL_STYLE':
-          case 'LOCAL_STROKE_STYLE':
-            return '<span class="property-label">Style Local</span>';
-          case 'RADIUS':
-          case 'CORNER_RADIUS':
-            return '<span class="property-label">RADIUS</span>';
-          case 'GAP':
-          case 'SPACING':
-          case 'ITEM_SPACING':
-          case 'WIDTH':
-          case 'HEIGHT':
-            return '<span class="property-label">Dimension</span>';
-          case 'LINE_HEIGHT':
-            return '<span class="property-label">Ligne</span>';
-          case 'FONT_SIZE':
-            return '<span class="property-label">Taille</span>';
-          default:
-            return '<span class="property-label">' + property + '</span>';
-        }
-      }
-
-      // NOUVEAU: Stocker les valeurs dans data-attributes pour le toast d'annulation
-      var currentValue = group.value;
-      var variableName = bestSuggestion ? bestSuggestion.name : '';
-
-      var html = '<div class="compact-row" data-indices="' + group.originalIndices.join(',') + '" data-current-value="' + currentValue + '" data-variable-name="' + variableName + '" onclick="highlightLayers([' + group.originalIndices.join(',') + '])" style="cursor: pointer;">';
-
-      // Col 1 : Le "Problème" (Valeur Actuelle)
-      html += '<div class="col-problem" title="Type: ' + group.property + ' | Valeur: ' + group.value + '">';
-
-      // Icône de type
-      html += getPropertyIcon(group.property);
-
-      // Visuel (swatch ou valeur textuelle)
-      if (group.property === "Fill" || group.property === "Stroke" || group.property === "Local Fill Style" || group.property === "Local Stroke Style" || group.property === "Text" || group.property === "Text Fill") {
-        // Extraire la couleur hex du début de la valeur (avant le nom du style)
-        var colorValue = group.value.split(' ')[0];
-        html += '<div class="mini-swatch" style="background-color: ' + colorValue + ';"></div>';
-      } else {
-        html += '<span class="value-display">' + group.value + '</span>';
-      }
-
-      html += '</div>';
-
-      // Col 2 : Le "Lien"
-      html += '<div class="col-arrow">';
-      html += '<div class="arrow-symbol">→</div>';
-      html += '<div class="layer-count-badge" title="' + group.originalIndices.length + ' calque' + (group.originalIndices.length > 1 ? 's' : '') + ' concerné' + (group.originalIndices.length > 1 ? 's' : '') + '">Sur ' + group.originalIndices.length + ' calque' + (group.originalIndices.length > 1 ? 's' : '') + '</div>';
-      html += '</div>';
-
-      // Col 3 : La "Solution" (Variable)
-      html += '<div class="col-solution">';
-      if (group.suggestions && group.suggestions.length > 0) {
-        if (hasConflicts) {
-          // Multiple suggestions - select avec live preview et bouton apply
-          html += '<div style="display: flex; align-items: center; gap: 8px;">';
-          html += '<select class="conflict-select" onchange="handleConflictSelectChange([' + group.originalIndices.join(',') + '], this.value, this)">';
-          html += '<option value="">Choisir parmi ' + group.suggestions.length + ' variables</option>';
-          group.suggestions.forEach(function (suggestion, idx) {
-            var distanceIndicator = suggestion.isExact ? '' : ' ≈';
-            var valuePreview = suggestion.hex ? suggestion.hex : (suggestion.value !== undefined ? suggestion.value : "");
-            html += '<option value="' + suggestion.id + '">' + suggestion.name + ' (' + valuePreview + ')' + distanceIndicator + '</option>';
-          });
-          html += '</select>';
-          html += '<button class="btn-apply-manual" style="display: none; padding: 4px 10px; background: var(--poly-success); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; font-weight: 500; transition: all 0.2s;" onclick="applyManualFix(this)">Appliquer</button>';
-          html += '</div>';
-        } else {
-          // Single suggestion - bouton pill vert
-          html += '<button class="variable-pill" data-variable-name="' + bestSuggestion.name + '" onclick="applyGroupFix([' + group.originalIndices.join(',') + '], \'' + bestSuggestion.id + '\')">';
-          html += '<svg class="variable-icon" viewBox="0 0 16 16"><path fill="currentColor" d="M8 2l2.5 5 5.5.5-4 4 .5 5.5L8 12l-4 2 .5-5.5-4-4 5.5-.5L8 2z"/></svg>';
-          html += '<span>' + bestSuggestion.name + '</span>';
-          html += '</button>';
-        }
-      } else {
-        // NO_MATCH case
-        html += '<div class="no-match-badge" title="Aucun token sémantique ne correspond à cette valeur exacte dans votre système.">Aucun token compatible</div>';
-      }
-      html += '</div>';
-
-      // Col 4 : Bouton ignorer
-      html += '<button class="btn-x" onclick="this.closest(\'.compact-row\').style.display=\'none\'" title="Ignorer ce groupe">×</button>';
-
-      html += '</div>';
-
-      return html;
-    }
 
     // Fonction pour corriger tous les groupes d'une catégorie
     function applyAllCategoryFixes(categoryKey) {
@@ -6306,57 +6116,7 @@
     // Verrou temporel pour ignorer les changements de sélection programmatiques
     window.ignoreSelectionChangeUntil = 0;
 
-    function highlightLayers(indices) {
-      // Activer le verrou pour seulement 200ms (au lieu de 2 secondes) pour éviter les conflits
-      window.ignoreSelectionChangeUntil = Date.now() + 200;
 
-      parent.postMessage({
-        pluginMessage: {
-          type: 'highlight-nodes',
-          indices: indices
-        }
-      }, '*');
-    }
-
-    function selectLayers(indices) {
-      highlightLayers(indices);
-    }
-
-    function applyGroupFix(indices, variableId) {
-      console.log('applyGroupFix called with indices:', indices, 'variableId:', variableId);
-      parent.postMessage({
-        pluginMessage: {
-          type: 'apply-group-fix',
-          indices: indices,
-          variableId: variableId
-        }
-      }, '*');
-    }
-
-    function applyManualGroupFix(indices, buttonElement) {
-      // Trouver le sélecteur dans la même carte
-      var card = buttonElement.closest('.cleaning-result-card');
-      var selector = card.querySelector('.manual-select');
-      var variableId = selector.value;
-
-      if (!variableId) {
-        return; // Ne rien faire si aucune variable sélectionnée
-      }
-
-      parent.postMessage({
-        pluginMessage: {
-          type: 'apply-group-fix',
-          indices: indices,
-          variableId: variableId
-        }
-      }, '*');
-    }
-
-    // Expose functions to global scope for inline onclick handlers
-    window.highlightLayers = highlightLayers;
-    window.selectLayers = selectLayers;
-    window.applyGroupFix = applyGroupFix;
-    window.applyManualGroupFix = applyManualGroupFix;
 
     // ============================================
     // ✅ CORRECTIF GLOBAL : SCROLL, FILTRES & ACTIONS
@@ -8704,66 +8464,7 @@
     }
 
     // Gestionnaire pour les sélecteurs (Manuel & Auto avec Dropdown)
-    function initVariableSelectors() {
-      // Use event delegation for better performance and dynamic content support
-      document.addEventListener('change', function (e) {
-        // Cible : soit .manual-select soit .variable-selector (standard)
-        if (e.target.classList.contains('manual-select') || e.target.classList.contains('variable-selector')) {
-          var select = e.target;
-          var variableId = select.value;
-          var card = select.closest('.cleaning-result-card') || select.closest('.scan-result-card');
-          if (!card) return;
 
-
-          var select = e.target;
-          var variableId = select.value;
-          var card = select.closest('.cleaning-result-card') || select.closest('.scan-result-card');
-          if (!card) return;
-
-          // Récupérer les boutons de validation
-          var applyBtn = card.querySelector('.manual-apply-btn') || card.querySelector('button[data-action="apply"]');
-
-          // Récupérer les indices concernés
-          var indicesRaw = select.getAttribute('data-indices') || select.getAttribute('data-index');
-          var indices = [];
-          if (select.hasAttribute('data-indices')) {
-            indices = indicesRaw.split(',').map(Number);
-          } else if (select.hasAttribute('data-index')) {
-            indices = [parseInt(indicesRaw)];
-          }
-
-          if (variableId) {
-            // 1. Stocker l'ID sélectionné sur la carte pour usage futur (Validation)
-            card._selectedVariableId = variableId;
-            select.setAttribute('data-selected', variableId);
-
-            // 2. Activer le bouton de validation (Etat : Prêt à valider)
-            if (applyBtn) {
-              applyBtn.disabled = false;
-              // Si c'est un bouton "manuel", changer son texte peut-être ?
-              // applyBtn.classList.add('ready'); 
-            }
-            card.classList.add('ready-to-apply');
-
-            // 3. ✨ PREVIEW : Envoyer le message de prévisualisation
-            sendPreviewFix(indices, variableId);
-
-            // Mise à jour des boutons globaux si c'est du manuel
-            if (e.target.classList.contains('manual-select')) {
-              updateManualApplyButton();
-            }
-
-          } else {
-            // Cas où on désélectionne (si possible)
-            if (applyBtn) applyBtn.disabled = true;
-            card.classList.remove('ready-to-apply');
-            if (e.target.classList.contains('manual-select')) {
-              updateManualApplyButton();
-            }
-          }
-        }
-      });
-    }
 
     // ============================================
     // CUSTOM DROPDOWN SYSTEM FOR VARIABLE SELECTORS
@@ -8974,176 +8675,9 @@
       }
     }
 
-    function initCustomDropdowns() {
-      document.addEventListener('click', function (e) {
 
-        var trigger = e.target.closest('.select-trigger');
-        if (trigger) {
-          var container = trigger.closest('.custom-select-container');
-          toggleCustomDropdown(container);
-          e.stopPropagation();
-          return;
-        }
 
-        var option = e.target.closest('.option-item');
-        if (option) {
-          var container = option.closest('.custom-select-container');
-          var variableId = option.getAttribute('data-variable-id');
-          var variableName = option.getAttribute('data-variable-name');
-          var indices = JSON.parse(container.getAttribute('data-indices') || '[]');
 
-          // ✅ Gérer l'option "Aucune" (variable vide) = clear preview
-          if (!variableId || variableId === '') {
-            // Rollback: envoyer clear-preview pour restaurer l'état initial
-            console.log('🔄 [UI] Clear preview requested for indices:', indices);
-
-            // Réinitialiser l'affichage du trigger
-            updateCustomDropdownTrigger(container, null);
-
-            // Fermer le dropdown
-            container.classList.remove('open');
-
-            // Supprimer la sélection stockée
-            container._selectedVariableId = null;
-
-            // Désactiver le bouton apply
-            var card = container.closest('.cleaning-result-card') || container.closest('.scan-result-card');
-            if (card) {
-              var applyBtn = card.querySelector('.manual-apply-btn') || card.querySelector('button[data-action="apply"]');
-              if (applyBtn) {
-                applyBtn.disabled = true;
-                card.classList.remove('ready-to-apply');
-              }
-              card._selectedVariableId = null;
-            }
-
-            // Envoyer le message clear-preview au plugin
-            window.ignoreSelectionChangeUntil = Date.now() + 2000;
-            parent.postMessage({
-              pluginMessage: {
-                type: 'clear-preview',
-                indices: indices
-              }
-            }, '*');
-
-            e.stopPropagation();
-            return;
-          }
-
-          // Trouver la suggestion sélectionnée directement depuis les attributs
-          var selectedSuggestion = {
-            id: variableId,
-            name: variableName,
-            hex: option.getAttribute('data-variable-value').startsWith('#') ? option.getAttribute('data-variable-value') : null,
-            value: option.getAttribute('data-variable-value')
-          };
-
-          // Mettre à jour l'affichage
-          updateCustomDropdownTrigger(container, selectedSuggestion);
-
-          // Fermer le dropdown
-          container.classList.remove('open');
-
-          // Stocker la sélection
-          container._selectedVariableId = variableId;
-
-          // Activer le bouton de validation
-          var card = container.closest('.cleaning-result-card') || container.closest('.scan-result-card');
-          if (card) {
-            var applyBtn = card.querySelector('.manual-apply-btn') || card.querySelector('button[data-action="apply"]');
-            if (applyBtn) {
-              applyBtn.disabled = false;
-              card.classList.add('ready-to-apply');
-            }
-
-            // Stocker aussi sur la card pour faciliter l'apply
-            card._selectedVariableId = variableId;
-
-            // Trigger Live Preview
-            if (variableId && livePreviewReady) {
-              sendPreviewFix(indices, variableId);
-            }
-          }
-
-          e.stopPropagation();
-          return;
-        }
-
-        // Fermer tous les dropdowns ouverts quand on clique ailleurs
-        if (!e.target.closest('.custom-select-container')) {
-          document.querySelectorAll('.custom-select-container.open').forEach(function (cont) {
-            cont.classList.remove('open');
-          });
-        }
-      });
-    }
-
-    function toggleCustomDropdown(container) {
-      var isOpen = container.classList.contains('open');
-
-      // Fermer tous les autres dropdowns
-      document.querySelectorAll('.custom-select-container.open').forEach(function (other) {
-        if (other !== container) {
-          other.classList.remove('open');
-        }
-      });
-
-      // Basculer l'état de ce dropdown
-      if (isOpen) {
-        container.classList.remove('open');
-      } else {
-        container.classList.add('open');
-      }
-    }
-
-    // Garder l'alias pour compatibilité si nécessaire, mais on l'appelle dans DOMContentLoaded
-    var initManualSelectors = initVariableSelectors;
-
-    function updateManualApplyButton() {
-      var readyCards = document.querySelectorAll('.manual-fix.ready-to-apply');
-      var applyBtn = document.getElementById('applyAllManualBtn');
-
-      if (readyCards.length > 0) {
-        applyBtn.disabled = false;
-        applyBtn.textContent = '✅ Appliquer les ' + readyCards.length + ' sélection' + (readyCards.length > 1 ? 's' : '');
-      } else {
-        applyBtn.disabled = true;
-        applyBtn.textContent = '⚠️ Appliquer les sélections manuelles';
-      }
-    }
-
-    // Application groupée des corrections manuelles
-    function applyAllManualFixes() {
-      // Vérifier que nous sommes sur l'onglet "Manuel"
-      var manualTab = document.querySelector('.tab[data-filter="manual"]');
-      var isManualTabActive = manualTab && manualTab.classList.contains('active');
-
-      if (!isManualTabActive) {
-        showNotification('Cette action n\'est disponible que sur l\'onglet "Manuel"', 'warning');
-        return;
-      }
-
-      var readyCards = document.querySelectorAll('.manual-fix.ready-to-apply');
-      var fixesApplied = 0;
-
-      readyCards.forEach(function (card) {
-        var select = card.querySelector('.manual-select');
-        if (select && select.value) {
-          var indicesRaw = select.getAttribute('data-indices');
-          var indices = indicesRaw ? indicesRaw.split(',').map(Number) : [];
-          var variableId = select.value;
-
-          // Simuler l'application (vous devrez adapter selon votre logique existante)
-          applyGroupFix(indices, variableId);
-          fixesApplied++;
-        }
-      });
-
-      if (fixesApplied > 0) {
-        // Feedback utilisateur
-        showNotification(fixesApplied + ' correction' + (fixesApplied > 1 ? 's' : '') + ' manuelle' + (fixesApplied > 1 ? 's' : '') + ' appliquée' + (fixesApplied > 1 ? 's' : '') + ' !', 'success');
-      }
-    }
 
     // ============================================
     // TOAST NOTIFICATIONS PREMIUM
@@ -9274,7 +8808,7 @@
     function updateKeyboardSelectableCards() {
       keyboardSelectableCards = Array.from(document.querySelectorAll('.cleaning-result-card')).filter(function (card) {
         // Ne prendre que les cartes qui ont des boutons d'action disponibles
-        return card.querySelector('button.variable-pill') || card.querySelector('.variable-selector');
+        return card.querySelector('button.variable-pill');
       });
     }
 
@@ -9299,15 +8833,13 @@
       if (keyboardSelectedIndex >= 0 && keyboardSelectedIndex < keyboardSelectableCards.length) {
         var card = keyboardSelectableCards[keyboardSelectedIndex];
         var variablePill = card.querySelector('button.variable-pill');
-        var variableSelector = card.querySelector('.variable-selector');
+
 
         if (variablePill && !variablePill.disabled) {
           // Appliquer la correction automatique
           variablePill.click();
-        } else if (variableSelector && !variableSelector.disabled) {
-          // Focus sur le sélecteur manuel
-          variableSelector.focus();
         }
+
       }
     }
 
@@ -9535,127 +9067,14 @@
     }
 
     // Initialisation au chargement
+    // Initialisation au chargement
     document.addEventListener('DOMContentLoaded', function () {
       initFilterSystem();
-      initManualSelectors();
-      initCustomDropdowns();
+      // initManualSelectors(); // Legacy removed
+      // initCustomDropdowns(); // Legacy removed (delegation used)
     });
 
-    // Fonction helper pour générer le sélecteur de variable
-    function generateVariableSelector(result, index) {
-      var suggestions = result.colorSuggestions || result.numericSuggestions || [];
-      var hasSingleExactMatch = suggestions.length === 1 && suggestions[0].isExact;
 
-      // Si pas de suggestions mais qu'il y a une variable suggérée, créer une suggestion exacte
-      if (suggestions.length === 0 && result.suggestedVariableId) {
-        suggestions = [{ id: result.suggestedVariableId, name: result.suggestedVariableName, isExact: true }];
-        hasSingleExactMatch = true;
-      }
-
-      // Vérifier si des suggestions ont un scope mismatch
-      var hasScopeMismatch = suggestions.some(function (s) { return s.scopeMismatch; });
-
-      if (hasSingleExactMatch) {
-        // Correspondance exacte : badge statique
-        var badgeStyle = hasScopeMismatch ?
-          'background: var(--poly-warning); border: 1px solid var(--poly-warning);' :
-          'background: var(--poly-accent);';
-        var badgeHtml = '<div class="variable-badge exact-match" style="' + badgeStyle + ' color: white; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 500; font-family: monospace;">' + result.suggestedVariableName;
-        if (hasScopeMismatch) {
-          badgeHtml += ' ⚠️';
-        }
-        badgeHtml += '</div>';
-        return badgeHtml;
-      } else if (suggestions.length > 0) {
-        // Suggestions multiples : dropdown stylisé
-        var dropdownStyle = hasScopeMismatch ?
-          'background: var(--poly-warning); border: 1px solid var(--poly-warning);' :
-          'background: var(--poly-accent);';
-        var selectHtml = '<div style="position: relative;">';
-        selectHtml += '<select class="variable-selector" data-index="' + index + '" style="appearance: none; ' + dropdownStyle + ' color: white; border: none; padding: 4px 8px; border-radius: 12px; font-size: 11px; font-weight: 500; font-family: monospace; cursor: pointer; min-width: 80px;">';
-
-        suggestions.forEach(function (suggestion, idx) {
-          var selected = idx === 0 ? 'selected' : '';
-          var distanceIndicator = suggestion.isExact ? '' : ' ≈';
-          var scopeIndicator = suggestion.scopeMismatch ? ' ⚠️' : '';
-          var valuePreview = suggestion.hex ? suggestion.hex : (suggestion.value !== undefined ? suggestion.value : "");
-          selectHtml += '<option value="' + suggestion.id + '" ' + selected + '>' + suggestion.name + ' (' + valuePreview + ')' + distanceIndicator + scopeIndicator + '</option>';
-        });
-
-        selectHtml += '</select>';
-        // Flèche du dropdown
-        selectHtml += '<span style="position: absolute; right: 6px; top: 50%; transform: translateY(-50%); pointer-events: none; color: white; font-size: 8px;">▼</span>';
-        selectHtml += '</div>';
-        return selectHtml;
-      }
-    }
-
-    function generateColorCard(result) {
-      var icon = (result.property === "Fill" || result.property === "Local Fill Style") ? ICONS.fill : ICONS.stroke;
-      var cardHtml = '<div class="scan-result-card" data-index="' + result.originalIndex + '" style="display: flex; align-items: center; padding: 12px 16px; margin-bottom: 8px; background: var(--poly-surface-soft); border: 1px solid var(--poly-border-subtle); border-radius: 8px; transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);">';
-
-      // Nom de la propriété
-      cardHtml += '<div style="display: flex; align-items: center; min-width: 80px; margin-right: 16px;">';
-      cardHtml += '<span style="font-size: 12px; color: var(--poly-text-muted); font-weight: 500;">' + result.property + '</span>';
-      cardHtml += '</div>';
-
-      // Nom du layer
-      cardHtml += '<div style="flex: 1; margin-right: 16px;">';
-      cardHtml += '<div style="font-weight: 500; font-size: 13px; color: var(--poly-text-primary); margin-bottom: 2px;">' + result.layerName + '</div>';
-      cardHtml += '</div>';
-
-      // Transformation visuelle couleur
-      cardHtml += '<div style="display: flex; align-items: center; margin-right: 16px;">';
-      // Rond avec la couleur brute
-      cardHtml += '<div style="width: 20px; height: 20px; border-radius: 50%; background-color: ' + result.value + '; border: 1px solid var(--poly-border-subtle); margin-right: 8px;"></div>';
-      // Sélecteur de variable (badge ou dropdown)
-      cardHtml += generateVariableSelector(result);
-      cardHtml += '</div>';
-
-      // Boutons d'action
-      cardHtml += '<div style="display: flex; gap: 4px;">';
-      cardHtml += '<button class="btn-primary" data-action="apply" data-index="' + result.originalIndex + '" title="Appliquer"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20,6 9,17 4,12"/></svg></button>';
-      cardHtml += '<button class="btn-x" data-action="ignore" data-index="' + result.originalIndex + '" title="Ignorer"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>';
-      cardHtml += '</div>';
-
-      cardHtml += '</div>';
-      return cardHtml;
-    }
-
-    function generateGeometryCard(result) {
-      var icon = result.property.includes("Radius") ? ICONS.radius : ICONS.spacing;
-      var cardHtml = '<div class="scan-result-card" data-index="' + result.originalIndex + '" style="display: flex; align-items: center; padding: 12px 16px; margin-bottom: 8px; background: var(--poly-surface-soft); border: 1px solid var(--poly-border-subtle); border-radius: 8px; transition: all 0.25s cubic-bezier(0.25, 0.46, 0.45, 0.94);">';
-
-      // Icône et nom de la propriété
-      cardHtml += '<div style="display: flex; align-items: center; min-width: 80px; margin-right: 16px;">';
-      cardHtml += '<span style="color: var(--poly-accent); margin-right: 6px;">' + icon + '</span>';
-      cardHtml += '<span style="font-size: 12px; color: var(--poly-text-muted); font-weight: 500;">' + result.property + '</span>';
-      cardHtml += '</div>';
-
-      // Nom du layer
-      cardHtml += '<div style="flex: 1; margin-right: 16px;">';
-      cardHtml += '<div style="font-weight: 500; font-size: 13px; color: var(--poly-text-primary); margin-bottom: 2px;">' + result.layerName + '</div>';
-      cardHtml += '</div>';
-
-      // Transformation visuelle mesure
-      cardHtml += '<div style="display: flex; align-items: center; margin-right: 16px;">';
-      // Valeur en px
-      cardHtml += '<span style="font-family: monospace; font-size: 13px; color: var(--poly-text-primary); margin-right: 8px;">' + result.value + '</span>';
-      // Flèche
-      cardHtml += '<span style="color: var(--poly-text-muted); margin-right: 8px;">→</span>';
-      // Sélecteur de variable (badge ou dropdown)
-      cardHtml += generateVariableSelector(result);
-      cardHtml += '</div>';
-
-      // Boutons d'action
-      cardHtml += '<div style="display: flex; gap: 4px;">';
-      cardHtml += '<button class="btn-primary" data-action="apply" data-index="' + result.originalIndex + '" title="Appliquer"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20,6 9,17 4,12"/></svg></button>';
-      cardHtml += '<button class="btn-x" data-action="ignore" data-index="' + result.originalIndex + '" title="Ignorer"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>';
-      cardHtml += '</div>';
-
-      cardHtml += '</div>';
-      return cardHtml;
-    }
 
     function attachActionHandlers() {
       // Utiliser la délégation d'événements sur le container des résultats
@@ -10339,22 +9758,7 @@
 
 
     // Fonction pour synchroniser manuellement les résultats de scan
-    function syncScanResults() {
 
-      if (lastScanResults && lastScanResults.length > 0) {
-        parent.postMessage({
-          pluginMessage: {
-            type: 'sync-scan-results',
-            results: lastScanResults
-          }
-        }, '*');
-      } else {
-        console.error('🔄 SYNC: Aucun résultat disponible pour synchronisation');
-        if (typeof figma !== 'undefined' && figma.notify) {
-          figma.notify('❌ Aucun résultat à synchroniser', { timeout: 2000 });
-        }
-      }
-    }
 
     // ============================================
     // PREVIEW & EXPORT FUNCTIONS
@@ -10553,6 +9957,37 @@
       for (var key in previewData) {
         if (!previewData.hasOwnProperty(key)) continue;
 
+        var value = previewData[key];
+
+        // ✅ RECURSIVE RENDER FOR NESTED PRIMITIVES (Specific to Typography)
+        // Detects objects that are NOT semantic tokens (no 'modes', 'type', 'resolvedValue')
+        if (activeCategory === 'typography' && typeof value === 'object' && value !== null && !value.modes && !value.type && !value.resolvedValue) {
+          // Flatten nested object (e.g. fontSize: { sm: '12px' })
+          for (var subKey in value) {
+            if (!value.hasOwnProperty(subKey)) continue;
+
+            var subValue = value[subKey];
+
+            // Convert CamelCase key to kebab-case (fontSize -> font-size)
+            var prefix = key.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
+            var combinedKey = prefix + '-' + subKey; // font-size-sm
+
+            // Render flattened row
+            var row = renderTokenRow({
+              key: combinedKey,
+              value: subValue,
+              isColorCategory: isColor,
+              isSemanticToken: false,
+              isLocked: isLocked,
+              isCustomLib: isCustomLib,
+              activeCategory: activeCategory, // Displpay will be typography-font-size-sm
+              hasColorTableColumn: hasColorTokens
+            });
+            tbody.appendChild(row);
+          }
+          continue; // Skip the main object row
+        }
+
         var isSemanticToken = key.indexOf('.') !== -1;
         var row = renderTokenRow({
           key: key,
@@ -10649,11 +10084,34 @@
       inputs.forEach(function (input) {
         input.addEventListener('change', function () {
           var tokenKey = input.getAttribute('data-token-key');
+          var tokenPath = input.getAttribute('data-token-path');
           var newValue = input.value.trim();
-          if (newValue && currentTokens[activeCategory][tokenKey]) {
+
+          if (!newValue) return;
+
+          // isColor is defined in outer scope of updatePreview, need to recapture it or infer it?
+          // Actually attachTokenEventListeners defines its own scope but references isColor?
+          // NO, attachTokenEventListeners is defined OUTSIDE updatePreview where isColor is defined.
+          // So isColor is NOT available here unless passed.
+          // However, existing code assumes 'isColor' checks property of activeCategory.
+          var isColor = (activeCategory === "brand" || activeCategory === "system" || activeCategory === "gray");
+
+          if (tokenPath) {
+            // UPDATE NESTED (e.g. fontSize.sm -> currentTokens.typography.fontSize.sm)
+            var parts = tokenPath.split('.');
+            var target = currentTokens[activeCategory];
+            for (var i = 0; i < parts.length - 1; i++) {
+              target = target[parts[i]];
+              if (!target) break;
+            }
+            if (target && target.hasOwnProperty(parts[parts.length - 1])) {
+              target[parts[parts.length - 1]] = newValue;
+              updateExport();
+              if (isColor) updatePreview();
+            }
+          } else if (currentTokens[activeCategory][tokenKey]) {
             currentTokens[activeCategory][tokenKey] = newValue;
             updateExport();
-            // Refresh preview to update color swatch if it's a color
             if (isColor) {
               updatePreview();
             }
@@ -10895,7 +10353,7 @@
     }
 
     // Renderer unifié pour toutes les rows de tokens
-    function renderTokenRow({ key, value, isColorCategory, isSemanticToken, isLocked, isCustomLib, activeCategory, hasColorTableColumn }) {
+    function renderTokenRow({ key, value, isColorCategory, isSemanticToken, isLocked, isCustomLib, activeCategory, hasColorTableColumn, tokenPath }) {
       // Créer la row
       var row = document.createElement('tr');
       row.className = 'token-row';
@@ -10955,6 +10413,7 @@
       } else {
         input.classList.add('editable');
         input.setAttribute('data-token-key', key);
+        if (tokenPath) input.setAttribute('data-token-path', tokenPath); // Pass the path for nested editing
         input.readOnly = false;
       }
 
@@ -11220,14 +10679,31 @@
         if (isLineHeight) {
           // Line height : peut être sans unité (multiplier) ou en rem
           if (n < 5) {
-            return n.toString(); // Multiplier (ex: 1.5)
+            // Unitless multiplier (ex: 1.5) -> KEEP AS IS
+            // IMPORTANT: Do NOT convert 1.5 to px then rem !!
+            return n.toString();
           } else {
+            // If value is large (e.g. 24), assume PX and convert to rem
             return (n / 16).toFixed(3).replace(/\.?0+$/, "") + "rem";
           }
         }
         if (isLetterSpacing) {
-          // Letter spacing : généralement en em
-          return (n / 1000).toFixed(3).replace(/\.?0+$/, "") + "em"; // Convertir de millième d'em
+          // Letter spacing : values like -0.05 are likely em/rem already or multipliers
+          // If value is > 0.5 (e.g. 20), assume px -> em?
+          // Existing logic assumes value is in "millième d'em" or something? 
+          // (n / 1000) suggests it expects integer tracking like Photoshop/Figma (e.g. 20)
+
+          // Let's rely on standard: if small (< 1), keep as em/unitless. If big, /1000 ???
+          // In our generators, we produce "-0.05em", so isNumeric is FALSE (handled by string branch)
+          // If we receive "0", n=0.
+
+          if (n === 0) return "0";
+
+          // If value comes from Figma as number (e.g. letterSpacing field), it might be px or % ?
+          // Default heuristic: preserve what comes out of generator (usually strings "0.05em").
+          // If number, assume it's small relative value.
+
+          return n.toString() + "em";
         }
         if (isRadius || isSpacing) {
           // Radius et spacing : px
@@ -11460,6 +10936,7 @@
             var k = (semanticToken.name || "").toLowerCase();
             if (k.includes("radius")) preferredCats = ["radius"];
             else if (k.includes("spacing") || k.includes("space") || k.includes("padding") || k.includes("gap")) preferredCats = ["spacing"];
+            // Removed typography check as it's no longer semantic->primitive but primitive usage directly
           }
 
           var primitiveMatch = findPrimitiveByValue(scalarValue, options.primitivesObj, preferredCats);
@@ -11897,7 +11374,7 @@
               alias: entry.meta && entry.meta.aliasTo ? entry.meta.aliasTo : null
             };
           } else {
-            target[semanticKey] = entry.value;
+            target[semanticKey] = entry.value || ""; // Ensure empty string if null/undefined
           }
         }
       }
@@ -11932,7 +11409,7 @@
           .replace(/^(semantic-|primitive-)/, "")
           .replace(/^(brand-|system-|gray-|spacing-|radius-|typography-|border-)/, "");
 
-        result[flatKey] = entry.value;
+        result[flatKey] = entry.value || "";
       }
 
       return options.pretty ?
