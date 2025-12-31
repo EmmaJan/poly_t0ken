@@ -20,7 +20,7 @@ console.log("✅ Using V2 scan functions (mode-aware, ValueType.FLOAT, strict sc
 // 5. Supprimer Legacy si Core stable
 //
 // Voir LEGACY_ENGINE_DECISION.md pour détails
-const USE_CORE_ENGINE = false;
+const USE_CORE_ENGINE = true;
 const DEBUG = true; // Master debug flag (consolidates DEBUG_TOKENS + DEBUG_SCOPES_SCAN)
 
 // Legacy flags (kept for compatibility, but use DEBUG instead)
@@ -63,16 +63,31 @@ function debugTokens(label, payload) {
 // ============================================================================
 // MESSAGE SENDING WRAPPER (PLUGIN → UI)
 // ============================================================================
-function postToUI(type, payload) {
+function postToUI(typeOrMsg, payload) {
   try {
-    var message = Object.assign({ type: type }, payload || {});
+    var message;
+    if (typeof typeOrMsg === 'object' && typeOrMsg !== null && typeOrMsg.type) {
+      // Handle postToUI({ type: 'foo', ... }) signature
+      message = typeOrMsg;
+      if (payload && typeof payload === 'object') {
+        Object.assign(message, payload);
+      }
+    } else {
+      // Handle postToUI('foo', { ... }) signature
+      message = Object.assign({ type: typeOrMsg }, payload || {});
+    }
+
+    // Optional: Add timestamp
+    message._ts = Date.now();
+
     figma.ui.postMessage(message);
+
     if (DEBUG) {
-      debugLog('Plugin → UI: ' + type, payload);
+      debugLog('Plugin → UI: ' + message.type, message);
     }
   } catch (error) {
     console.error('❌ Error sending message to UI:', error);
-    console.error('Message type:', type, 'Payload:', payload);
+    console.error('Message payload:', typeOrMsg);
   }
 }
 
@@ -129,6 +144,40 @@ const LIBS = {
 };
 
 // Normalisation des types de bibliothèque - fonction globale
+/**
+ * Flatten a system color object {main, light, dark} or {50, 100...} into a single scalar value.
+ * Works for all libraries that have object-based system colors.
+ */
+function flattenSystemColorValue(value, key) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+
+  var chosenValue = null;
+  // Priority order: main > 500 > 600 > light > dark > first scalar
+  if (value.main) chosenValue = value.main;
+  else if (value['500']) chosenValue = value['500'];
+  else if (value['600']) chosenValue = value['600'];
+  else if (value[500]) chosenValue = value[500];
+  else if (value[600]) chosenValue = value[600];
+  else if (value.light) chosenValue = value.light;
+  else if (value.dark) chosenValue = value.dark;
+  else {
+    // Fallback: first scalar
+    var keys = Object.keys(value);
+    for (var i = 0; i < keys.length; i++) {
+      var v = value[keys[i]];
+      if (typeof v === 'string' || typeof v === 'number') {
+        chosenValue = v;
+        break;
+      }
+    }
+  }
+
+  if (chosenValue && chosenValue !== value) {
+    return chosenValue;
+  }
+  return value;
+}
+
 function normalizeLibType(naming) {
   if (!naming) return 'tailwind';
   var normalized = naming.toLowerCase().trim();
@@ -274,7 +323,9 @@ function getScopesForPropertyKind(propertyKind) {
     case PropertyKind.CORNER_RADIUS:
       return ['CORNER_RADIUS', 'ALL_SCOPES'];
     case PropertyKind.STROKE_WEIGHT:
-      return ['STROKE_FLOAT'];
+      // STROKE_FLOAT is ideal, but many design systems don't configure it
+      // Fallback to WIDTH_HEIGHT and ALL_SCOPES for broader compatibility
+      return ['STROKE_FLOAT', 'WIDTH_HEIGHT', 'ALL_SCOPES'];
     case PropertyKind.FONT_SIZE:
       return ['FONT_SIZE'];
     case PropertyKind.LINE_HEIGHT:
@@ -343,249 +394,174 @@ function analyzeSemanticTokensStats(tokens, context) {
   };
 }
 
+/* ============================================================================
+   SEMANTIC SAVE PIPELINE (Refactored)
+   ============================================================================ */
+
+function semanticDiagnostics(tokens, callsite) {
+  if (!DEBUG && !tokens) return;
+
+  if (tokens) {
+    // 1. Stats and Checks
+    var allKeys = Object.keys(tokens);
+    var spaceCount = 0;
+    var radiusCount = 0;
+    for (var i = 0; i < allKeys.length; i++) {
+      if (allKeys[i].indexOf('space.') === 0) spaceCount++;
+      if (allKeys[i].indexOf('radius.') === 0) radiusCount++;
+    }
+
+    console.log('[SEMANTIC_GEN] Finalizing Semantic Tokens. Total keys:', allKeys.length);
+    if (spaceCount === 0 || radiusCount === 0) {
+      console.warn('⚠️ [SEMANTIC_GEN] WARNING: No space or radius tokens generated! Check mapSemanticTokens configuration.');
+    }
+
+    // 2. Critical Keys Alias check
+    var criticalKeys = ['action.primary.default', 'bg.inverse', 'text.primary'];
+    if (DEBUG) console.log(`🔍 [DIAGNOSTICS] Checking aliases for ${allKeys.length} tokens`);
+
+    criticalKeys.forEach(function (k) {
+      if (tokens[k]) {
+        var t = tokens[k];
+        var status = t.aliasTo ? (t.state === 'ALIAS_RESOLVED' ? '✅ RESOLVED' : '❌ UNRESOLVED') : 'VALUE';
+        if (DEBUG) console.log(`  ${k}: ${status} ${t.aliasTo ? `→ ${t.aliasTo.id || 'unknown'}` : ''}`);
+      }
+    });
+  }
+}
+
+function normalizeSemanticToken(token, key, themeMode) {
+  if (!token || typeof token !== 'object') return token;
+
+  // PRESERVE STRUCTURE: If modes exist, strictly preserve them
+  if (token.modes) {
+    return Object.assign({}, token); // Shallow clone
+  }
+
+  // ALREADY NORMALIZED?
+  if (token.resolvedValue !== undefined && !token.modes) {
+    return Object.assign({}, token);
+  }
+
+  // LEGACY FALLBACK: Return as is (matches original behavior)
+  return token;
+}
+
+function mergeWithExistingSemantic(existing, incoming) {
+  if (!existing) return incoming;
+
+  // Explicit logic from original: preserve existing aliasTo behavior
+  var merged = Object.assign({}, incoming);
+
+  if (existing && existing.aliasTo && incoming) {
+    merged.aliasTo = existing.aliasTo;
+  }
+
+  return merged;
+}
+
+function applyFallbackGuards(existing, next, key) {
+  // 1. Computed State
+  var state = TOKEN_STATE.VALUE;
+  if (next.modes) {
+    var hasLight = next.modes.light && next.modes.light.aliasRef;
+    var hasDark = next.modes.dark && next.modes.dark.aliasRef;
+    if (hasLight || hasDark) state = TOKEN_STATE.ALIAS_RESOLVED;
+  } else if (next.aliasTo) {
+    state = (typeof next.aliasTo === 'object' && next.aliasTo.variableId)
+      ? TOKEN_STATE.ALIAS_RESOLVED
+      : TOKEN_STATE.ALIAS_UNRESOLVED;
+  }
+  next.state = state;
+
+  // 2. Object Guard (Critical)
+  if (!next.modes && typeof next.resolvedValue === 'object') {
+    console.error(`🚨 CRITICAL: resolvedValue for ${key} is object: `, next.resolvedValue);
+    next.resolvedValue = (existing && typeof existing.resolvedValue !== 'object')
+      ? existing.resolvedValue
+      : getFallbackValue(next.type || 'COLOR', 'semantic');
+  }
+
+  // 3. Fallback Blocking
+  // Guard: Only check fallback logic if NOT multi-mode (logic from original code)
+  if (!next.modes) {
+    if (shouldPreserveExistingSemantic(existing, next)) {
+      return { token: existing, blocked: false, preserved: true };
+    }
+
+    var isFallback = isObviousFallback(next.resolvedValue) || isUIFallbackValue(next.resolvedValue, next.type);
+    var hasFlattenProof = next.flattenedFromAlias === true;
+
+    if (isFallback && !hasFlattenProof && existing && !isObviousFallback(existing.resolvedValue)) {
+      if (DEBUG) console.log(`[FALLBACK_BLOCKED] Blocking ${next.resolvedValue} for ${key}, keeping ${existing.resolvedValue} `);
+      next.resolvedValue = existing.resolvedValue;
+      return { token: next, blocked: true, preserved: false };
+    }
+  }
+
+  return { token: next, blocked: false, preserved: false };
+}
+
+function saveSemanticToPluginData(formattedTokens, callsite) {
+  try {
+    var semanticData = JSON.stringify(formattedTokens);
+    figma.root.setPluginData("tokenStarter.semantic", semanticData);
+  } catch (e) {
+    console.warn('Could not save semantic tokens:', e);
+  }
+}
+
 function saveSemanticTokensToFile(semanticTokens, callsite) {
   try {
-    // 1) Diagnostic non-invasif (Requested by User)
-    if (semanticTokens) {
-      var allKeys = Object.keys(semanticTokens);
-      var countTotal = allKeys.length;
-      var spaceCount = 0;
-      var radiusCount = 0;
-      for (var k = 0; k < countTotal; k++) {
-        if (allKeys[k].indexOf('space.') === 0) spaceCount++;
-        if (allKeys[k].indexOf('radius.') === 0) radiusCount++;
-      }
-      console.log('[SEMANTIC_GEN] Finalizing Semantic Tokens. Total keys:', countTotal);
-      console.log('[SEMANTIC_GEN] Space keys count:', spaceCount);
-      console.log('[SEMANTIC_GEN] Radius keys count:', radiusCount);
+    // 1. Diagnostics
+    semanticDiagnostics(semanticTokens, callsite);
 
-      if (spaceCount === 0 || radiusCount === 0) {
-        console.warn('⚠️ [SEMANTIC_GEN] WARNING: No space or radius tokens generated! Check mapSemanticTokens configuration.');
-      }
+    // 2. Load Existing
+    var existingTokens = getSemanticTokensFromFile('MERGE_CHECK') || {};
+    var themeMode = 'light';
+    try {
+      var savedThemeMode = figma.root.getPluginData("tokenStarter.themeMode");
+      if (savedThemeMode === 'dark') themeMode = 'dark';
+    } catch (e) { }
 
-      // 3) Validation Runtime (DEBUG only)
-      // Confirm space.md and radius.md exist and are FLOAT
-      var tSpace = semanticTokens['space.md'];
-      var tRadius = semanticTokens['radius.md'];
+    var formattedTokens = {};
+    var stats = { resolved: 0, unresolved: 0, values: 0, blocked: 0, preserved: 0 };
 
-      if (!tSpace) {
-        console.error('❌ [SEMANTIC_VALIDATION] FAILURE: space.md is missing. Semantic generation incomplete.');
-      } else if (tSpace.type !== 'FLOAT') {
-        console.error('❌ [SEMANTIC_VALIDATION] FAILURE: space.md is not FLOAT. Got:', tSpace.type);
-      }
+    for (var key in semanticTokens) {
+      if (!semanticTokens.hasOwnProperty(key)) continue;
 
-      if (!tRadius) {
-        console.error('❌ [SEMANTIC_VALIDATION] FAILURE: radius.md is missing. Semantic generation incomplete.');
-      } else if (tRadius.type !== 'FLOAT') {
-        console.error('❌ [SEMANTIC_VALIDATION] FAILURE: radius.md is not FLOAT. Got:', tRadius.type);
-      }
+      // a) Normalize
+      var token = normalizeSemanticToken(semanticTokens[key], key, themeMode);
+
+      // b) Merge
+      var existing = existingTokens[key];
+      token = mergeWithExistingSemantic(existing, token);
+
+      // c) Fallback Guards
+      var result = applyFallbackGuards(existing, token, key);
+      token = result.token;
+
+      if (result.blocked) stats.blocked++;
+      if (result.preserved) stats.preserved++;
+
+      if (token.state === TOKEN_STATE.ALIAS_RESOLVED) stats.resolved++;
+      else if (token.state === TOKEN_STATE.ALIAS_UNRESOLVED) stats.unresolved++;
+      else stats.values++;
+
+      formattedTokens[key] = token;
     }
 
-    if (semanticTokens && Object.keys(semanticTokens).length > 0) {
-      // DIAGNOSTICS : Vérifier que les alias sont correctement résolus
-      var criticalSemanticKeys = [
-        'action.primary.default', 'action.primary.hover', 'action.primary.active',
-        'bg.inverse', 'text.primary'
-      ];
+    // 3. Save
+    diagnoseSemanticTokens({ semantic: formattedTokens }, 'SAVE_' + (callsite || 'UNK'));
+    saveSemanticToPluginData(formattedTokens, callsite);
 
-      (function () { return function () { } })() && console.log(`🔍 [DIAGNOSTICS] Vérification des alias pour ${Object.keys(semanticTokens).length} tokens sémantiques`);
-
-      for (var key in semanticTokens) {
-        if (!semanticTokens.hasOwnProperty(key)) continue;
-        var token = semanticTokens[key];
-
-        if (criticalSemanticKeys.includes(key)) {
-          var status = 'UNKNOWN';
-          if (token.aliasTo) {
-            status = token.state === 'ALIAS_RESOLVED' ? '✅ RESOLVED' : '❌ UNRESOLVED';
-          } else {
-            status = 'VALUE';
-          }
-          (function () { return function () { } })() && console.log(`  ${key}: ${status} ${token.aliasTo ? `→ ${token.aliasTo.id || 'unknown'}` : ''}`);
-        }
-      }
-
-      /**
-       * Convertit un token de la nouvelle structure vers l'ancien format
-       * @param {object} token - Token au format {type, modes: {light: {...}, dark: {...}}} ou ancien format
-       * @param {string} key - Clé du token (pour type fallback)
-       * @param {string} preferredMode - Mode préféré ('light' ou 'dark')
-       * @returns {object} Token normalisé {resolvedValue, type, aliasRef, ...}
-       */
-      function normalizeTokenStructure(token, key, preferredMode) {
-        if (!token || typeof token !== 'object') return token;
-
-        // Si déjà au bon format (a resolvedValue et pas de modes), retourner tel quel
-        if (token.resolvedValue !== undefined && !token.modes) {
-          return token;
-        }
-
-        // Si nouvelle structure avec modes
-        if (token.modes) {
-          var modeData = token.modes[preferredMode] || token.modes.light || token.modes.dark || {};
-
-          return {
-            resolvedValue: modeData.resolvedValue,
-            type: token.type || SEMANTIC_TYPE_MAP[key] || "COLOR",
-            aliasRef: modeData.aliasRef || null,
-            aliasTo: token.aliasTo || null,
-            state: token.state || TOKEN_STATE.VALUE,
-            meta: token.meta || {
-              sourceCategory: getCategoryFromSemanticKey(key),
-              sourceKey: getKeyFromSemanticKey(key),
-              updatedAt: Date.now()
-            }
-          };
-        }
-
-        // Sinon retourner tel quel
-        return token;
-      }
-
-      // VALIDATION : S'assurer que tous les resolvedValue sont scalaires
-      // Déterminer le mode préféré
-      var themeMode = 'light';
-      try {
-        var savedThemeMode = figma.root.getPluginData("tokenStarter.themeMode");
-        if (savedThemeMode === 'dark') themeMode = 'dark';
-      } catch (e) { }
-
-      for (var key in semanticTokens) {
-        if (!semanticTokens.hasOwnProperty(key)) continue;
-
-        // ✅ CRITICAL FIX: Ne PAS normaliser les tokens qui ont déjà une structure modes !
-        // La normalisation détruit la structure modes, donc on la saute pour ces tokens
-        var token = semanticTokens[key];
-        if (!token.modes) {
-          // Seulement normaliser les tokens sans modes (ancien format)
-          semanticTokens[key] = normalizeTokenStructure(token, key, themeMode);
-          token = semanticTokens[key]; // Mettre à jour la référence
-        }
-
-        // Validation finale (seulement pour les tokens normalisés sans modes)
-        if (!semanticTokens[key].modes && token && typeof token.resolvedValue === 'object') {
-          console.error(`🚨 Token ${key} a toujours un resolvedValue objet après normalisation`);
-          token.resolvedValue = '#FF00FF';
-        } else if (!semanticTokens[key].modes && token && typeof token.resolvedValue !== 'string' && typeof token.resolvedValue !== 'number') {
-          console.warn(`⚠️ Token ${key} a un resolvedValue non scalaire`);
-          token.resolvedValue = String(token.resolvedValue);
-        }
-      }
-
-      // Charger les tokens existants pour préserver aliasTo complexe
-      var existingTokens = getSemanticTokensFromFile('MERGE_CHECK') || {};
-
-      var formattedTokens = {};
-      var aliasResolvedCount = 0;
-      var aliasUnresolvedCount = 0;
-      var valueCount = 0;
-      var blockedFallbackCount = 0;
-      var preservedUnresolvedCount = 0;
-
-      for (var key in semanticTokens) {
-        if (!semanticTokens.hasOwnProperty(key)) continue;
-
-        var tokenData = semanticTokens[key];
-        var tokenType = SEMANTIC_TYPE_MAP[key] || "COLOR";
-        var existingToken = existingTokens[key];
-
-        // ✅ PRÉSERVER LA STRUCTURE MODES (ne pas normaliser !)
-        // Si le token a déjà une structure modes, la garder telle quelle
-        var normalizedToken;
-        if (tokenData.modes) {
-          // Nouvelle structure avec modes → LA GARDER !
-          normalizedToken = tokenData;
-        } else {
-          // Ancienne structure → normaliser pour compatibilité
-          normalizedToken = normalizeTokenStructure(tokenData, key, 'light');
-        }
-
-        // Préserver aliasTo existant si disponible
-        if (existingToken && existingToken.aliasTo) {
-          normalizedToken.aliasTo = existingToken.aliasTo;
-        }
-
-        // DÉTERMINER L'ÉTAT (Nouveau Modèle)
-        let state = TOKEN_STATE.VALUE;
-
-        // ✅ Pour les tokens avec modes, vérifier aliasRef dans chaque mode
-        if (normalizedToken.modes) {
-          // Si au moins un mode a un aliasRef, c'est un alias
-          var hasLightAlias = normalizedToken.modes.light && normalizedToken.modes.light.aliasRef;
-          var hasDarkAlias = normalizedToken.modes.dark && normalizedToken.modes.dark.aliasRef;
-
-          if (hasLightAlias || hasDarkAlias) {
-            // Pour l'instant, on considère que si au moins un mode a un alias, c'est résolu
-            // (la résolution complète se fera dans importTokensToFigma)
-            state = TOKEN_STATE.ALIAS_RESOLVED;
-          }
-        } else if (normalizedToken.aliasTo) {
-          // Ancienne structure : vérifier aliasTo
-          if (typeof normalizedToken.aliasTo === 'object' && normalizedToken.aliasTo.variableId) {
-            state = TOKEN_STATE.ALIAS_RESOLVED;
-          } else {
-            state = TOKEN_STATE.ALIAS_UNRESOLVED;
-          }
-        }
-        normalizedToken.state = state;
-
-        // GARDE-FOU ANTI-OBJET : resolvedValue DOIT être scalaire
-        // ⚠️ SKIP si structure modes (les valeurs sont dans modes.light/dark.resolvedValue)
-        if (!normalizedToken.modes) {
-          if (typeof normalizedToken.resolvedValue === 'object') {
-            console.error(`🚨 CRITICAL: resolvedValue for ${key} is an object: `, normalizedToken.resolvedValue);
-            normalizedToken.resolvedValue = (existingToken && typeof existingToken.resolvedValue !== 'object')
-              ? existingToken.resolvedValue
-              : getFallbackValue(tokenType, 'semantic');
-          }
-        }
-
-        // PROTECTION CONTRE LES FALLBACKS (Règle dure)
-        // ⚠️ SKIP si structure modes
-        if (!normalizedToken.modes) {
-          const isCurrentlyUnresolved = state === TOKEN_STATE.ALIAS_UNRESOLVED;
-          const wasUnresolved = existingToken && existingToken.state === TOKEN_STATE.ALIAS_UNRESOLVED;
-
-          if (shouldPreserveExistingSemantic(existingToken, normalizedToken)) {
-            if (isCurrentlyUnresolved || wasUnresolved) preservedUnresolvedCount++;
-            else blockedFallbackCount++;
-
-            formattedTokens[key] = existingToken;
-            if (existingToken.state === TOKEN_STATE.ALIAS_RESOLVED) aliasResolvedCount++;
-            else if (existingToken.state === TOKEN_STATE.ALIAS_UNRESOLVED) aliasUnresolvedCount++;
-            else valueCount++;
-            continue;
-          }
-
-          // Fallback bloqué si pas de preuve de flatten
-          var isFallback = isObviousFallback(normalizedToken.resolvedValue) || isUIFallbackValue(normalizedToken.resolvedValue, normalizedToken.type);
-          var hasFlattenProof = normalizedToken.flattenedFromAlias === true;
-
-          if (isFallback && !hasFlattenProof && existingToken && !isObviousFallback(existingToken.resolvedValue)) {
-            (function () { return function () { } })() && console.log(`[FALLBACK_BLOCKED] Blocking ${normalizedToken.resolvedValue} for ${key}, keeping ${existingToken.resolvedValue} `);
-            normalizedToken.resolvedValue = existingToken.resolvedValue;
-            blockedFallbackCount++;
-          }
-        }
-
-        // Finalisation
-        formattedTokens[key] = normalizedToken;
-        if (state === TOKEN_STATE.ALIAS_RESOLVED) aliasResolvedCount++;
-        else if (state === TOKEN_STATE.ALIAS_UNRESOLVED) aliasUnresolvedCount++;
-        else valueCount++;
-      }
-
-      // Diagnostic des tokens avant sauvegarde
-      diagnoseSemanticTokens({ semantic: formattedTokens }, 'SAVE_' + (callsite || 'UNK'));
-
-      var semanticData = JSON.stringify(formattedTokens);
-      figma.root.setPluginData("tokenStarter.semantic", semanticData);
-
-      (function () { return function () { } })() && console.log(`💾 SEMANTIC_SAVE[${callsite || 'UNK'}]: Total ${Object.keys(formattedTokens).length} | Resolved: ${aliasResolvedCount} | Unresolved: ${aliasUnresolvedCount} | Values: ${valueCount} `);
-      (function () { return function () { } })() && console.log(`📊 SEMANTIC_SAVE_DETAILS: BlockedFallbacks: ${blockedFallbackCount} | PreservedUnresolved: ${preservedUnresolvedCount} `);
+    if (DEBUG) {
+      console.log(`💾 SEMANTIC_SAVE[${callsite || 'UNK'}]: Total ${Object.keys(formattedTokens).length} | Resolved: ${stats.resolved} | Unresolved: ${stats.unresolved} | Values: ${stats.values} `);
+      console.log(`📊 SEMANTIC_SAVE_DETAILS: BlockedFallbacks: ${stats.blocked} | PreservedUnresolved: ${stats.preserved} `);
     }
+
   } catch (e) {
-    console.warn('Could not save semantic tokens to file:', e);
+    console.warn('saveSemanticTokensToFile failed:', e);
   }
 }
 
@@ -861,7 +837,7 @@ async function rehydrateSemanticAliases() {
     saveSemanticTokensToFile(tokens, 'REHYDRATE_FINAL');
 
     // Notifier l'UI pour mise à jour du DesignerView
-    figma.ui.postMessage({
+    postToUI({
       type: 'semantic-tokens-rehydrated',
       tokens: tokens
     });
@@ -1428,6 +1404,7 @@ function mapSemanticTokens(palettes, preset, options) {
     // Dimension tokens (semantic proxies)
     'radius.none', 'radius.sm', 'radius.md', 'radius.lg', 'radius.full',
     'space.xs', 'space.sm', 'space.md', 'space.lg', 'space.xl', 'space.2xl',
+    'stroke.none', 'stroke.thin', 'stroke.default', 'stroke.thick', 'stroke.heavy',
     'font.size.sm', 'font.size.base', 'font.size.lg',
     'font.weight.normal', 'font.weight.medium', 'font.weight.bold'
     // Note: on.* tokens removed (use action.*.text, status.*.text for contrast)
@@ -1559,6 +1536,13 @@ function mapSemanticTokens(palettes, preset, options) {
     if (key === 'space.lg') return { category: 'spacing', light: '6', dark: '6', type: 'FLOAT' };
     if (key === 'space.xl') return { category: 'spacing', light: '8', dark: '8', type: 'FLOAT' };
     if (key === 'space.2xl') return { category: 'spacing', light: '11', dark: '11', type: 'FLOAT' };
+
+    // --- STROKE (5) ---
+    if (key === 'stroke.none') return { category: 'stroke', light: '0', dark: '0', type: 'FLOAT' };
+    if (key === 'stroke.thin') return { category: 'stroke', light: '1', dark: '1', type: 'FLOAT' };
+    if (key === 'stroke.default') return { category: 'stroke', light: '2', dark: '2', type: 'FLOAT' };
+    if (key === 'stroke.thick') return { category: 'stroke', light: '4', dark: '4', type: 'FLOAT' };
+    if (key === 'stroke.heavy') return { category: 'stroke', light: '8', dark: '8', type: 'FLOAT' };
 
     return null;
   }
@@ -1726,7 +1710,7 @@ function mapSemanticTokens(palettes, preset, options) {
 
       if (palettes[category]) {
         var val = palettes[category][preferredRef];
-        if (val) {
+        if (val !== undefined && val !== null) {
           resolvedValue = val;
           aliasInfo = { category: category, key: preferredRef };
         } else {
@@ -1896,7 +1880,7 @@ function getSemanticType(key) {
 // This array is kept only to prevent runtime errors from legacy code that may reference it.
 var SEMANTIC_TOKENS = [];
 
-// SEMANTIC_TYPE_MAP: Canonical dot-notation keys ONLY (75 tokens)
+// SEMANTIC_TYPE_MAP: Canonical dot-notation keys ONLY (80 tokens)
 var SEMANTIC_TYPE_MAP = {
   // Background (7)
   'bg.canvas': 'COLOR', 'bg.surface': 'COLOR', 'bg.elevated': 'COLOR',
@@ -1944,10 +1928,12 @@ var SEMANTIC_TYPE_MAP = {
   // Radius (5)
   'radius.none': 'FLOAT', 'radius.sm': 'FLOAT', 'radius.md': 'FLOAT', 'radius.lg': 'FLOAT', 'radius.full': 'FLOAT',
   // Spacing (6)
-  'space.xs': 'FLOAT', 'space.sm': 'FLOAT', 'space.md': 'FLOAT', 'space.lg': 'FLOAT', 'space.xl': 'FLOAT', 'space.2xl': 'FLOAT'
+  'space.xs': 'FLOAT', 'space.sm': 'FLOAT', 'space.md': 'FLOAT', 'space.lg': 'FLOAT', 'space.xl': 'FLOAT', 'space.2xl': 'FLOAT',
+  // Stroke / Border Width (5)
+  'stroke.none': 'FLOAT', 'stroke.thin': 'FLOAT', 'stroke.default': 'FLOAT', 'stroke.thick': 'FLOAT', 'stroke.heavy': 'FLOAT'
 };
 
-// SEMANTIC_NAME_MAP: Canonical dot-notation keys → lib-specific export names (75 tokens × 5 libs)
+// SEMANTIC_NAME_MAP: Canonical dot-notation keys → lib-specific export names (80 tokens × 5 libs)
 var SEMANTIC_NAME_MAP = {
   tailwind: {
     // Background (7)
@@ -1992,7 +1978,9 @@ var SEMANTIC_NAME_MAP = {
     // Radius (5)
     'radius.none': 'radius-none', 'radius.sm': 'radius-sm', 'radius.md': 'radius-md', 'radius.lg': 'radius-lg', 'radius.full': 'radius-full',
     // Spacing (6)
-    'space.xs': 'spacing-1', 'space.sm': 'spacing-2', 'space.md': 'spacing-4', 'space.lg': 'spacing-6', 'space.xl': 'spacing-8', 'space.2xl': 'spacing-12'
+    'space.xs': 'spacing-1', 'space.sm': 'spacing-2', 'space.md': 'spacing-4', 'space.lg': 'spacing-6', 'space.xl': 'spacing-8', 'space.2xl': 'spacing-12',
+    // Stroke / Border Width (5)
+    'stroke.none': 'border-0', 'stroke.thin': 'border', 'stroke.default': 'border-2', 'stroke.thick': 'border-3', 'stroke.heavy': 'border-4'
   },
   mui: {
     // Background (7)
@@ -2037,7 +2025,9 @@ var SEMANTIC_NAME_MAP = {
     // Radius (5)
     'radius.none': 'shape.borderRadius', 'radius.sm': 'shape.borderRadius', 'radius.md': 'shape.borderRadius', 'radius.lg': 'shape.borderRadius', 'radius.full': 'shape.borderRadius',
     // Spacing (6)
-    'space.xs': 'spacing(0.5)', 'space.sm': 'spacing(1)', 'space.md': 'spacing(2)', 'space.lg': 'spacing(3)', 'space.xl': 'spacing(4)', 'space.2xl': 'spacing(6)'
+    'space.xs': 'spacing(0.5)', 'space.sm': 'spacing(1)', 'space.md': 'spacing(2)', 'space.lg': 'spacing(3)', 'space.xl': 'spacing(4)', 'space.2xl': 'spacing(6)',
+    // Stroke / Border Width (5)
+    'stroke.none': '0px', 'stroke.thin': '1px', 'stroke.default': '2px', 'stroke.thick': '3px', 'stroke.heavy': '4px'
   },
   ant: {
     // Background (7)
@@ -2082,7 +2072,9 @@ var SEMANTIC_NAME_MAP = {
     // Radius (5)
     'radius.none': 'borderRadius', 'radius.sm': 'borderRadiusSM', 'radius.md': 'borderRadius', 'radius.lg': 'borderRadiusLG', 'radius.full': 'borderRadiusLG',
     // Spacing (6)
-    'space.xs': 'paddingXXS', 'space.sm': 'paddingXS', 'space.md': 'paddingSM', 'space.lg': 'paddingMD', 'space.xl': 'paddingLG', 'space.2xl': 'paddingXL'
+    'space.xs': 'paddingXXS', 'space.sm': 'paddingXS', 'space.md': 'paddingSM', 'space.lg': 'paddingMD', 'space.xl': 'paddingLG', 'space.2xl': 'paddingXL',
+    // Stroke / Border Width (5)
+    'stroke.none': 'lineWidth', 'stroke.thin': 'lineWidth', 'stroke.default': 'lineWidthBold', 'stroke.thick': 'lineWidthBold', 'stroke.heavy': 'lineWidthBold'
   },
   bootstrap: {
     // Background (7)
@@ -2127,7 +2119,9 @@ var SEMANTIC_NAME_MAP = {
     // Radius (5)
     'radius.none': '0', 'radius.sm': '$border-radius-sm', 'radius.md': '$border-radius', 'radius.lg': '$border-radius-lg', 'radius.full': '50rem',
     // Spacing (6)
-    'space.xs': '$spacer * .25', 'space.sm': '$spacer * .5', 'space.md': '$spacer', 'space.lg': '$spacer * 1.5', 'space.xl': '$spacer * 2', 'space.2xl': '$spacer * 3'
+    'space.xs': '$spacer * .25', 'space.sm': '$spacer * .5', 'space.md': '$spacer', 'space.lg': '$spacer * 1.5', 'space.xl': '$spacer * 2', 'space.2xl': '$spacer * 3',
+    // Stroke / Border Width (5)
+    'stroke.none': '0', 'stroke.thin': '$border-width', 'stroke.default': '$border-width * 2', 'stroke.thick': '$border-width * 3', 'stroke.heavy': '$border-width * 4'
   },
   chakra: {
     // Background (7)
@@ -2172,7 +2166,9 @@ var SEMANTIC_NAME_MAP = {
     // Radius (5)
     'radius.none': 'radii.none', 'radius.sm': 'radii.sm', 'radius.md': 'radii.md', 'radius.lg': 'radii.lg', 'radius.full': 'radii.full',
     // Spacing (6)
-    'space.xs': 'space.1', 'space.sm': 'space.2', 'space.md': 'space.4', 'space.lg': 'space.6', 'space.xl': 'space.8', 'space.2xl': 'space.12'
+    'space.xs': 'space.1', 'space.sm': 'space.2', 'space.md': 'space.4', 'space.lg': 'space.6', 'space.xl': 'space.8', 'space.2xl': 'space.12',
+    // Stroke / Border Width (5)
+    'stroke.none': 'borders.none', 'stroke.thin': 'borders.1px', 'stroke.default': 'borders.2px', 'stroke.thick': 'borders.3px', 'stroke.heavy': 'borders.4px'
   }
 };
 
@@ -2180,47 +2176,7 @@ var SEMANTIC_NAME_MAP = {
 /**
  * ORCHESTRATOR: Generate Semantic Tokens
  */
-function generateSemanticTokens(primitives, options) {
-  if (!options) options = {};
-  (function () { return function () { } })() && console.log("🚀 Starting Token Engine (5-Step Impl)");
 
-  var naming = options.naming || 'tailwind';
-
-  // Step 1: Resolve Preset
-  var preset = resolveLibraryPreset(naming);
-  (function () { return function () { } })() && console.log("Step 1: Preset resolved ->", preset.name);
-
-  // Step 2: Generate/Validate Primitives
-  // Note: 'primitives' arg passed from UI might be partial or full. 
-  // If we are regenerating semantics, we assume we have primitives. 
-  // IF the primitives are missing, we should generate them.
-  // Ideally, this function accepts 'primitives' and uses them.
-  // The User requirement "Primitive Palette Generator" implies we control this.
-  // But usually primitives are "input" to semantic generation.
-  // We will run the generator to fill gaps or if pure generation is requested.
-  // For now, we assume 'primitives' struct contains the brand color we need.
-  var brandColor = (primitives && primitives.brand && (primitives.brand['500'] || primitives.brand.main))
-    || '#3b82f6'; // Default Blue
-
-  // If primitives are not fully formed, we generate defaults
-  var generatedPrimitives = generatePrimitivePalette(brandColor, preset, { currentPrimitives: primitives });
-
-  // Merge: prefer passed primitives if they exist (user edits), else generated
-  var workingPrimitives = Object.assign({}, generatedPrimitives, primitives);
-  // Ensure we rely on the tinted version for mapping?
-  // The 'tintPalette' step should run on the 'gray' specifically.
-
-  // Step 3: Tinting
-  // We apply tinting to the Gray scale if it wasn't already tinted (this is tricky if we reuse primitives).
-  // For refactor, we can assume we enforce tinting on the grey scale we use for MAPPING.
-  workingPrimitives = tintPalette(workingPrimitives, brandColor, { tintStrength: 0.03 });
-
-  // Step 4: Semantic Mapping
-  var semanticTokens = mapSemanticTokens(workingPrimitives, preset, options);
-
-  // Step 5 happens outside (persistence), but here we return the structured object
-  return semanticTokens;
-}
 
 // ... existing helper functions (checkSemanticContrast, etc.) ...
 
@@ -2496,85 +2452,82 @@ function getSemanticVariableName(semanticKey, libType) {
  * @returns {Array} Liste des rows pour le preview
  */
 function getSemanticPreviewRows(tokens, naming) {
-  var rows = [];
-  if (!tokens || !tokens.semantic) return rows;
-
-  // Déterminer le mode actif (light par défaut)
-  var activeMode = 'light';
   try {
-    var savedMode = figma.root.getPluginData("tokenStarter.themeMode");
-    if (savedMode === 'dark') activeMode = 'dark';
-  } catch (e) { }
+    var rows = [];
+    if (!tokens || !tokens.semantic) return rows;
 
-  for (var key in tokens.semantic) {
-    if (!tokens.semantic.hasOwnProperty(key)) continue;
+    var activeMode = 'light';
+    try {
+      var savedMode = figma.root.getPluginData("tokenStarter.themeMode");
+      if (savedMode === 'dark') activeMode = 'dark';
+    } catch (e) { }
 
-    var tokenData = tokens.semantic[key];
+    for (var key in tokens.semantic) {
+      if (!tokens.semantic.hasOwnProperty(key)) continue;
 
-    // ✅ NOUVELLE STRUCTURE : extraire depuis tokenData.modes[activeMode]
-    var resolvedValue, tokenType, isAlias, aliasTo, isBrokenAlias;
+      try {
+        var tokenData = tokens.semantic[key];
+        var resolvedValue = null;
+        var tokenType = 'COLOR';
+        var isAlias = false;
+        var aliasTo = null;
+        var isBrokenAlias = false;
 
-    if (typeof tokenData === 'object' && tokenData.modes) {
-      // Nouvelle structure (par token avec modes imbriqués)
-      tokenType = tokenData.type || getSemanticType(key);
-      var modeData = tokenData.modes[activeMode] || tokenData.modes.light || {};
-      resolvedValue = modeData.resolvedValue;
+        if (tokenData && typeof tokenData === 'object' && tokenData.modes) {
+          // New Structure
+          tokenType = tokenData.type || getSemanticType(key);
+          var modeData = tokenData.modes[activeMode] || tokenData.modes.light || {};
+          resolvedValue = modeData.resolvedValue;
 
-      // ✅ FIX: Si resolvedValue est undefined ou un objet, utiliser une valeur par défaut
-      if (resolvedValue === undefined || (typeof resolvedValue === 'object' && !resolvedValue.r)) {
-        resolvedValue = tokenType === 'COLOR' ? '#000000' : '0';
-        (function () { return function () { } })() && console.warn(`⚠️ [PREVIEW] ${key}: resolvedValue undefined, using fallback`);
+          // Resolve Alias ID to Name
+          var aliasRefObj = modeData.aliasRef;
+          if (aliasRefObj && aliasRefObj.category && aliasRefObj.key) {
+            aliasTo = aliasRefObj.category + '.' + aliasRefObj.key;
+            isAlias = true;
+          }
+
+        } else if (tokenData && typeof tokenData === 'object' && tokenData.resolvedValue !== undefined) {
+          // Legacy Structure
+          resolvedValue = tokenData.resolvedValue;
+          tokenType = tokenData.type || getSemanticType(key);
+          isAlias = tokenData.isAlias || false;
+          aliasTo = tokenData.aliasTo;
+        } else {
+          // Raw Value
+          resolvedValue = tokenData;
+          tokenType = getSemanticType(key);
+        }
+
+        // PARANOID SANITIZATION
+        if (resolvedValue === undefined || resolvedValue === null) {
+          resolvedValue = (tokenType === 'COLOR') ? '#000000' : '0';
+        }
+
+        var displayValue = sanitizeValueForUI(resolvedValue, tokenType);
+        var badge = isBrokenAlias ? "Alias cassé" : (isAlias ? "Alias" : null);
+
+        rows.push({
+          key: key,
+          figmaName: getSemanticVariableName(key, naming),
+          type: tokenType,
+          value: displayValue,
+          rawValue: resolvedValue,
+          isAlias: isAlias,
+          isBrokenAlias: isBrokenAlias,
+          aliasTo: aliasTo,
+          badge: badge
+        });
+
+      } catch (itemError) {
+        console.error(`[PREVIEW] Error for ${key}:`, itemError);
+        rows.push({ key: key, figmaName: key, type: 'ERROR', value: 'Error' });
       }
-
-      // ✅ FIX: Convertir aliasRef (objet) en string lisible
-      var aliasRefObj = modeData.aliasRef;
-      if (aliasRefObj && aliasRefObj.category && aliasRefObj.key) {
-        aliasTo = aliasRefObj.category + '.' + aliasRefObj.key;
-      } else {
-        aliasTo = null;
-      }
-      isAlias = aliasTo ? true : false;
-      isBrokenAlias = false; // TODO: détecter les alias cassés
-    } else if (typeof tokenData === 'object' && tokenData.resolvedValue !== undefined) {
-      // Ancien format (post-rehydratation) - pour compatibilité
-      resolvedValue = tokenData.resolvedValue;
-      tokenType = tokenData.type || getSemanticType(key);
-      isAlias = tokenData.isAlias || false;
-      isBrokenAlias = tokenData.isBrokenAlias || false;
-      aliasTo = tokenData.aliasTo;
-    } else {
-      // Ancien format ou valeur brute (fallback)
-      resolvedValue = tokenData;
-      tokenType = getSemanticType(key);
-      isAlias = false;
-      isBrokenAlias = false;
-      aliasTo = null;
     }
-
-    // Sanitation: s'assurer que value est toujours une string pour l'UI
-    var displayValue = sanitizeValueForUI(resolvedValue, tokenType);
-
-    // Déterminer le badge à afficher
-    var badge = null;
-    if (isBrokenAlias) {
-      badge = "Alias cassé";
-    } else if (isAlias) {
-      badge = "Alias";
-    }
-
-    rows.push({
-      key: key,
-      figmaName: getSemanticVariableName(key, naming),
-      type: tokenType,
-      value: displayValue, // Valeur sanitizée pour l'UI
-      rawValue: resolvedValue, // Garder la valeur brute pour les opérations internes
-      isAlias: isAlias,
-      isBrokenAlias: isBrokenAlias,
-      aliasTo: aliasTo,
-      badge: badge
-    });
+    return rows;
+  } catch (err) {
+    console.error(`[PREVIEW] Fatal Error:`, err);
+    return [];
   }
-  return rows;
 }
 
 // Fonction helper pour sanitiser les valeurs avant affichage en UI
@@ -2606,7 +2559,7 @@ function sanitizeValueForUI(value, tokenType) {
       return sanitizeValueForUI(modeData.resolvedValue, tokenType); // Récursif
     }
 
-    if (tokenType === "COLOR" && 'r' in value && 'g' in value && 'b' in value) {
+    if (tokenType === "COLOR" && value && 'r' in value && 'g' in value && 'b' in value) {
       // Convertir RGB en hex pour affichage
       try {
         return ColorService.rgbToHex({
@@ -2620,8 +2573,12 @@ function sanitizeValueForUI(value, tokenType) {
       }
     } else {
       // Pour tout autre objet, convertir en string de manière safe
-      console.warn('Unexpected object value for UI:', value);
-      return JSON.stringify(value);
+      // console.warn('Unexpected object value for UI:', value);
+      try {
+        return JSON.stringify(value);
+      } catch (e) {
+        return String(value);
+      }
     }
   }
 
@@ -2671,6 +2628,36 @@ function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
     // Use centralized mapping (source-of-truth: getPrimitiveMappingForSemantic)
     var mapping = getPrimitiveMappingForSemantic(semanticKey, lib);
     if (!mapping) return null;
+
+    // [FIX MUI] Resolution shape-aware pour System & Brand
+    if (lib === 'mui' && allTokens && allTokens.primitives) {
+      console.log('🔧 [MUI_FIX] Adjusting semantic mapping for key:', semanticKey);
+      if (mapping.category === 'system' && allTokens.primitives.system) {
+        // En MUI, system.success est un objet { main, light, dark }.
+        // Si le mapping demande 'success' (l'objet), on doit cibler une feuille (main ou 500).
+        mapping.keys = mapping.keys.map(function (k) {
+          var sysObj = allTokens.primitives.system[k];
+          // Si c'est un objet, on cherche 'main' ou '500'
+          if (sysObj && typeof sysObj === 'object') {
+            if (sysObj['500']) return k + '.500';
+            if (sysObj.main) return k + '.main';
+            // Fallback: prendre la première clé
+            var firstKey = Object.keys(sysObj)[0];
+            if (firstKey) return k + '.' + firstKey;
+          }
+          return k;
+        });
+      }
+      // [FIX MUI] Brand resolution (500 -> main is handled by generateFallbackKeys, but explicit helps)
+      if (mapping.category === 'brand' && allTokens.primitives.brand) {
+        // Si primitif brand est { main, light... } on s'assure de mapper 500->main
+        if (allTokens.primitives.brand.main && !allTokens.primitives.brand['500']) {
+          mapping.keys = mapping.keys.map(function (k) {
+            return (k === '500' || k === 'primary') ? 'main' : k;
+          });
+        }
+      }
+    }
 
     // Génère des clés de fallback tolérantes pour la résolution d'alias
     function generateFallbackKeys(key, category) {
@@ -3245,7 +3232,7 @@ var TokenService = {
 
 
   generateAll: function (msg) {
-    var hex = msg.hex || '#6366F1';
+    var hex = msg.hex || '#4F46E5';
     var naming = msg.naming || CONFIG.naming.default;
 
 
@@ -3442,7 +3429,7 @@ var Scanner = {
 
     var selection = figma.currentPage.selection;
     if (!selection || !Array.isArray(selection) || selection.length === 0) {
-      figma.ui.postMessage({ type: "scan-results", results: [] });
+      postToUI({ type: "scan-results", results: [] });
       return [];
     }
 
@@ -3471,7 +3458,7 @@ var Scanner = {
       console.log('🔍 [SCAN] Total issues:', results.length, 'Bound issues:', boundCount);
     }
 
-    figma.ui.postMessage({ type: "scan-results", results: results });
+    postToUI({ type: "scan-results", results: results });
 
 
     setTimeout(function () {
@@ -3519,7 +3506,7 @@ var Scanner = {
 
 
       if (depth === 0 && results.length % 10 === 0) {
-        figma.ui.postMessage({
+        postToUI({
           type: "scan-progress",
           current: results.length,
           status: "Analyse en cours..."
@@ -4027,12 +4014,34 @@ var Fixer = {
   _validateVariableCanBeApplied: function (variable, result) {
     if (!variable) return false;
     var type = variable.resolvedType;
-    var prop = result.property;
+    var propertyKind = result.propertyKind;
 
+    // Use propertyKind for robust type checking
+    switch (propertyKind) {
+      // COLOR properties
+      case PropertyKind.FILL:
+      case PropertyKind.TEXT_FILL:
+      case PropertyKind.STROKE:
+      case PropertyKind.EFFECT_COLOR:
+        return type === "COLOR";
+
+      // FLOAT properties
+      case PropertyKind.CORNER_RADIUS:
+      case PropertyKind.GAP:
+      case PropertyKind.PADDING:
+      case PropertyKind.STROKE_WEIGHT:
+      case PropertyKind.FONT_SIZE:
+      case PropertyKind.LINE_HEIGHT:
+      case PropertyKind.LETTER_SPACING:
+        return type === "FLOAT";
+    }
+
+    // Fallback: string matching for legacy results without propertyKind
+    var prop = result.property || '';
     if (prop === "Fill" || prop === "Text" || prop === "Stroke" || prop.indexOf("Style") !== -1) {
       return type === "COLOR";
     }
-    if (prop.indexOf("Radius") !== -1 || prop.indexOf("Spacing") !== -1 || prop.indexOf("Padding") !== -1 || prop === "Font Size") {
+    if (prop.indexOf("Radius") !== -1 || prop.indexOf("Spacing") !== -1 || prop.indexOf("Padding") !== -1 || prop === "Font Size" || prop.indexOf("Border Width") !== -1) {
       return type === "FLOAT";
     }
     return true;
@@ -4041,7 +4050,52 @@ var Fixer = {
   _applyVariableToProperty: async function (node, result, variable) {
     try {
       var success = false;
+      var propertyKind = result.propertyKind;
+      var fProp = result.figmaProperty;
 
+      // ===== PROPERTKIND-BASED ROUTING (preferred) =====
+      switch (propertyKind) {
+        case PropertyKind.FILL:
+        case PropertyKind.TEXT_FILL:
+          success = await applyColorVariableToFill(node, variable, result.fillIndex, result);
+          return success;
+
+        case PropertyKind.STROKE:
+          success = await applyColorVariableToStroke(node, variable, result.strokeIndex, result);
+          return success;
+
+        case PropertyKind.CORNER_RADIUS:
+          success = await applyNumericVariable(node, variable, fProp || 'cornerRadius', "Corner Radius", result);
+          return success;
+
+        case PropertyKind.GAP:
+          success = await applyNumericVariable(node, variable, fProp || 'itemSpacing', "Gap", result);
+          return success;
+
+        case PropertyKind.PADDING:
+          success = await applyNumericVariable(node, variable, fProp || 'paddingLeft', result.property, result);
+          return success;
+
+        case PropertyKind.STROKE_WEIGHT:
+          // Use figmaProperty if available, otherwise fallback to strokeWeight
+          var strokeProp = fProp || 'strokeWeight';
+          success = await applyNumericVariable(node, variable, strokeProp, "Border Width", result);
+          return success;
+
+        case PropertyKind.FONT_SIZE:
+          success = await applyNumericVariable(node, variable, fProp || 'fontSize', "Font Size", result);
+          return success;
+
+        case PropertyKind.LINE_HEIGHT:
+          success = await applyNumericVariable(node, variable, fProp || 'lineHeight', "Line Height", result);
+          return success;
+
+        case PropertyKind.LETTER_SPACING:
+          success = await applyNumericVariable(node, variable, fProp || 'letterSpacing', "Letter Spacing", result);
+          return success;
+      }
+
+      // ===== FALLBACK: STRING-BASED ROUTING (legacy results) =====
       switch (result.property) {
         case "Font Size":
         case "Line Height":
@@ -4070,16 +4124,31 @@ var Fixer = {
         case "TOP RIGHT RADIUS":
         case "BOTTOM LEFT RADIUS":
         case "BOTTOM RIGHT RADIUS":
+        case "Corner Radius":
+        case "Top Left Radius":
+        case "Top Right Radius":
+        case "Bottom Left Radius":
+        case "Bottom Right Radius":
           success = await applyNumericVariable(node, variable, result.figmaProperty, result.property, result);
           break;
 
         case "Spacing":
+        case "Gap":
         case "Item Spacing":
         case "Padding Left":
         case "Padding Right":
         case "Padding Top":
         case "Padding Bottom":
           success = await applyNumericVariable(node, variable, result.figmaProperty, result.property, result);
+          break;
+
+        case "Border Width":
+        case "Border Width Top":
+        case "Border Width Right":
+        case "Border Width Bottom":
+        case "Border Width Left":
+          var swProp = result.figmaProperty || 'strokeWeight';
+          success = await applyNumericVariable(node, variable, swProp, result.property, result);
           break;
 
         default:
@@ -4174,7 +4243,7 @@ rehydrateSemanticAliases();
 figma.clientStorage.getAsync("tokenStarter.naming").then(async function (clientSavedNaming) {
   var savedNaming = clientSavedNaming || await getNamingFromFile();
 
-  figma.ui.postMessage({
+  postToUI({
     type: "init",
     naming: savedNaming,
     savedSemanticTokens: savedSemanticTokens
@@ -4183,7 +4252,7 @@ figma.clientStorage.getAsync("tokenStarter.naming").then(async function (clientS
   // Fallback vers la méthode synchrone
   var savedNaming = getNamingFromFile();
 
-  figma.ui.postMessage({
+  postToUI({
     type: "init",
     naming: savedNaming,
     savedSemanticTokens: savedSemanticTokens
@@ -4191,7 +4260,90 @@ figma.clientStorage.getAsync("tokenStarter.naming").then(async function (clientS
 });
 
 
+/* ============================================================================
+   GENERATION PIPELINE
+   ============================================================================ */
+function generateTokensPipeline(input) {
+  // input: { hex, naming, themeMode }
+  var tokens = {};
+  var steps = [];
+  var normalizedLib = normalizeLibType(input.naming);
+
+  try {
+    // 1. Core Primitives
+    steps.push('generateCorePrimitives');
+    var corePrimitives = generateCorePrimitives(input.hex, { naming: normalizedLib }, CORE_PRESET_V1);
+
+    // 2. Core Semantics
+    steps.push('generateCoreSemantics');
+    var coreSemantics = generateCoreSemantics(corePrimitives, CORE_PRESET_V1, { naming: normalizedLib });
+
+    // 3. Validation
+    steps.push('validateTags');
+    var validationReport = validateAndAdjustForRgaa(coreSemantics, CORE_PRESET_V1);
+
+    // 4. Projection
+    steps.push('projectToLegacy');
+    tokens = projectCoreToLegacyShape({
+      primitives: corePrimitives,
+      semantics: coreSemantics
+    }, normalizedLib);
+
+    return {
+      tokens: tokens,
+      reports: { validation: validationReport },
+      meta: { lib: normalizedLib, theme: input.themeMode }
+    };
+
+  } catch (e) {
+    throw { type: 'pipeline-error', step: steps[steps.length - 1], message: e.message, original: e };
+  }
+}
+
+function persistTokens(tokens, naming) {
+  if (!tokens) return;
+
+  // Border Guard (Legacy Requirement)
+  if (!tokens.border || Object.keys(tokens.border).length === 0) {
+    console.warn("[PLUGIN] Border empty, injecting fallback");
+    tokens.border = { "1": "1px", "2": "2px", "4": "4px" };
+  }
+
+  // Save Naming
+  saveNamingToFile(naming);
+
+  // Save Primitives
+  // Required to keep parity with previous behavior
+  var primitivesToSave = {
+    brand: tokens.brand,
+    gray: tokens.gray,
+    system: tokens.system,
+    spacing: tokens.spacing,
+    radius: tokens.radius,
+    typography: tokens.typography,
+    stroke: tokens.stroke || {},
+    border: tokens.border || {}
+  };
+  savePrimitivesTokensToFile(primitivesToSave, 'GENERATE');
+
+  // Save Semantics
+  if (tokens.semantic) {
+    saveSemanticTokensToFile(tokens.semantic, 'AUTO_GENERATE_PIPELINE');
+  }
+}
+
+function emitTokensGenerated(tokens, naming) {
+  if (!tokens) return;
+  var semanticPreview = getSemanticPreviewRows(tokens, naming);
+  postToUI('tokens-generated', {
+    tokens: tokens,
+    semanticPreview: semanticPreview,
+    naming: naming
+  });
+}
+
 figma.ui.onmessage = async function (msg) {
+  console.log("[PLUGIN] onmessage", msg);
   // Initialize collection cache for alias resolution
   initializeCollectionCache();
 
@@ -4221,173 +4373,35 @@ figma.ui.onmessage = async function (msg) {
 
       case 'generate':
       case 'generate-tokens':
-        // Unified Generation Handler
-        var hex = msg.hex || msg.color || '#6366F1';
-        var naming = msg.naming || (await getNamingFromFile()) || "tailwind";
-        var themeMode = figma.root.getPluginData("tokenStarter.themeMode") || "light";
-        var primaryColor = hex;
-        var normalizedLib = normalizeLibType(naming);
+        try {
+          var naming = msg.naming || (await getNamingFromFile()) || "tailwind";
+          var themeMode = figma.root.getPluginData("tokenStarter.themeMode") || "light";
+          var hex = msg.hex || msg.color || '#4F46E5';
 
-        (function () { return function () { } })() && console.log('🎨 Generating tokens for naming:', naming);
+          console.log('🎨 Generating tokens (Pipeline) for:', naming);
 
-        // BASELINE LOGS - Paramètres de génération
-        debugTokens('Generation Parameters', {
-          lib: naming,
-          normalizedLib: normalizedLib,
-          themeMode: themeMode,
-          primaryColor: primaryColor
-        });
+          // 1. Generate
+          var result = generateTokensPipeline({ hex: hex, naming: naming, themeMode: themeMode });
 
-        var tokens = {};
+          // 2. Persist
+          persistTokens(result.tokens, naming);
 
-        // ============================================================================
-        // BRANCHEMENT CORE vs LEGACY
-        // ============================================================================
-        if (USE_CORE_ENGINE) {
-          // ╔══════════════════════════════════════════════════════════════════════╗
-          // ║ CORE SECTION - Core Engine V1 (USE_CORE_ENGINE = true)              ║
-          // ║ Utilise: generateCorePrimitives + generateCoreSemantics +           ║
-          // ║          validateAndAdjustForRgaa + projectCoreToLegacyShape        ║
-          // ╚══════════════════════════════════════════════════════════════════════╝
-          console.log('🚀 CORE_ENGINE_ON - Using Core Engine V1');
-          debugTokens('Engine Mode', { engine: 'CORE_V1', lib: normalizedLib });
+          // 3. Emit
+          emitTokensGenerated(result.tokens, naming);
 
-          try {
-            // 1. Generate Core Primitives
-            var corePrimitives = generateCorePrimitives(primaryColor, { naming: normalizedLib }, CORE_PRESET_V1);
-
-            // 2. Generate Core Semantics (multi-mode)
-            var coreSemantics = generateCoreSemantics(corePrimitives, CORE_PRESET_V1, { naming: normalizedLib });
-
-            // 3. Validate RGAA
-            var validationReport = validateAndAdjustForRgaa(coreSemantics, CORE_PRESET_V1);
-            debugTokens('RGAA Validation', {
-              passed: validationReport.passed,
-              issuesCount: validationReport.issues.length,
-              adjustedCount: validationReport.adjusted.length
-            });
-
-            // 4. Project to Legacy Shape (adapter temporaire)
-            tokens = projectCoreToLegacyShape({
-              primitives: corePrimitives,
-              semantics: coreSemantics
-            }, normalizedLib);
-
-            // Logs
-            var semanticCount = Object.keys(tokens.semantic || {}).length;
-            debugTokens('Core Semantic Keys Generated', {
-              total: semanticCount,
-              top10: Object.keys(tokens.semantic || {}).slice(0, 10)
-            });
-
-          } catch (coreError) {
-            console.error('❌ Core Engine Error:', coreError);
-            // Fallback to empty tokens
-            tokens = {
-              brand: {}, gray: {}, system: {}, spacing: {}, radius: {}, typography: {}, border: {}, semantic: {}
-            };
+          // 4. Parity/Diag
+          if (typeof debugParityReport !== 'undefined') {
+            debugParityReport(result.tokens, CORE_PRESET_V1);
           }
 
-        } else {
-          // ╔══════════════════════════════════════════════════════════════════════╗
-          // ║ LEGACY SECTION - Legacy Engine (USE_CORE_ENGINE = false)            ║
-          // ║ Utilise: generateBrandColors + generateGrayscale + generateSemanticTokens ║
-          // ║ IMPORTANT: Ne pas supprimer - fallback requis                       ║
-          // ╚══════════════════════════════════════════════════════════════════════╝
-          console.log('🔧 LEGACY_ENGINE_ON - Using Legacy Engine');
-          debugTokens('Engine Mode', { engine: 'LEGACY', lib: normalizedLib });
-
-          // 1. Generate Primitives (LEGACY)
-          tokens = {
-            brand: generateBrandColors(hex, naming),
-            system: generateSystemColors(naming),
-            gray: generateGrayscale(naming),
-            spacing: generateSpacing(naming),
-            radius: generateRadius(naming),
-            typography: generateTypography(naming),
-            border: generateBorder()
-          };
-
-          // BASELINE LOGS - Primitives counts
-          var primitivesCount = 0;
-          var primitivesByCategory = {};
-          for (var cat in tokens) {
-            if (tokens.hasOwnProperty(cat) && cat !== 'semantic') {
-              var catCount = Object.keys(tokens[cat] || {}).length;
-              primitivesByCategory[cat] = catCount;
-              primitivesCount += catCount;
-            }
-          }
-          debugTokens('Primitives Generated', {
-            total: primitivesCount,
-            byCategory: primitivesByCategory
+        } catch (e) {
+          console.error('❌ [PLUGIN] Generate Pipeline Error:', e);
+          figma.notify("❌ Error generating tokens: " + (e.message || e));
+          postToUI('generate-error', {
+            step: e.step || 'unknown',
+            message: e.message || String(e)
           });
-
-          // BASELINE LOGS - Top 10 primitive keys
-          var top10Primitives = [];
-          for (var cat in tokens) {
-            if (tokens.hasOwnProperty(cat) && cat !== 'semantic') {
-              var keys = Object.keys(tokens[cat] || {});
-              for (var i = 0; i < Math.min(10, keys.length); i++) {
-                top10Primitives.push(cat + '.' + keys[i]);
-                if (top10Primitives.length >= 10) break;
-              }
-              if (top10Primitives.length >= 10) break;
-            }
-          }
-          debugTokens('Top 10 Primitive Keys', top10Primitives);
-
-          // 2. Generate Semantics using the Legacy Engine
-          if (naming === "tailwind" || naming === "mui" || naming === "ant" || naming === "bootstrap" || naming === "shadcn") {
-            (function () { return function () { } })() && console.log(`🎨 Calling Legacy Semantic Engine for ${naming}`);
-            try {
-              var genOptions = { naming: naming };
-              var generated = generateSemanticTokens(tokens, genOptions);
-              var existing = getSemanticTokensFromFile('MERGE_GENERATE') || {};
-              var merged = mergeSemanticWithExistingAliases(generated, existing);
-              tokens.semantic = merged || generated;
-              saveSemanticTokensToFile(tokens.semantic, 'AUTO_GENERATE');
-
-              // BASELINE LOGS - Semantic tokens counts
-              var semanticCount = Object.keys(tokens.semantic || {}).length;
-              var top10Semantic = Object.keys(tokens.semantic || {}).slice(0, 10);
-              debugTokens('Semantic Tokens Generated', {
-                total: semanticCount,
-                top10Keys: top10Semantic
-              });
-            } catch (e) {
-              console.error('❌ Semantic Engine Error:', e);
-              tokens.semantic = {};
-            }
-          }
         }
-
-        // ============================================================================
-        // PIPELINE COMMUN (inchangé)
-        // ============================================================================
-        cachedTokens = tokens;
-        saveNamingToFile(naming);
-
-        // ✅ FIX PERSISTENCE: Save Primitives !
-        var primitivesToSave = {
-          brand: tokens.brand,
-          gray: tokens.gray,
-          system: tokens.system,
-          spacing: tokens.spacing,
-          radius: tokens.radius,
-          typography: tokens.typography,
-          border: tokens.border || {}
-        };
-        savePrimitivesTokensToFile(primitivesToSave, 'GENERATE');
-
-
-        var semanticPreview = getSemanticPreviewRows(tokens, naming);
-        figma.ui.postMessage({
-          type: 'tokens-generated',
-          tokens: tokens,
-          semanticPreview: semanticPreview,
-          naming: naming
-        });
         break;
 
       case 'import':
@@ -4395,11 +4409,11 @@ figma.ui.onmessage = async function (msg) {
         (function () { return function () { } })() && console.log('🔄 Pipeline d\'import : ' + msg.type + ' → Figma Service');
         try {
           await importTokensToFigma(msg.tokens || cachedTokens, msg.naming, msg.overwrite);
-          figma.ui.postMessage({ type: 'import-completed' });
+          postToUI({ type: 'import-completed' });
         } catch (err) {
           console.error('Import error:', err);
           figma.notify("❌ Erreur d'import : " + err.message);
-          figma.ui.postMessage({ type: 'import-completed', error: err.message });
+          postToUI({ type: 'import-completed', error: err.message });
         }
         break;
 
@@ -4407,10 +4421,10 @@ figma.ui.onmessage = async function (msg) {
         try {
           await importTokensToFigma(msg.tokens, msg.naming || "custom", false);
           figma.notify("✅ Tokens importés depuis le fichier");
-          figma.ui.postMessage({ type: 'import-completed' });
+          postToUI({ type: 'import-completed' });
         } catch (e) {
           figma.notify("❌ Erreur lors de l'import depuis le fichier");
-          figma.ui.postMessage({ type: 'import-completed', error: e.message });
+          postToUI({ type: 'import-completed', error: e.message });
         }
         break;
 
@@ -4471,7 +4485,7 @@ figma.ui.onmessage = async function (msg) {
 
           console.log('[PLUGIN] Sending response to UI:', { appliedCount, index: msg.index });
 
-          figma.ui.postMessage({
+          postToUI({
             type: "single-fix-applied",
             appliedCount: appliedCount,
             index: msg.index
@@ -4498,7 +4512,7 @@ figma.ui.onmessage = async function (msg) {
               }
             }
           }
-          figma.ui.postMessage({
+          postToUI({
             type: "group-fix-applied",
             appliedCount: appliedCount,
             indices: appliedIndices  // ✅ Renvoi des indices appliqués
@@ -4509,7 +4523,7 @@ figma.ui.onmessage = async function (msg) {
       case 'apply-all-fixes':
         (async function () {
           var count = await applyAllFixes();
-          figma.ui.postMessage({ type: "all-fixes-applied", appliedCount: count });
+          postToUI({ type: "all-fixes-applied", appliedCount: count });
         })();
         break;
 
@@ -4590,7 +4604,7 @@ figma.ui.onmessage = async function (msg) {
 
           if (DEBUG) console.log('[ROLLBACK] Restored', restoredCount, 'nodes');
 
-          figma.ui.postMessage({
+          postToUI({
             type: 'rollback-complete',
             indices: indices,
             restoredCount: restoredCount
@@ -4617,7 +4631,7 @@ figma.ui.onmessage = async function (msg) {
 
       case 'sync-scan-results':
         if (msg.results) Scanner.lastScanResults = msg.results;
-        figma.ui.postMessage({ type: "sync-confirmation", success: true });
+        postToUI({ type: "sync-confirmation", success: true });
         break;
 
       case 'save-naming':
@@ -4641,14 +4655,14 @@ figma.ui.onmessage = async function (msg) {
     }
   } catch (error) {
     console.error("Plugin internal error:", error);
-    figma.ui.postMessage({ type: 'error', error: error.message });
+    postToUI({ type: 'error', error: error.message });
   }
 };
 
 
 var existingCollections = figma.variables.getLocalVariableCollections();
 if (existingCollections.length > 0) {
-  figma.ui.postMessage({ type: "has-variables", value: true });
+  postToUI({ type: "has-variables", value: true });
 
 
   try {
@@ -4689,14 +4703,14 @@ if (existingCollections.length > 0) {
         library: existingTokens.library
       });
 
-      figma.ui.postMessage({
+      postToUI({
         type: "existing-tokens",
         tokens: existingTokens.tokens,
         library: existingTokens.library
       });
     } else {
       console.log('⚠️ [EXTRACT_TO_UI] No tokens found, sending empty object');
-      figma.ui.postMessage({
+      postToUI({
         type: "existing-tokens",
         tokens: {},
         library: "tailwind"
@@ -5033,481 +5047,7 @@ function hslToHex(h, s, l) {
 
 
 
-function generateBrandColors(hex, naming) {
-  var hsl = hexToHsl(hex);
-  var H = hsl.h;
-  var S = hsl.s;
-  var L = hsl.l;
 
-  var palette5 = {
-    subtle: hslToHex(H, S, Math.min(97, L + 25)),
-    light: hslToHex(H, S, Math.min(92, L + 15)),
-    base: hex,
-    hover: hslToHex(H, S, Math.max(10, L - 8)),
-    dark: hslToHex(H, S, Math.max(5, L - 18))
-  };
-
-  if (naming === "shadcn") {
-
-    var shadcnBrand = {};
-    var levels = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950];
-
-
-    for (var i = 0; i < levels.length; i++) {
-      var level = levels[i];
-      var color;
-
-      if (level === 50) color = palette5.subtle;
-      else if (level === 100) color = palette5.light;
-      else if (level === 200) color = hslToHex(H, S, Math.min(95, L + 10));
-      else if (level === 300) color = hslToHex(H, S, Math.min(95, L + 5));
-      else if (level === 400) color = hslToHex(H, S, Math.min(95, L + 2));
-      else if (level === 500) color = palette5.base;
-      else if (level === 600) color = hslToHex(H, S, Math.max(5, L - 2));
-      else if (level === 700) color = hslToHex(H, S, Math.max(5, L - 5));
-      else if (level === 800) color = hslToHex(H, S, Math.max(5, L - 10));
-      else if (level === 900) color = palette5.dark;
-      else if (level === 950) color = hslToHex(H, S, Math.max(5, L - 15));
-
-      shadcnBrand[level.toString()] = color;
-    }
-
-    return shadcnBrand;
-  }
-
-  if (naming === "tailwind") {
-
-    var tailwindBrand = {};
-    var levels = [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950];
-
-
-    for (var i = 0; i < levels.length; i++) {
-      var level = levels[i];
-      var color;
-
-      if (level === 50) color = palette5.subtle;
-      else if (level === 100) color = palette5.light;
-      else if (level === 200) color = hslToHex(H, S, Math.min(95, L + 10));
-      else if (level === 300) color = hslToHex(H, S, Math.min(95, L + 5));
-      else if (level === 400) color = hslToHex(H, S, Math.min(95, L + 2));
-      else if (level === 500) color = palette5.base;
-      else if (level === 600) color = hslToHex(H, S, Math.max(5, L - 2));
-      else if (level === 700) color = hslToHex(H, S, Math.max(5, L - 5));
-      else if (level === 800) color = hslToHex(H, S, Math.max(5, L - 10));
-      else if (level === 900) color = palette5.dark;
-      else if (level === 950) color = hslToHex(H, S, Math.max(5, L - 15));
-
-      tailwindBrand[level.toString()] = color;
-    }
-
-    return tailwindBrand;
-  }
-
-  if (!naming || naming === "chakra" || naming === "custom") {
-    return {
-      "100": palette5.subtle,
-      "200": palette5.light,
-      "300": palette5.base,
-      "400": palette5.hover,
-      "500": palette5.dark
-    };
-  }
-
-  if (naming === "mui") {
-    return {
-      light: palette5.light,
-      main: palette5.base,
-      dark: palette5.dark,
-      contrastText: "#FFFFFF"
-    };
-  }
-
-  if (naming === "bootstrap") {
-    return {
-      "primary": palette5.base,
-      "primary-subtle": palette5.subtle,
-      "primary-hover": palette5.hover,
-      "primary-dark": palette5.dark
-    };
-  }
-
-  if (naming === "ant") {
-    return {
-      "1": palette5.subtle,
-      "2": palette5.light,
-      "3": palette5.base,
-      "4": palette5.hover,
-      "5": palette5.dark
-    };
-  }
-
-  return {
-    subtle: palette5.subtle,
-    light: palette5.light,
-    base: palette5.base,
-    hover: palette5.hover,
-    dark: palette5.dark
-  };
-}
-
-function generateGrayscale(naming) {
-  var base = {
-    "50": "#F9FAFB",
-    "100": "#F3F4F6",
-    "200": "#E5E7EB",
-    "300": "#D1D5DB",
-    "400": "#9CA3AF",
-    "500": "#6B7280",
-    "600": "#4B5563",
-    "700": "#374151",
-    "800": "#1F2937",
-    "900": "#111827",
-    "950": "#030712",
-    "white": "#FFFFFF",
-  };
-
-  if (naming === "shadcn") {
-    var shadcnGrays = {};
-
-    var shadcnOrder = ["50", "100", "200", "300", "400", "500", "600", "700", "800", "900", "950"];
-    for (var i = 0; i < shadcnOrder.length; i++) {
-      var key = shadcnOrder[i];
-      shadcnGrays[key] = base[key];
-    }
-    return shadcnGrays;
-  }
-
-  if (naming === "ant") {
-    return {
-      "1": base["50"],
-      "2": base["100"],
-      "3": base["200"],
-      "4": base["300"],
-      "5": base["400"],
-      "6": base["500"],
-      "7": base["600"],
-      "8": base["700"],
-      "9": base["800"],
-      "10": base["900"]
-    };
-  }
-
-
-  var orderedGrays = {};
-  var order = ["50", "100", "200", "300", "400", "500", "600", "700", "800", "900", "950", "white"];
-  for (var i = 0; i < order.length; i++) {
-    var key = order[i];
-    orderedGrays[key] = base[key];
-  }
-  return orderedGrays;
-}
-
-function generateSystemColors(naming) {
-  const lib = normalizeLibType(naming);
-
-  // Couleurs système adaptées selon la bibliothèque
-  var baseColors;
-  if (lib === 'chakra') {
-    baseColors = {
-      success: "#38A169",  // Vert Chakra
-      warning: "#D69E2E",  // Orange Chakra
-      error: "#E53E3E",    // Rouge Chakra
-      info: "#3182CE"      // Bleu Chakra
-    };
-  } else if (lib === 'bootstrap') {
-    baseColors = {
-      success: "#28A745",  // Vert Bootstrap
-      warning: "#FFC107",  // Jaune Bootstrap
-      error: "#DC3545",    // Rouge Bootstrap
-      info: "#17A2B8"      // Cyan Bootstrap
-    };
-  } else if (lib === 'ant') {
-    baseColors = {
-      success: "#52C41A",  // Vert Ant
-      warning: "#FAAD14",  // Orange Ant
-      error: "#FF4D4F",    // Rouge Ant
-      info: "#1890FF"      // Bleu Ant
-    };
-  } else {
-    // MUI/Tailwind - couleurs génériques
-    baseColors = {
-      success: "#10B981",  // Vert générique
-      warning: "#F59E0B",  // Orange générique
-      error: "#EF4444",    // Rouge générique
-      info: "#3B82F6"      // Bleu générique
-    };
-  }
-
-  var result = {};
-
-  for (var colorName in baseColors) {
-    if (!baseColors.hasOwnProperty(colorName)) continue;
-
-    var baseHex = baseColors[colorName];
-    var hsl = hexToHsl(baseHex);
-
-    var light = hslToHex(hsl.h, hsl.s, Math.min(95, hsl.l + 25));
-    var dark = hslToHex(hsl.h, hsl.s, Math.max(20, hsl.l - 15));
-
-    if (naming === "shadcn") {
-
-      if (colorName === "success") {
-        result["primary"] = baseHex;
-        result["primary-foreground"] = "#FFFFFF";
-      } else if (colorName === "error") {
-        result["destructive"] = baseHex;
-        result["destructive-foreground"] = "#FFFFFF";
-      } else if (colorName === "warning") {
-        result["warning"] = baseHex;
-        result["warning-foreground"] = "#000000";
-      } else if (colorName === "info") {
-        result["accent"] = baseHex;
-        result["accent-foreground"] = "#FFFFFF";
-      }
-    } else if (naming === "mui") {
-      result[colorName + "-light"] = light;
-      result[colorName + "-main"] = baseHex;
-      result[colorName + "-dark"] = dark;
-    } else if (naming === "bootstrap") {
-      result[colorName] = baseHex;
-      result[colorName + "-subtle"] = light;
-      result[colorName + "-emphasis"] = dark;
-    } else {
-      result[colorName + "-light"] = light;
-      result[colorName] = baseHex;
-      result[colorName + "-dark"] = dark;
-    }
-  }
-
-  return result;
-}
-
-function generateSpacing(naming) {
-  if (naming === "shadcn") {
-    return {
-      "1": "0.25rem",
-      "2": "0.5rem",
-      "3": "0.75rem",
-      "4": "1rem",
-      "5": "1.25rem",
-      "6": "1.5rem",
-      "8": "2rem",
-      "10": "2.5rem",
-      "11": "2.75rem",
-      "12": "3rem",
-      "16": "4rem"
-    };
-  }
-  if (naming === "mui") {
-    return { "1": "8px", "2": "16px", "3": "24px", "4": "32px", "5": "40px" };
-  }
-  if (naming === "bootstrap") {
-    return { "1": "0.25rem", "2": "0.5rem", "3": "1rem", "4": "1.5rem", "5": "3rem" };
-  }
-  return { "1": "4px", "2": "8px", "3": "12px", "4": "16px", "5": "20px", "6": "24px", "8": "32px", "11": "44px", "12": "48px" };
-}
-
-function generateRadius(naming) {
-  if (naming === "shadcn") {
-    return {
-      "none": "0px",
-      "sm": "0.125rem",
-      "md": "0.375rem",
-      "lg": "0.5rem",
-      "xl": "0.75rem",
-      "2xl": "1rem",
-      "3xl": "1.5rem",
-      "full": "9999px"
-    };
-  }
-  if (naming === "mui") {
-    return { "xs": "4px", "sm": "8px", "md": "12px", "lg": "16px", "xl": "20px" };
-  }
-  if (naming === "bootstrap") {
-    return { "sm": "0.25rem", "default": "0.375rem", "lg": "0.5rem", "pill": "50rem" };
-  }
-  return { "none": "0", "sm": "2", "md": "4", "lg": "8", "xl": "12", "2xl": "16", "full": "9999" };
-}
-
-// NOUVEAU GÉNÉRATEURS TYPOGRAPHIE SCALAIRES (V2)
-function generateFontSizes(naming) {
-  if (naming === "shadcn" || naming === "tailwind") {
-    return {
-      "xs": "12px",
-      "sm": "14px",
-      "base": "16px",
-      "lg": "18px",
-      "xl": "20px",
-      "2xl": "24px",
-      "3xl": "30px",
-      "4xl": "36px",
-      "5xl": "48px",
-      "6xl": "60px",
-      "7xl": "72px",
-      "8xl": "96px",
-      "9xl": "128px"
-    };
-  }
-  if (naming === "mui") {
-    // Échelle MUI par défaut convertie en px ou rem
-    return {
-      "h1": "96px",
-      "h2": "60px",
-      "h3": "48px",
-      "h4": "34px",
-      "h5": "24px",
-      "h6": "20px",
-      "subtitle1": "16px",
-      "subtitle2": "14px",
-      "body1": "16px",
-      "body2": "14px",
-      "caption": "12px",
-      "overline": "12px"
-    };
-  }
-  if (naming === "bootstrap") {
-    return {
-      "h1": "40px",
-      "h2": "32px",
-      "h3": "28px",
-      "h4": "24px",
-      "h5": "20px",
-      "h6": "16px",
-      "display-1": "96px",
-      "display-2": "5.5rem",
-      "display-3": "4.5rem",
-      "display-4": "3.5rem",
-      "lead": "1.25rem",
-      "small": "0.875rem"
-    };
-  }
-  // Default / "Standard"
-  return {
-    "xs": "0.75rem",
-    "sm": "0.875rem",
-    "base": "1rem",
-    "lg": "1.125rem",
-    "xl": "1.25rem",
-    "2xl": "1.5rem",
-    "3xl": "1.875rem",
-    "4xl": "2.25rem"
-  };
-}
-
-function generateLineHeights(naming) {
-  // Tailwind/Shadcn defaults
-  if (naming === "shadcn" || naming === "tailwind") {
-    return {
-      "none": "1",
-      "tight": "1.25",
-      "snug": "1.375",
-      "normal": "1.5",
-      "relaxed": "1.625",
-      "loose": "2",
-      "3": ".75rem",
-      "4": "1rem",
-      "5": "1.25rem",
-      "6": "1.5rem",
-      "7": "1.75rem",
-      "8": "2rem",
-      "9": "2.25rem",
-      "10": "2.5rem"
-    };
-  }
-  if (naming === "mui") {
-    // MUI line heights are unitless usually
-    return {
-      "h1": "1.167",
-      "h2": "1.2",
-      "h3": "1.167",
-      "h4": "1.235",
-      "h5": "1.334",
-      "h6": "1.6",
-      "subtitle1": "1.75",
-      "body1": "1.5",
-      "body2": "1.43",
-      "button": "1.75"
-    };
-  }
-  if (naming === "bootstrap") {
-    return {
-      "base": "1.5",
-      "sm": "1.25",
-      "lg": "2",
-      "heading": "1.2"
-    };
-  }
-  // Fallback
-  return {
-    "none": "1",
-    "tight": "1.25",
-    "normal": "1.5",
-    "relaxed": "1.625",
-    "loose": "2"
-  };
-}
-
-function generateFontWeights(naming) {
-  // Common weights
-  return {
-    "thin": 100,
-    "extralight": 200,
-    "light": 300,
-    "normal": 400,
-    "medium": 500,
-    "semibold": 600,
-    "bold": 700,
-    "extrabold": 800,
-    "black": 900
-  };
-}
-
-function generateLetterSpacings(naming) {
-  if (naming === "shadcn" || naming === "tailwind") {
-    return {
-      "tighter": "-0.05em",
-      "tight": "-0.025em",
-      "normal": "0em",
-      "wide": "0.025em",
-      "wider": "0.05em",
-      "widest": "0.1em"
-    };
-  }
-  if (naming === "mui") {
-    return {
-      "h1": "-0.01562em",
-      "h2": "-0.00833em",
-      "h3": "0em",
-      "h4": "0.00735em",
-      "h5": "0em",
-      "h6": "0.0075em",
-      "body1": "0.00938em",
-      "body2": "0.01071em",
-      "button": "0.02857em"
-    };
-  }
-  // Default is minimal
-  return {
-    "tight": "-0.025em",
-    "normal": "0em",
-    "wide": "0.025em"
-  };
-}
-
-function generateTypography(naming) {
-  // RETOURNE UN OBJET STRUCTURÉ (BREAKING CHANGE GÉRÉ PAR UI COMPAT)
-  // tokens.typography = { fontSize: {}, fontWeight: {}, lineHeight: {}, letterSpacing: {} }
-  return {
-    fontSize: generateFontSizes(naming),
-    fontWeight: generateFontWeights(naming),
-    lineHeight: generateLineHeights(naming),
-    letterSpacing: generateLetterSpacings(naming)
-  };
-}
-
-function generateBorder() {
-  return { "1": "1", "2": "2", "4": "4" };
-}
 
 
 
@@ -5595,6 +5135,11 @@ function inferSemanticFamily(normalizedKey) {
     return 'space';
   }
 
+  // STROKE (border widths - stroke.thin, stroke.default, etc.)
+  if (normalizedKey.startsWith('stroke-') || normalizedKey.includes('-stroke-')) {
+    return 'stroke';
+  }
+
   if (normalizedKey.startsWith('font-size-') || normalizedKey.includes('-font-size-') ||
     normalizedKey.startsWith('fontsize-') || normalizedKey.includes('-fontsize-')) {
     return 'fontSize';
@@ -5672,6 +5217,7 @@ var primitiveScopesMapping = {
   border: [],     // ❌ Jamais proposé - Utiliser les sémantiques (border-*)
   radius: [],     // ❌ Jamais proposé - Utiliser les sémantiques (radius-*)
   spacing: [],    // ❌ Jamais proposé - Utiliser les sémantiques (space-*)
+  stroke: ["STROKE_FLOAT"],  // ✅ Primitives stroke ont le scope pour l'application
   typography: []  // ❌ Jamais proposé - Utiliser les sémantiques (font-size-*)
 };
 
@@ -5724,6 +5270,7 @@ var semanticScopesMapping = {
   // ===== DIMENSIONS (FLOAT) =====
   radius: ["CORNER_RADIUS"],
   space: ["GAP", "INDIVIDUAL_PADDING", "WIDTH_HEIGHT"],  // Updated to align with PropertyKind
+  stroke: ["STROKE_FLOAT"],  // stroke.thin, stroke.default, etc. for border widths
   fontSize: ["FONT_SIZE"],
   fontWeight: ["FONT_WEIGHT"], // Added support for potential future usage
   lineHeight: ["LINE_HEIGHT"],
@@ -5821,7 +5368,7 @@ function getRequiredScopesForScanResult(result) {
   if (property === 'Border Width' || figmaProperty === 'strokeWeight' ||
     figmaProperty === 'strokeTopWeight' || figmaProperty === 'strokeBottomWeight' ||
     figmaProperty === 'strokeLeftWeight' || figmaProperty === 'strokeRightWeight') {
-    return ['STROKE_FLOAT'];
+    return ['STROKE_FLOAT', 'WIDTH_HEIGHT', 'ALL_SCOPES'];
   }
 
   // Line Height
@@ -6337,7 +5884,8 @@ function createScanIssue(params) {
     colorSuggestions: params.rawValueType === ValueType.COLOR ? suggestions : [],
     numericSuggestions: isFloat ? suggestions : [],
     property: params.property || params.propertyKind,
-    value: params.value || (params.rawValue + (isFloat ? 'px' : ''))
+    value: params.value || (params.rawValue + (isFloat ? 'px' : '')),
+    figmaProperty: params.figmaProperty || params.propertyKey || ''
   };
 }
 
@@ -7470,6 +7018,18 @@ async function importTokensToFigma(tokens, naming, overwrite) {
     }
   }
 
+  // Stroke / Border Width primitives (0, 1, 2, 3, 4)
+  if (tokens.stroke) {
+    var strokeCollection = getOrCreateCollection("Stroke", overwrite);
+    for (var stKey in tokens.stroke) {
+      if (!tokens.stroke.hasOwnProperty(stKey)) continue;
+      var varName = stKey.replace(/\./g, " / ");
+      var stVal = normalizeFloatValue(tokens.stroke[stKey]);
+      var variable = await createOrUpdateVariable(strokeCollection, varName, "FLOAT", stVal, "stroke", overwrite, undefined);
+      if (variable) registerPrimitive('stroke', stKey, variable.id);
+    }
+  }
+
   // --- SEMANTICS SYNC ---
 
   if (tokens.semantic) {
@@ -7630,7 +7190,7 @@ async function importTokensToFigma(tokens, naming, overwrite) {
   }
 
   figma.notify("✅ Sync Complete!");
-  figma.ui.postMessage({ type: 'import-completed' });
+  postToUI({ type: 'import-completed' });
 }
 
 
@@ -7846,8 +7406,8 @@ function getPrimitiveMappingForSemantic(semanticKey, lib) {
       'bg.surface': { category: 'gray', keys: ['100', 'grey.50'] },
       'bg.elevated': { category: 'gray', keys: ['200', 'grey.100'] },
       'bg.muted': { category: 'gray', keys: ['300', 'grey.200'] },
-      'bg.inverse': { category: 'gray', keys: ['950', '900'] },
-      'text.primary': { category: 'gray', keys: ['950', '900'] },
+      'bg.inverse': { category: 'gray', keys: ['900'] },
+      'text.primary': { category: 'gray', keys: ['900'] },
       'text.secondary': { category: 'gray', keys: ['700', '600'] },
       'text.muted': { category: 'gray', keys: ['500', '400'] },
       'text.inverse': { category: 'gray', keys: ['50', '100'] },
@@ -8761,16 +8321,22 @@ function findColorSuggestionsV2(hexValue, contextModeId, requiredScopes, propert
  * Helper: Filter a single variable by scopes
  * Strict Mode: No fallback for variables without scopes if scopes are required.
  */
-function filterVariableByScopes(meta, requiredScopes) {
+const SCOPE_POLICY = 'LENIENT'; // 'STRICT' or 'LENIENT'
+
+function filterVariableByScopes(meta, requiredScopes, policy) {
   if (!requiredScopes || requiredScopes.length === 0) return true;
+  policy = policy || SCOPE_POLICY;
 
   // Si on demande des scopes précis mais que la variable n'en a pas
-  // On l'accepte par défaut car beaucoup d'utilisateurs ne configurent pas les scopes
+  // LENIENT: On l'accepte par défaut
+  // STRICT: On rejette
   if (!meta.scopes || meta.scopes.length === 0) {
-    if (DEBUG) {
-      console.log(`[SCOPE_FILTER] ✅ Variable accepted (no scopes defined): ${meta.name}`);
+    if (policy === 'LENIENT') {
+      if (DEBUG) console.log(`[SCOPE_FILTER] ✅ Variable accepted (no scopes + LENIENT): ${meta.name}`);
+      return true;
+    } else {
+      return false;
     }
-    return true;
   }
 
   // SPECIAL CASE: ALL_SCOPES means the variable can be used anywhere
@@ -8791,9 +8357,7 @@ function filterVariableByScopes(meta, requiredScopes) {
   if (DEBUG) {
     console.warn(`[SCOPE_FILTER] Variable excluded (scope mismatch): ${meta.name}`, {
       varScopes: meta.scopes,
-      varScopesValues: JSON.stringify(meta.scopes),
-      requiredScopes: requiredScopes,
-      requiredScopesValues: JSON.stringify(requiredScopes)
+      requiredScopes: requiredScopes
     });
   }
 
@@ -10143,6 +9707,104 @@ function checkNumericPropertiesSafely(node, valueToVariableMap, results) {
         if (DEBUG) console.error('[SCAN ERROR] checkNumericPropertiesSafely:padding', { nodeId: node.id, nodeName: node.name, prop: paddingProp.name, error: paddingError });
       }
     }
+
+    // 3. Stroke Weight (Border Width)
+    try {
+      // Check if node supports strokeWeight
+      if ('strokeWeight' in node) {
+        // CAS 1: Non-mixed strokeWeight
+        if (typeof node.strokeWeight === 'number' && node.strokeWeight > 0) {
+          var strokeScopes = getScopesForPropertyKind(PropertyKind.STROKE_WEIGHT);
+          var strokeCheck = checkBinConformity('strokeWeight', strokeScopes);
+
+          if (!strokeCheck.isConform) {
+            var strokeSugg = findNumericSuggestionsV2(node.strokeWeight, contextModeId, strokeScopes, "Border Width", 5, node.type);
+
+            // Skip si déjà lié à une suggestion valide
+            if (strokeCheck.boundId && strokeSugg.some(function (s) { return s.id === strokeCheck.boundId; })) {
+              // Skip
+            } else {
+              var strokeStatus = strokeSugg.length > 0 ? IssueStatus.HAS_MATCHES : IssueStatus.NO_MATCH;
+
+              results.push(createScanIssue({
+                nodeId: node.id,
+                nodeName: node.name,
+                nodeType: node.type,
+                propertyKind: PropertyKind.STROKE_WEIGHT,
+                propertyKey: 'strokeWeight',
+                rawValue: node.strokeWeight,
+                rawValueType: ValueType.FLOAT,
+                contextModeId: contextModeId,
+                isBound: !!strokeCheck.boundId,
+                boundVariableId: strokeCheck.boundId,
+                requiredScopes: strokeScopes,
+                suggestions: strokeSugg,
+                status: strokeStatus,
+                property: "Border Width",
+                value: node.strokeWeight + "px",
+                figmaProperty: 'strokeWeight'
+              }));
+            }
+          }
+        }
+        // CAS 2: Mixed strokeWeight - scan individual sides
+        else if (node.strokeWeight === figma.mixed) {
+          var strokeSideProperties = [
+            { name: 'strokeTopWeight', displayName: 'Border Width Top', figmaProp: 'strokeTopWeight' },
+            { name: 'strokeRightWeight', displayName: 'Border Width Right', figmaProp: 'strokeRightWeight' },
+            { name: 'strokeBottomWeight', displayName: 'Border Width Bottom', figmaProp: 'strokeBottomWeight' },
+            { name: 'strokeLeftWeight', displayName: 'Border Width Left', figmaProp: 'strokeLeftWeight' }
+          ];
+
+          for (var sw = 0; sw < strokeSideProperties.length; sw++) {
+            try {
+              var strokeSideProp = strokeSideProperties[sw];
+              var strokeSideValue = node[strokeSideProp.name];
+
+              if (typeof strokeSideValue === 'number' && strokeSideValue > 0) {
+                var swScopes = getScopesForPropertyKind(PropertyKind.STROKE_WEIGHT);
+                var swCheck = checkBinConformity(strokeSideProp.figmaProp, swScopes);
+
+                if (!swCheck.isConform) {
+                  var swSugg = findNumericSuggestionsV2(strokeSideValue, contextModeId, swScopes, strokeSideProp.displayName, 5, node.type);
+
+                  // Skip si déjà lié à une suggestion valide
+                  if (swCheck.boundId && swSugg.some(function (s) { return s.id === swCheck.boundId; })) {
+                    continue;
+                  }
+
+                  var swStatus = swSugg.length > 0 ? IssueStatus.HAS_MATCHES : IssueStatus.NO_MATCH;
+
+                  results.push(createScanIssue({
+                    nodeId: node.id,
+                    nodeName: node.name,
+                    nodeType: node.type,
+                    propertyKind: PropertyKind.STROKE_WEIGHT,
+                    propertyKey: strokeSideProp.figmaProp,
+                    rawValue: strokeSideValue,
+                    rawValueType: ValueType.FLOAT,
+                    contextModeId: contextModeId,
+                    isBound: !!swCheck.boundId,
+                    boundVariableId: swCheck.boundId,
+                    requiredScopes: swScopes,
+                    suggestions: swSugg,
+                    status: swStatus,
+                    property: strokeSideProp.displayName,
+                    value: strokeSideValue + "px",
+                    figmaProperty: strokeSideProp.figmaProp
+                  }));
+                }
+              }
+            } catch (strokeSideError) {
+              if (DEBUG) console.error('[SCAN ERROR] checkNumericPropertiesSafely:strokeSide', { nodeId: node.id, nodeName: node.name, prop: strokeSideProp.name, error: strokeSideError });
+            }
+          }
+        }
+      }
+    } catch (strokeWeightError) {
+      if (DEBUG) console.error('[SCAN ERROR] checkNumericPropertiesSafely:strokeWeight', { nodeId: node.id, nodeName: node.name, error: strokeWeightError });
+    }
+
   } catch (numericError) {
     if (DEBUG) console.error('[SCAN ERROR] checkNumericPropertiesSafely', numericError);
   }
@@ -10287,7 +9949,7 @@ function scanSelection(ignoreHiddenLayers) {
     var selection = figma.currentPage.selection;
 
     if (!selection || !Array.isArray(selection)) {
-      figma.ui.postMessage({ type: "scan-results", results: [] });
+      postToUI({ type: "scan-results", results: [] });
       return [];
     }
 
@@ -10307,12 +9969,12 @@ function scanSelection(ignoreHiddenLayers) {
 
       if (!valueToVariableMap || valueToVariableMap.size === 0) {
         figma.notify("⚠️ Aucune variable trouvée dans le document");
-        figma.ui.postMessage({ type: "scan-results", results: [] });
+        postToUI({ type: "scan-results", results: [] });
         return [];
       }
     } catch (mapError) {
       figma.notify("❌ Erreur lors de l'accès aux variables");
-      figma.ui.postMessage({ type: "scan-results", results: [] });
+      postToUI({ type: "scan-results", results: [] });
       return [];
     }
 
@@ -10321,7 +9983,7 @@ function scanSelection(ignoreHiddenLayers) {
 
   } catch (scanError) {
     figma.notify("❌ Erreur critique lors de l'analyse - vérifiez la console pour les détails");
-    figma.ui.postMessage({ type: "scan-results", results: [] });
+    postToUI({ type: "scan-results", results: [] });
   }
 }
 
@@ -10335,7 +9997,7 @@ function scanPage(ignoreHiddenLayers) {
     var pageChildren = figma.currentPage.children;
 
     if (!pageChildren || !Array.isArray(pageChildren)) {
-      figma.ui.postMessage({ type: "scan-results", results: [] });
+      postToUI({ type: "scan-results", results: [] });
       return [];
     }
 
@@ -10345,12 +10007,12 @@ function scanPage(ignoreHiddenLayers) {
       valueToVariableMap = createValueToVariableMap();
       if (!valueToVariableMap || valueToVariableMap.size === 0) {
         figma.notify("⚠️ Aucune variable trouvée dans le document");
-        figma.ui.postMessage({ type: "scan-results", results: [] });
+        postToUI({ type: "scan-results", results: [] });
         return [];
       }
     } catch (mapError) {
       figma.notify("❌ Erreur lors de l'accès aux variables");
-      figma.ui.postMessage({ type: "scan-results", results: [] });
+      postToUI({ type: "scan-results", results: [] });
       return [];
     }
 
@@ -10359,7 +10021,7 @@ function scanPage(ignoreHiddenLayers) {
 
   } catch (pageScanError) {
     figma.notify("❌ Erreur lors du scan de page");
-    figma.ui.postMessage({ type: "scan-results", results: [] });
+    postToUI({ type: "scan-results", results: [] });
   }
 }
 
@@ -10371,7 +10033,7 @@ function startAsyncScan(nodes, valueToVariableMap, ignoreHiddenLayers) {
   var totalNodes = nodes.length;
 
 
-  figma.ui.postMessage({
+  postToUI({
     type: "scan-progress",
     progress: 0,
     total: totalNodes,
@@ -10405,7 +10067,7 @@ function startAsyncScan(nodes, valueToVariableMap, ignoreHiddenLayers) {
 
 
     var progress = (currentIndex / totalNodes) * 100;
-    figma.ui.postMessage({
+    postToUI({
       type: "scan-progress",
       progress: progress,
       current: currentIndex,
@@ -10448,7 +10110,7 @@ function finishScan(results) {
 
   setTimeout(function () {
 
-    figma.ui.postMessage({
+    postToUI({
       type: "scan-progress",
       progress: 100,
       status: "Analyse terminée"
@@ -10459,7 +10121,7 @@ function finishScan(results) {
       results.forEach(function (r) { assertNoUndefined(r, 'scan result'); });
     }
 
-    figma.ui.postMessage({
+    postToUI({
       type: "scan-results",
       results: results
     });
@@ -11135,6 +10797,15 @@ function validatePropertyExists(node, result) {
       case "Font Size":
         return node.type === "TEXT" && typeof node.fontSize === 'number';
 
+      case "Border Width":
+      case "Border Width Top":
+      case "Border Width Right":
+      case "Border Width Bottom":
+      case "Border Width Left":
+        // Vérifier que le nœud supporte strokeWeight
+        var swProp = result.figmaProperty || 'strokeWeight';
+        return swProp in node && typeof node[swProp] === 'number';
+
       default:
         return false;
     }
@@ -11172,6 +10843,13 @@ function validateVariableCanBeApplied(variable, result) {
         return variableType === "FLOAT";
 
       case "Font Size":
+        return variableType === "FLOAT";
+
+      case "Border Width":
+      case "Border Width Top":
+      case "Border Width Right":
+      case "Border Width Bottom":
+      case "Border Width Left":
         return variableType === "FLOAT";
 
       default:
@@ -11249,6 +10927,23 @@ async function applyVariableToProperty(node, variable, result) {
 
       case "Font Size":
         success = await applyNumericVariable(node, variable, result.figmaProperty, result.property, result);
+        break;
+
+      case "Border Width":
+      case "Border Width Top":
+      case "Border Width Right":
+      case "Border Width Bottom":
+      case "Border Width Left":
+        // Déterminer la figmaProperty si elle manque
+        var bwProp = result.figmaProperty || 'strokeWeight';
+        if (!bwProp || bwProp === 'strokeWeight') {
+          if (result.property === "Border Width") bwProp = "strokeWeight";
+          else if (result.property === "Border Width Top") bwProp = "strokeTopWeight";
+          else if (result.property === "Border Width Right") bwProp = "strokeRightWeight";
+          else if (result.property === "Border Width Bottom") bwProp = "strokeBottomWeight";
+          else if (result.property === "Border Width Left") bwProp = "strokeLeftWeight";
+        }
+        success = await applyNumericVariable(node, variable, bwProp, result.property, result);
         break;
 
       default:
@@ -11599,7 +11294,7 @@ function checkAndNotifySelection() {
 
   var selectionId = selection.map(function (n) { return n.id; }).sort().join('|');
 
-  figma.ui.postMessage({
+  postToUI({
     type: "selection-checked",
     hasSelection: hasValidSelection,
     selectedFrameName: selectedFrameName,
@@ -12211,6 +11906,65 @@ async function flattenSemanticTokensFromFigma(callsite) {
 
 
 /**
+ * debugParityReport: Diagnostics pour vérifier la parité Legacy/Core
+ * @param {object} tokens - L'objet tokens complet (legacy shape)
+ * @param {object} corePreset - Preset pour validation (optionnel)
+ */
+function debugParityReport(tokens, corePreset) {
+  corePreset = corePreset || CORE_PRESET_V1;
+  console.log('📊 [PARITY_REPORT] Starting diagnostic...');
+
+  // 1. Counts
+  var categories = ['brand', 'system', 'gray', 'spacing', 'radius', 'stroke', 'border', 'typography', 'semantic'];
+  var counts = {};
+  categories.forEach(function (cat) {
+    if (tokens[cat]) {
+      counts[cat] = Object.keys(tokens[cat]).length;
+    } else {
+      counts[cat] = 'MISSING';
+      console.warn(`⚠️ [PARITY] Missing category: ${cat}`);
+    }
+  });
+  console.log('📊 [PARITY_REPORT] Counts:', JSON.stringify(counts));
+
+  // 2. Type Checks (Primitives should be scalar)
+  var primitiveCats = ['brand', 'spacing', 'radius', 'stroke', 'border'];
+  primitiveCats.forEach(function (cat) {
+    if (!tokens[cat]) return;
+    var keys = Object.keys(tokens[cat]);
+    for (var i = 0; i < keys.length; i++) {
+      var k = keys[i];
+      var v = tokens[cat][k];
+      if (typeof v === 'object' && v !== null) {
+        console.warn(`⚠️ [PARITY] Object found in primitive ${cat}.${k} (expected scalar). Value:`, v);
+      }
+    }
+  });
+
+  // 3. Schema Diff (Semantics)
+  if (corePreset && corePreset.semanticSchema) {
+    var expected = corePreset.semanticSchema;
+    var generated = Object.keys(tokens.semantic || {});
+    var missing = expected.filter(function (k) { return generated.indexOf(k) === -1; });
+
+    if (missing.length > 0) {
+      console.error(`❌ [PARITY] Missing semantic keys (${missing.length}):`, missing.join(', '));
+    } else {
+      console.log('✅ [PARITY] All semantic keys present.');
+    }
+  }
+
+  // 4. Critical check: Border
+  if (!tokens.border || Object.keys(tokens.border).length === 0) {
+    console.error('❌ [PARITY] Border is empty! UI might break.');
+  } else {
+    console.log('✅ [PARITY] Border has ' + Object.keys(tokens.border).length + ' tokens.');
+  }
+
+  console.log('📊 [PARITY_REPORT] End.');
+}
+
+/**
  * projectCoreToLegacyShape: Adapter temporaire Core -> Legacy
  * Convertit les tokens Core (primitives + semantics multi-mode) vers le format legacy
  * @param {object} coreTokens - { primitives: {...}, semantics: {...} }
@@ -12228,10 +11982,80 @@ function projectCoreToLegacyShape(coreTokens, lib) {
     system: primitives.system || {},
     spacing: primitives.spacing || {},
     radius: primitives.radius || {},
+    stroke: primitives.stroke || {},
     typography: primitives.typography || {},
-    border: primitives.border || {},
+    border: {}, // Will be populated below
     semantic: {}
   };
+
+  // [FIX MUI] Nettoyage System -> Brand fusion & Border Injection
+  if (lib === 'mui') {
+    console.log('🔧 [MUI_FIX] Projecting legacy shape: Cleaning Brand & checking Border');
+    // 1. Nettoyer System colors qui auraient pu fuiter dans Brand
+    // (warning, success, error, info ne doivent pas être dans brand)
+    var systemKeys = ['success', 'warning', 'error', 'info'];
+    systemKeys.forEach(function (k) {
+      if (legacy.brand && legacy.brand[k]) {
+        delete legacy.brand[k];
+      }
+    });
+
+    // 2. Garantir la présence de Border (souvent manquant en MUI car pas de scale numérique standard)
+    // Si border est vide, on injecte un fallback
+    if (!legacy.border || Object.keys(legacy.border).length === 0) {
+      // Tenter de récupérer depuis primitives.stroke si disponible
+      if (primitives.stroke && Object.keys(primitives.stroke).length > 0) {
+        // ne rien faire, le bloc suivant (Border Compatibility Cheat) va s'en charger
+      } else {
+        // Injection force
+        legacy.border = {
+          '1': 1,
+          '2': 2,
+          '4': 4
+        };
+        // Si primitives.stroke existe mais n'a pas 1/2/4, on l'enrichit aussi pour cohérence mapping
+        if (!primitives.stroke) primitives.stroke = {};
+        primitives.stroke['1'] = 1;
+        primitives.stroke['2'] = 2;
+        primitives.stroke['4'] = 4;
+      }
+    }
+
+    // 3. Flatten System objects to scalars (fix [object Object] in UI)
+    // Source fix applied in generateCorePrimitives (hue normalization) - only flattening needed here
+    systemKeys.forEach(function (k) {
+      legacy.system[k] = flattenSystemColorValue(legacy.system[k], 'system.' + k);
+    });
+
+    // Also check brand for any objects
+    for (var bk in legacy.brand) {
+      legacy.brand[bk] = flattenSystemColorValue(legacy.brand[bk], 'brand.' + bk);
+    }
+  }
+
+  // Generic flattening for ALL libs (system colors are objects in most frameworks)
+  var systemCategories = ['success', 'warning', 'error', 'info'];
+  systemCategories.forEach(function (k) {
+    if (legacy.system && legacy.system[k] && typeof legacy.system[k] === 'object') {
+      legacy.system[k] = flattenSystemColorValue(legacy.system[k], 'system.' + k);
+    }
+  });
+
+  // ✅ BORDER COMPATIBILITY CHEAT
+  // L'UI attend primitives.border (legacy: 1, 2, 4)
+  // Core génère primitives.stroke (0, 1, 2, 4, 8)
+  // On mappe border vers les valeurs correspondantes de stroke
+  if (primitives.stroke) {
+    // Legacy border usually had keys "1", "2", "4" mapping to values "1", "2", "4" (or numbers)
+    // We try to find stroke keys that have these values.
+    // Core stroke keys match values (key '1' -> val 1).
+    if (primitives.stroke['1'] !== undefined) legacy.border['1'] = primitives.stroke['1'];
+    if (primitives.stroke['2'] !== undefined) legacy.border['2'] = primitives.stroke['2'];
+    if (primitives.stroke['4'] !== undefined) legacy.border['4'] = primitives.stroke['4'];
+  } else if (primitives.border) {
+    legacy.border = primitives.border;
+  }
+
 
   // Convertir les semantics multi-mode vers le format legacy
   // Le format legacy est déjà { key: { type, modes: {...} } } donc on préserve tel quel
@@ -12240,6 +12064,16 @@ function projectCoreToLegacyShape(coreTokens, lib) {
       legacy.semantic[key] = semantics[key];
     }
   }
+
+  // DEBUG: Log legacy shape before returning
+  console.log('📦 [LEGACY_SHAPE] Generated:', {
+    brand: legacy.brand ? Object.keys(legacy.brand).length : 0,
+    gray: legacy.gray ? Object.keys(legacy.gray).length : 0,
+    system: legacy.system ? Object.keys(legacy.system).length : 0,
+    spacing: legacy.spacing ? Object.keys(legacy.spacing).length : 0,
+    radius: legacy.radius ? Object.keys(legacy.radius).length : 0,
+    semantic: legacy.semantic ? Object.keys(legacy.semantic).length : 0
+  });
 
   return legacy;
 }
@@ -12827,7 +12661,7 @@ var CORE_PRESET_V1 = {
     letterSpacing: ['tighter', 'tight', 'normal', 'wide', 'wider', 'widest']
   },
 
-  // Schema sémantique: 75 tokens canoniques
+  // Schema sémantique: 80 tokens canoniques
   semanticSchema: [
     // Background (7)
     'bg.canvas', 'bg.surface', 'bg.elevated', 'bg.subtle', 'bg.muted', 'bg.accent', 'bg.inverse',
@@ -12864,10 +12698,12 @@ var CORE_PRESET_V1 = {
     // Radius (5)
     'radius.none', 'radius.sm', 'radius.md', 'radius.lg', 'radius.full',
     // Spacing (6)
-    'space.xs', 'space.sm', 'space.md', 'space.lg', 'space.xl', 'space.2xl'
+    'space.xs', 'space.sm', 'space.md', 'space.lg', 'space.xl', 'space.2xl',
+    // Stroke / Border Width (5)
+    'stroke.none', 'stroke.thin', 'stroke.default', 'stroke.thick', 'stroke.heavy'
   ],
 
-  // Règles de mapping sémantique (light/dark modes) - 75 tokens
+  // Règles de mapping sémantique (light/dark modes) - 80 tokens
   mappingRules: {
     // Background (7)
     'bg.canvas': { light: { category: 'gray', ref: '50' }, dark: { category: 'gray', ref: '950' } },
@@ -12976,7 +12812,14 @@ var CORE_PRESET_V1 = {
     'space.md': { light: { category: 'spacing', ref: '4' }, dark: { category: 'spacing', ref: '4' } },
     'space.lg': { light: { category: 'spacing', ref: '6' }, dark: { category: 'spacing', ref: '6' } },
     'space.xl': { light: { category: 'spacing', ref: '8' }, dark: { category: 'spacing', ref: '8' } },
-    'space.2xl': { light: { category: 'spacing', ref: '12' }, dark: { category: 'spacing', ref: '12' } }
+    'space.2xl': { light: { category: 'spacing', ref: '12' }, dark: { category: 'spacing', ref: '12' } },
+
+    // Stroke / Border Width (5) - refs must match primitivesSchema.borderWidth: ['0', '1', '2', '4', '8']
+    'stroke.none': { light: { category: 'stroke', ref: '0' }, dark: { category: 'stroke', ref: '0' } },
+    'stroke.thin': { light: { category: 'stroke', ref: '1' }, dark: { category: 'stroke', ref: '1' } },
+    'stroke.default': { light: { category: 'stroke', ref: '2' }, dark: { category: 'stroke', ref: '2' } },
+    'stroke.thick': { light: { category: 'stroke', ref: '4' }, dark: { category: 'stroke', ref: '4' } },
+    'stroke.heavy': { light: { category: 'stroke', ref: '8' }, dark: { category: 'stroke', ref: '8' } }
   },
 
   // Règles d'accessibilité RGAA AA
@@ -13006,6 +12849,7 @@ function generateCorePrimitives(primaryColor, options, corePreset) {
     system: {},
     spacing: {},
     radius: {},
+    stroke: {},
     typography: {}
   };
 
@@ -13071,7 +12915,7 @@ function generateCorePrimitives(primaryColor, options, corePreset) {
           }
 
           primitives.system[colorName][sysStop] = ColorService.hslToHex({
-            h: baseHue,
+            h: baseHue / 360,  // Normalize degrees (0-360) to 0-1
             s: sysSat,
             l: sysLight
           });
@@ -13093,6 +12937,14 @@ function generateCorePrimitives(primaryColor, options, corePreset) {
   for (var r = 0; r < radiusKeys.length; r++) {
     var rKey = radiusKeys[r];
     primitives.radius[rKey] = radiusMap[rKey] || 0;
+  }
+
+  // Stroke / Border Width (valeurs en px)
+  // Using borderWidth from schema: ['0', '1', '2', '4', '8']
+  var strokeWidths = corePreset.primitivesSchema.borderWidth || ['0', '1', '2', '3', '4'];
+  for (var bw = 0; bw < strokeWidths.length; bw++) {
+    var bwKey = strokeWidths[bw];
+    primitives.stroke[bwKey] = parseInt(bwKey) || 0;
   }
 
   // Typography
@@ -13131,14 +12983,23 @@ function generateCoreSemantics(primitives, corePreset, options) {
     var semanticKey = schema[i];
     var rule = mappingRules[semanticKey];
 
+    // DEBUG: Log stroke tokens
+    if (semanticKey.indexOf('stroke.') === 0) {
+      console.log('[STROKE_DEBUG] Processing:', semanticKey, 'Rule:', JSON.stringify(rule), 'Primitives.stroke:', JSON.stringify(primitives.stroke));
+    }
+
     if (!rule) {
       // Pas de règle définie, skip
+      if (semanticKey.indexOf('stroke.') === 0) {
+        console.warn('[STROKE_DEBUG] No rule for:', semanticKey);
+      }
       continue;
     }
 
     // Déterminer le type (COLOR ou FLOAT)
     var tokenType = 'COLOR';
     if (semanticKey.indexOf('radius.') === 0 || semanticKey.indexOf('space.') === 0 ||
+      semanticKey.indexOf('stroke.') === 0 ||
       semanticKey.indexOf('font.size') === 0 || semanticKey.indexOf('font.weight') === 0) {
       tokenType = 'FLOAT';
     }
@@ -13352,3 +13213,44 @@ function validateAndAdjustForRgaa(coreTokens, corePreset) {
 }
 
 // Force update check
+
+/* ============================================================================
+   MUI SYSTEM TEST v2
+   ============================================================================ */
+function runMuiSystemValidation() {
+  try {
+    console.log("🧪 [TEST] Running MUI System Validation v2...");
+    var primary = "#4F46E5"; // Indigo
+    var dummyPrims = generateCorePrimitives(primary, { naming: 'mui' }, CORE_PRESET_V1);
+    var dummySem = generateCoreSemantics(dummyPrims, CORE_PRESET_V1, { naming: 'mui' });
+    var legacy = projectCoreToLegacyShape({ primitives: dummyPrims, semantics: dummySem }, 'mui');
+
+    var success = legacy.system['success'];
+    var warning = legacy.system['warning'];
+    var info = legacy.system['info'];
+    var error = legacy.system['error'];
+    var gray900 = dummyPrims.gray['900'];
+
+    console.log('🧪 [TEST] Results - Success: ' + success + ', Warning: ' + warning + ', Info: ' + info + ', Error: ' + error);
+    console.log('🧪 [TEST] Gray 900 reference: ' + gray900);
+
+    // Check if distinct and colorful
+    var colors = [success, warning, info, error];
+    var unique = colors.filter(function (v, i, a) { return a.indexOf(v) === i; });
+
+    if (unique.length < 4) {
+      console.error("❌ [TEST] Collision detected in system tokens! Some are identical.");
+    }
+
+    if (success === gray900 || warning === gray900 || info === gray900) {
+      console.error("❌ [TEST] System tokens ARE STILL GRAY! Fix failed.");
+    } else {
+      console.log("✅ [TEST] MUI System tokens are COLORFUL and DISTINCT.");
+    }
+  } catch (e) {
+    console.error("❌ [TEST] Fatal error during validation:", e);
+  }
+}
+
+// Auto-run test at startup
+setTimeout(runMuiSystemValidation, 1500);

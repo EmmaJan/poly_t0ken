@@ -4141,10 +4141,10 @@
           <div class="color-input-group" style="margin-bottom: 12px;">
             <div class="color-preview">
               <div class="color-preview-bg" id="colorPreviewBg"></div>
-              <input type="color" id="colorPicker" value="#6366F1">
+              <input type="color" id="colorPicker" value="#4F46E5">
             </div>
             <div class="color-input-wrapper">
-              <input type="text" id="colorInput" value="#6366F1" placeholder="#6366F1">
+              <input type="text" id="colorInput" value="#4F46E5" placeholder="#4F46E5">
             </div>
             <button class="btn-secondary" id="randomBtn">Random</button>
           </div>
@@ -4321,7 +4321,7 @@
                 <label style="margin: 0; font-size: 10px; cursor: pointer;" for="dashboardColorPicker">Primary
                   Color</label>
                 <div id="dashboardColorValue" style="font-family: monospace; font-size: 12px; color: var(--poly-text);">
-                  #6366F1</div>
+                  #4F46E5</div>
               </div>
             </div>
 
@@ -4549,7 +4549,7 @@
         <label>Token Name</label>
         <input type="text" id="modalTokenName" placeholder="e.g., primary-500">
         <label>Token Value</label>
-        <input type="text" id="modalTokenValue" placeholder="e.g., #6366F1">
+        <input type="text" id="modalTokenValue" placeholder="e.g., #4F46E5">
         <div class="modal-actions">
           <button class="btn-secondary" onclick="closeModal()" style="flex: 1;">Cancel</button>
           <button id="modalSaveBtn" onclick="saveToken()" style="flex: 1;">Save</button>
@@ -4581,7 +4581,7 @@
     // ============================================
     // STATE
     // ============================================
-    var currentColor = "#6366F1";
+    var currentColor = "#4F46E5";
     var currentNaming = "custom"; // Valeur par défaut
     var currentTokens = null;
     // semanticPreview supprimé - les sémantiques sont maintenant affichées comme les primitives
@@ -4964,7 +4964,7 @@
     }
 
     function resetWizard() {
-      currentColor = "#6366F1";
+      currentColor = "#4F46E5";
       currentNaming = "";
       currentTokens = null;
       selectedFile = null;
@@ -5184,7 +5184,7 @@
     // Mise à jour de l'aperçu accessibilité
     function updateA11yPreview(primaryColor) {
       if (!primaryColor || !primaryColor.startsWith('#')) {
-        primaryColor = currentColor || '#6366F1';
+        primaryColor = currentColor || '#4F46E5';
       }
 
       // ✨ Mémoriser la couleur vérifiée
@@ -5688,7 +5688,7 @@
 
     function updateTokenPreview(primaryColor) {
       if (!primaryColor || !primaryColor.startsWith('#')) {
-        primaryColor = currentColor || '#6366F1';
+        primaryColor = currentColor || '#4F46E5';
       }
 
       // Déterminer le mode actuel (Light/Dark/Both)
@@ -5874,17 +5874,46 @@
       });
     });
 
-    step2Generate.addEventListener("click", function () {
-      // Send message to plugin to generate tokens
-      parent.postMessage({
-        pluginMessage: {
-          type: "generate",
-          color: currentColor,
-          naming: currentNaming,
-          themeMode: currentThemeMode
-        }
-      }, "*");
-    });
+    if (step2Generate) {
+      step2Generate.addEventListener("click", function () {
+        console.log("[UI] step2Generate clicked", { currentColor, currentNaming, currentThemeMode });
+
+        // Visual feedback
+        var originalText = step2Generate.innerText;
+        step2Generate.innerText = "Génération...";
+        step2Generate.disabled = true;
+
+        // Send message to plugin to generate tokens
+        parent.postMessage({
+          pluginMessage: {
+            type: "generate",
+            color: currentColor,
+            naming: currentNaming,
+            themeMode: currentThemeMode
+          }
+        }, "*");
+
+        // Acknowledge listener (auto-remove after success/error)
+        var ackListener = function (event) {
+          var msg = event.data.pluginMessage;
+          if (!msg) return;
+
+          if (msg.type === 'tokens-generated' || msg.type === 'generate-error') {
+            step2Generate.innerText = originalText;
+            step2Generate.disabled = false;
+            window.removeEventListener('message', ackListener);
+
+            if (msg.type === 'generate-error') {
+              console.error("[UI] Generation failed:", msg.message);
+              alert("Erreur: " + msg.message);
+            }
+          }
+        };
+        window.addEventListener('message', ackListener);
+      });
+    } else {
+      console.error("[UI] step2Generate button not found in DOM");
+    }
 
     // ============================================
     // VUE 3: RÉSULTAT - Event Listeners
@@ -10246,6 +10275,34 @@
     }
 
     // Helpers pour harmoniser l'affichage de tous les types de tokens
+    function flattenSystemColorValue(value, key) {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+
+      var chosenValue = null;
+      // Priority order: main > 500 > 600 > light > dark > first scalar
+      if (value.main) chosenValue = value.main;
+      else if (value['500']) chosenValue = value['500'];
+      else if (value['600']) chosenValue = value['600'];
+      else if (value[500]) chosenValue = value[500];
+      else if (value[600]) chosenValue = value[600];
+      else if (value.light) chosenValue = value.light;
+      else if (value.dark) chosenValue = value.dark;
+      else {
+        var keys = Object.keys(value);
+        for (var i = 0; i < keys.length; i++) {
+          var v = value[keys[i]];
+          if (typeof v === 'string' || typeof v === 'number') {
+            chosenValue = v;
+            break;
+          }
+        }
+      }
+
+      if (chosenValue && chosenValue !== value) {
+        return chosenValue;
+      }
+      return value;
+    }
     function getTokenDisplayValue(token) {
       if (token === null || token === undefined) return "";
 
@@ -10294,6 +10351,7 @@
 
     function getTokenColorValue(token) {
       if (token === null || token === undefined) return "#000000";
+      token = flattenSystemColorValue(token);
       // Pour les tokens sémantiques modernes
       if (typeof token === 'object' && token.resolvedValue !== undefined) {
         // 🔥 CORRECTION : Si un alias existe, résoudre la couleur depuis les primitives
@@ -10404,6 +10462,14 @@
 
       // Valeur propre (jamais de HTML)
       var resolvedValue = getTokenDisplayValue(value);
+
+      // UI Guard: MUI system color must be scalar
+      if (currentNaming === 'mui' && activeCategory === 'system') {
+        if (typeof value === 'object') {
+          console.warn("⚠️ [MUI_GUARD] Object found for system color:", key);
+          resolvedValue = "—";
+        }
+      }
       input.value = resolvedValue || '';
 
       // Gestion de l'édition
@@ -10901,31 +10967,44 @@
      * @returns {Object} { value, valueKind, meta }
      */
     function getSemanticScalar(semanticToken, options) {
+      if (!semanticToken) return { value: null, valueKind: "unresolved", meta: {} };
+
+      // ✅ FIX: Prise en charge de la structure multi-mode
+      var resolvedValue = semanticToken.resolvedValue;
+      var aliasTo = semanticToken.aliasTo;
+
+      if (semanticToken.modes && (!resolvedValue && !aliasTo)) {
+        var mode = (options && options.theme) || (typeof previewTheme !== 'undefined' ? previewTheme : 'light');
+        var modeData = semanticToken.modes[mode] || semanticToken.modes.light || {};
+        resolvedValue = modeData.resolvedValue;
+        aliasTo = modeData.aliasTo;
+      }
+
       var result = {
         value: null,
         valueKind: "unresolved",
         meta: {
-          aliasTo: semanticToken.aliasTo || null,
-          resolvedFrom: semanticToken.resolvedValue || null
+          aliasTo: aliasTo || null,
+          resolvedFrom: resolvedValue || null
         }
       };
 
       // RÈGLE D'OR : Si aliasTo existe, retourner une référence string stable
-      if (semanticToken.aliasTo) {
-        var stringRef = aliasToStringRef(semanticToken.aliasTo, options);
+      if (aliasTo) {
+        var stringRef = aliasToStringRef(aliasTo, options);
         if (stringRef) {
           result.value = stringRef;
           result.valueKind = "alias";
-          result.meta.aliasTo = semanticToken.aliasTo; // Conserver les métadonnées
+          result.meta.aliasTo = aliasTo; // Conserver les métadonnées
           return result;
         } else {
-          console.warn(`⚠️ Could not generate string reference for aliasTo:`, semanticToken.aliasTo);
+          console.warn(`⚠️ Could not generate string reference for aliasTo:`, aliasTo);
           // Fallback vers resolvedValue
         }
       }
 
       // NOUVELLE RÈGLE : Si resolvedValue est une valeur scalaire, chercher une primitive correspondante (couleurs, spacing, radius)
-      var scalarValue = toScalar(semanticToken.resolvedValue);
+      var scalarValue = toScalar(resolvedValue);
       if (scalarValue !== null) {
         // Si on a des primitives disponibles pour la recherche
         if (options && options.primitivesObj) {
