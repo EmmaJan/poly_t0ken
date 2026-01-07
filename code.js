@@ -1,8 +1,7 @@
 
-
-
 // Plugin startup verification - verified manually: 0 occurrences of variable.scopes = assignments
-(function () { return function () { } })() && console.log("✅ Plugin initialized: scopes use setScopes() method only");
+// P1-A: Startup logs always shown (important for debugging plugin initialization)
+console.log("✅ Plugin initialized: scopes use setScopes() method only");
 console.log("✅ Using V2 scan functions (mode-aware, ValueType.FLOAT, strict scoping)");
 
 // ============================================================================
@@ -21,10 +20,9 @@ console.log("✅ Using V2 scan functions (mode-aware, ValueType.FLOAT, strict sc
 //
 // Voir LEGACY_ENGINE_DECISION.md pour détails
 const USE_CORE_ENGINE = true;
-const DEBUG = true; // Master debug flag (consolidates DEBUG_TOKENS + DEBUG_SCOPES_SCAN)
+const DEBUG = false; // Master debug flag - set to true for development/testing
 
-// Legacy flags (kept for compatibility, but use DEBUG instead)
-const DEBUG_TOKENS = DEBUG;
+// Legacy flag (kept for compatibility, DEBUG_SCOPES_SCAN still used in 10 places)
 const DEBUG_SCOPES_SCAN = DEBUG;
 
 // Self-test au démarrage (si DEBUG activé)
@@ -36,6 +34,60 @@ if (DEBUG && typeof validateScopesAndFiltering !== 'undefined') {
     console.warn('⚠️ Self-test skipped (function not yet defined):', e.message);
   }
 }
+
+// ============================================================================
+// MESSAGE TYPES (P2: Centralized documentation of all UI↔Plugin messages)
+// ============================================================================
+// UI → Plugin (requests)
+var MSG = {
+  // Scan actions
+  SCAN_SELECTION: 'scan-selection',
+  SCAN_PAGE: 'scan-page',
+  SCAN_FRAME: 'scan-frame',
+  CHECK_SELECTION: 'check-selection',
+
+  // Token generation & import
+  GENERATE: 'generate',  // ⚡ CANONICAL
+  GENERATE_TOKENS: 'generate-tokens',  // LEGACY ALIAS
+  IMPORT: 'import',  // ⚡ CANONICAL
+  IMPORT_TOKENS: 'import-tokens',  // LEGACY ALIAS
+  IMPORT_FROM_FILE: 'import-from-file',
+
+  // Fix application
+  APPLY_SINGLE_FIX: 'apply-single-fix',
+  APPLY_GROUP_FIX: 'apply-group-fix',
+  APPLY_ALL_FIXES: 'apply-all-fixes',
+
+  // Preview & Rollback
+  PREVIEW_FIX: 'preview-fix',
+  ROLLBACK_PREVIEW: 'rollback-preview',  // ⚡ CANONICAL
+  CLEAR_PREVIEW: 'clear-preview',  // LEGACY ALIAS
+
+  // Settings
+  SAVE_NAMING: 'save-naming',
+  SAVE_THEME_MODE: 'save-theme-mode',
+  RESIZE: 'resize',
+
+  // Misc
+  REHYDRATE_SEMANTIC_ALIASES: 'rehydrate-semantic-aliases',
+  SYNC_SCAN_RESULTS: 'sync-scan-results',
+  HIGHLIGHT_NODES: 'highlight-nodes'
+};
+
+// Plugin → UI (responses)
+var MSG_RESPONSE = {
+  EXISTING_TOKENS: 'existing-tokens',
+  TOKENS_GENERATED: 'tokens-generated',
+  SCAN_RESULTS: 'scan-results',
+  SCAN_PROGRESS: 'scan-progress',
+  SINGLE_FIX_APPLIED: 'single-fix-applied',
+  GROUP_FIX_APPLIED: 'group-fix-applied',
+  ALL_FIXES_APPLIED: 'all-fixes-applied',
+  ROLLBACK_COMPLETE: 'rollback-complete',
+  IMPORT_COMPLETED: 'import-completed',
+  SEMANTIC_TOKENS_REHYDRATED: 'semantic-tokens-rehydrated',
+  ERROR: 'error'
+};
 
 // ============================================================================
 // UTILITY HELPERS
@@ -53,11 +105,6 @@ function safeStringify(obj, maxLen) {
 function debugLog(label, payload) {
   if (!DEBUG) return;
   console.log('🔍 [DEBUG] ' + label + ':', safeStringify(payload, 3000));
-}
-
-// Legacy wrapper (kept for compatibility)
-function debugTokens(label, payload) {
-  debugLog(label, payload);
 }
 
 // ============================================================================
@@ -295,7 +342,6 @@ var ValueType = {
 // GLOBAL SCAN SETTINGS
 const SCAN_ALLOW_PRIMITIVES = false;
 
-
 // ============================================================================
 // SCOPE MAPPING HELPER
 // ============================================================================
@@ -347,7 +393,7 @@ function saveNamingToFile(naming) {
     figma.root.setPluginData("tokenStarter.naming", naming);
     // Sauvegarde dans clientStorage pour l'async (fire-and-forget)
     figma.clientStorage.setAsync("tokenStarter.naming", naming).catch(function () { });
-    (function () { return function () { } })() && console.log('💾 Saved naming to both storages:', naming);
+    if (DEBUG) console.log('💾 Saved naming to both storages:', naming);
   } catch (e) {
     console.warn('Could not save naming:', e);
   }
@@ -565,7 +611,6 @@ function saveSemanticTokensToFile(semanticTokens, callsite) {
   }
 }
 
-
 /**
  * Normalise aliasTo vers le format standard exploitable par l'UI/export
  * @param {string|object} aliasTo - aliasTo existant (string ID ou objet normalisé)
@@ -624,7 +669,6 @@ function resolveVariableIdToAliasDescriptor(variableId, collections) {
     }
 
     if (!variable) {
-      // (function () { return function () { } })() && console.warn('⚠️ resolveVariableIdToAliasDescriptor: variableId non trouvé:', variableId);
       return null;
     }
 
@@ -720,7 +764,7 @@ function getSemanticTokensFromFile(callsite) {
         if (typeof tokenData === 'object' && tokenData.modes && (tokenData.modes.light || tokenData.modes.dark)) {
           // Token multi-mode : préserver tel quel
           migratedTokens[key] = tokenData;
-          (function () { return function () { } })() && console.log(`✅ [LOAD] ${key}: preserved multi-mode structure`);
+          if (DEBUG) console.log(`✅ [LOAD] ${key}: preserved multi-mode structure`);
         }
         // Format normalisé (single-mode)
         else if (typeof tokenData === 'object' && tokenData.resolvedValue !== undefined) {
@@ -748,7 +792,7 @@ function getSemanticTokensFromFile(callsite) {
             // Convertir les noms complets en catégories canoniques
             var canonicalCollection = getCategoryFromVariableCollection(aliasTo.collection);
             if (canonicalCollection !== aliasTo.collection) {
-              (function () { return function () { } })() && console.log(`🔄[MIGRATE] Normalized alias collection: ${aliasTo.collection} → ${canonicalCollection} for ${key}`);
+              if (DEBUG) console.log(`🔄[MIGRATE] Normalized alias collection: ${aliasTo.collection} → ${canonicalCollection} for ${key}`);
               aliasTo.collection = canonicalCollection;
             }
           }
@@ -759,7 +803,7 @@ function getSemanticTokensFromFile(callsite) {
         else valueCount++;
       }
 
-      (function () { return function () { } })() && console.log(`📂 SEMANTIC_LOAD[${callsite || 'UNK'}]: Total ${Object.keys(migratedTokens).length} | Resolved: ${aliasCount} | Unresolved: ${unresolvedCount} | Values: ${valueCount} `);
+      if (DEBUG) console.log(`📂 SEMANTIC_LOAD[${callsite || 'UNK'}]: Total ${Object.keys(migratedTokens).length} | Resolved: ${aliasCount} | Unresolved: ${unresolvedCount} | Values: ${valueCount} `);
 
       // Diagnostic des tokens chargés
       diagnoseSemanticTokens({ semantic: migratedTokens }, 'LOAD_' + (callsite || 'UNK'));
@@ -821,7 +865,7 @@ async function getSemanticTokensFromFileAsync(callsite) {
   }
 
   if (progression) {
-    (function () { return function () { } })() && console.log(`✨ SEMANTIC_LOAD_ASYNC: Progression achieved, some aliases resolved.`);
+    if (DEBUG) console.log(`✨ SEMANTIC_LOAD_ASYNC: Progression achieved, some aliases resolved.`);
   }
   return tokens;
 }
@@ -830,7 +874,7 @@ async function getSemanticTokensFromFileAsync(callsite) {
  * Tente de re-lier les alias non résolus (Lazy Rebind)
  */
 async function rehydrateSemanticAliases() {
-  (function () { return function () { } })() && console.log("🔄 [REHYDRATE] Starting lazy rebind of semantic aliases...");
+  if (DEBUG) console.log("🔄 [REHYDRATE] Starting lazy rebind of semantic aliases...");
   const tokens = await getSemanticTokensFromFileAsync('REHYDRATE_TASK');
   if (tokens) {
     // On ne sauvegarde que si on a des données valides pour ne pas corrompre
@@ -845,7 +889,6 @@ async function rehydrateSemanticAliases() {
   }
   return null;
 }
-
 
 /**
  * Charge les tokens primitifs depuis le stockage persistant
@@ -874,9 +917,9 @@ function getPrimitivesTokensFromFile(callsite) {
         categoryStats.push(`${category}: ${tokenCount} tokens(${keys.join(', ')}${Object.keys(categoryTokens).length > 5 ? '...' : ''})`);
       }
 
-      (function () { return function () { } })() && console.log(`📖 LOAD_PRIMITIVES[${callsite}]: ${totalCategories} categories, ${totalTokens} total tokens`);
+      if (DEBUG) console.log(`📖 LOAD_PRIMITIVES[${callsite}]: ${totalCategories} categories, ${totalTokens} total tokens`);
       if (categoryStats.length > 0) {
-        (function () { return function () { } })() && console.log(`📖 LOAD_PRIMITIVES[${callsite}]: Details - ${categoryStats.join(' | ')} `);
+        if (DEBUG) console.log(`📖 LOAD_PRIMITIVES[${callsite}]: Details - ${categoryStats.join(' | ')} `);
       }
 
       return primitivesTokens;
@@ -937,9 +980,9 @@ function savePrimitivesTokensToFile(primitivesTokens, callsite) {
       var primitivesData = JSON.stringify(primitivesTokens);
       figma.root.setPluginData("tokenStarter.primitives", primitivesData);
 
-      (function () { return function () { } })() && console.log(`💾 SAVE_PRIMITIVES[${callsite}]: ${totalCategories} categories, ${totalTokens} total tokens`);
+      if (DEBUG) console.log(`💾 SAVE_PRIMITIVES[${callsite}]: ${totalCategories} categories, ${totalTokens} total tokens`);
       if (categoryStats.length > 0) {
-        (function () { return function () { } })() && console.log(`💾 SAVE_PRIMITIVES[${callsite}]: Details - ${categoryStats.join(' | ')} `);
+        if (DEBUG) console.log(`💾 SAVE_PRIMITIVES[${callsite}]: Details - ${categoryStats.join(' | ')} `);
       }
     }
   } catch (e) {
@@ -962,7 +1005,6 @@ async function getNamingFromFile() {
     return "custom";
   }
 }
-
 
 // Fonction helper pour convertir une valeur Figma en format affichable
 function convertFigmaValueToDisplay(figmaValue, tokenType) {
@@ -990,7 +1032,6 @@ function convertFigmaValueToDisplay(figmaValue, tokenType) {
 
   return (typeof figmaValue === 'string' || typeof figmaValue === 'number') ? figmaValue : null;
 }
-
 
 // Fonction pour détecter les valeurs fallback UI qui ne doivent pas être sauvegardées
 function isUIFallbackValue(value, tokenType) {
@@ -1102,7 +1143,6 @@ var CONFIG = {
 
   DEBUG_MODE: true,
 
-
   types: {
     SOLID: 'SOLID',
     VARIABLE_ALIAS: 'VARIABLE_ALIAS',
@@ -1121,7 +1161,6 @@ var CONFIG = {
     COMPONENT_SET: 'COMPONENT_SET'
   },
 
-
   properties: {
     FILL: 'Fill',
     STROKE: 'Stroke',
@@ -1131,13 +1170,11 @@ var CONFIG = {
     HEIGHT: 'Height'
   },
 
-
   variableTypes: {
     COLOR: 'COLOR',
     FLOAT: 'FLOAT',
     STRING: 'STRING'
   },
-
 
   limits: {
     MAX_DEPTH: 50,
@@ -1145,14 +1182,12 @@ var CONFIG = {
     MAX_HEIGHT: 1400
   },
 
-
   supportedTypes: {
     radius: ['FRAME', 'RECTANGLE', 'ELLIPSE', 'POLYGON', 'STAR', 'VECTOR', 'COMPONENT', 'INSTANCE'],
     fillAndStroke: ['FRAME', 'RECTANGLE', 'ELLIPSE', 'POLYGON', 'STAR', 'VECTOR', 'TEXT', 'COMPONENT', 'INSTANCE', 'LINE'],
     spacing: ['FRAME', 'GROUP', 'SECTION', 'COMPONENT', 'INSTANCE', 'COMPONENT_SET'],
     all: ['FRAME', 'RECTANGLE', 'ELLIPSE', 'POLYGON', 'STAR', 'VECTOR', 'TEXT', 'COMPONENT', 'INSTANCE', 'LINE', 'GROUP', 'SECTION', 'COMPONENT_SET']
   },
-
 
   scopes: {
     Fill: ['ALL_FILLS', 'FRAME_FILL', 'SHAPE_FILL', 'TEXT_FILL'],
@@ -1170,11 +1205,9 @@ var CONFIG = {
     'Font Size': ['FONT_SIZE']
   },
 
-
   layoutModes: {
     NONE: 'NONE'
   },
-
 
   categories: {
     brand: 'brand',
@@ -1186,7 +1219,6 @@ var CONFIG = {
     border: 'border',
     semantic: 'semantic'
   },
-
 
   naming: {
     shadcn: 'shadcn',
@@ -1379,7 +1411,7 @@ function tintPalette(palette, brandColor, options) {
  * Strict hierarchy enforcement
  */
 function mapSemanticTokens(palettes, preset, options) {
-  (function () { return function () { } })() && console.log("Step 4: Mapping Semantics (Strict Mode)");
+  if (DEBUG) console.log("Step 4: Mapping Semantics (Strict Mode)");
 
   // Define the mandatory semantic tokens list (Source of Truth)
   var semanticKeys = [
@@ -1418,19 +1450,26 @@ function mapSemanticTokens(palettes, preset, options) {
     border: ['border.default', 'border.muted', 'border.accent', 'border.focus']
   };
 
-  // User Rules for BG:
-  // Light: Canvas < Surface < Elevated < Subtle < Muted < Accent < Inverse
-  // Dark: Canvas < Surface < Elevated < Subtle < Muted < Accent < Inverse (Inverted Intensity)
+  // User Rules for BG (Intensity):
+  // Light: Surface (50) < Canvas (100) < Elevated (200) < Muted (300)
+  // Dark: Surface (950) > Canvas (900) > Elevated (800) > Muted (700)
 
   function getStandardMapping(key) {
     // ⚠️ CRITICAL: This mapping is CANONICAL and WCAG AA validated (75 tokens)
     // DO NOT MODIFY without validating contrast ratios (≥4.5:1 text, ≥3:1 UI)
+    //
+    // P2 NOTE: This function and CORE_PRESET_V1.mappingRules (L12757) contain the same data
+    // in different formats. When updating mappings, BOTH must be synchronized:
+    // - getStandardMapping: returns { category, light, dark, type }
+    // - CORE_PRESET_V1.mappingRules: returns { light: { category, ref }, dark: { category, ref } }
+    // TODO: Future refactor should unify to a single source of truth.
 
     // Returns { category, light, dark, type }
 
     // --- BACKGROUND (7) ---
-    if (key === 'bg.canvas') return { category: 'gray', light: '50', dark: '950', type: 'COLOR' };
-    if (key === 'bg.surface') return { category: 'gray', light: '100', dark: '900', type: 'COLOR' };
+    // NOTE: bg.canvas is DARKER than bg.surface (canvas=100, surface=50)
+    if (key === 'bg.canvas') return { category: 'gray', light: '100', dark: '900', type: 'COLOR' };
+    if (key === 'bg.surface') return { category: 'gray', light: '50', dark: '950', type: 'COLOR' };
     if (key === 'bg.elevated') return { category: 'gray', light: '200', dark: '800', type: 'COLOR' };
     if (key === 'bg.subtle') return { category: 'gray', light: '100', dark: '800', type: 'COLOR' };
     if (key === 'bg.muted') return { category: 'gray', light: '300', dark: '700', type: 'COLOR' };
@@ -1447,24 +1486,24 @@ function mapSemanticTokens(palettes, preset, options) {
     if (key === 'text.link') return { category: 'brand', light: '500', dark: '300', type: 'COLOR' };
     if (key === 'text.accent') return { category: 'brand', light: '600', dark: '400', type: 'COLOR' };
     if (key === 'text.inverse') return { category: 'gray', light: '50', dark: '950', type: 'COLOR' };
-    if (key === 'text.success') return { category: 'success', light: '700', dark: '400', type: 'COLOR' };
-    if (key === 'text.warning') return { category: 'warning', light: '700', dark: '400', type: 'COLOR' };
-    if (key === 'text.error') return { category: 'error', light: '700', dark: '400', type: 'COLOR' };
+    if (key === 'text.success') return { category: 'system.success', light: '700', dark: '400', type: 'COLOR' };
+    if (key === 'text.warning') return { category: 'system.warning', light: '700', dark: '400', type: 'COLOR' };
+    if (key === 'text.error') return { category: 'system.error', light: '700', dark: '400', type: 'COLOR' };
 
     // --- BORDER (6) ---
     if (key === 'border.default') return { category: 'gray', light: '200', dark: '800', type: 'COLOR' };
     if (key === 'border.muted') return { category: 'gray', light: '100', dark: '900', type: 'COLOR' };
-    if (key === 'border.subtle') return { category: 'gray', light: '100', dark: '850', type: 'COLOR' };
+    if (key === 'border.subtle') return { category: 'gray', light: '100', dark: '900', type: 'COLOR' };
     if (key === 'border.accent') return { category: 'brand', light: '200', dark: '500', type: 'COLOR' };
     if (key === 'border.focus') return { category: 'brand', light: '500', dark: '400', type: 'COLOR' };
-    if (key === 'border.error') return { category: 'error', light: '500', dark: '500', type: 'COLOR' };
+    if (key === 'border.error') return { category: 'system.error', light: '500', dark: '500', type: 'COLOR' };
 
     // --- DIVIDER (1) ---
     if (key === 'divider.default') return { category: 'gray', light: '200', dark: '700', type: 'COLOR' };
 
     // --- RING (2) ---
     if (key === 'ring.focus') return { category: 'brand', light: '500', dark: '400', type: 'COLOR' };
-    if (key === 'ring.error') return { category: 'error', light: '500', dark: '500', type: 'COLOR' };
+    if (key === 'ring.error') return { category: 'system.error', light: '500', dark: '500', type: 'COLOR' };
 
     // --- ON - contrast text (2) ---
     if (key === 'on.primary') return { category: 'gray', light: '50', dark: '50', type: 'COLOR' };
@@ -1488,35 +1527,35 @@ function mapSemanticTokens(palettes, preset, options) {
     if (key === 'action.tertiary.default') return { category: 'gray', light: '50', dark: '900', type: 'COLOR' };
     if (key === 'action.tertiary.hover') return { category: 'gray', light: '100', dark: '800', type: 'COLOR' };
     if (key === 'action.tertiary.active') return { category: 'gray', light: '200', dark: '700', type: 'COLOR' };
-    if (key === 'action.tertiary.disabled') return { category: 'gray', light: '100', dark: '850', type: 'COLOR' };
+    if (key === 'action.tertiary.disabled') return { category: 'gray', light: '100', dark: '900', type: 'COLOR' };
     if (key === 'action.tertiary.text') return { category: 'brand', light: '600', dark: '400', type: 'COLOR' };
 
     // --- ACTION DESTRUCTIVE (5) ---
-    if (key === 'action.destructive.default') return { category: 'error', light: '600', dark: '600', type: 'COLOR' };
-    if (key === 'action.destructive.hover') return { category: 'error', light: '700', dark: '500', type: 'COLOR' };
-    if (key === 'action.destructive.active') return { category: 'error', light: '800', dark: '400', type: 'COLOR' };
+    if (key === 'action.destructive.default') return { category: 'system.error', light: '600', dark: '600', type: 'COLOR' };
+    if (key === 'action.destructive.hover') return { category: 'system.error', light: '700', dark: '500', type: 'COLOR' };
+    if (key === 'action.destructive.active') return { category: 'system.error', light: '800', dark: '400', type: 'COLOR' };
     if (key === 'action.destructive.disabled') return { category: 'gray', light: '300', dark: '800', type: 'COLOR' };
     if (key === 'action.destructive.text') return { category: 'gray', light: '50', dark: '50', type: 'COLOR' };
 
     // --- STATUS SUCCESS (3) ---
-    if (key === 'status.success.bg') return { category: 'success', light: '100', dark: '900', type: 'COLOR' };
-    if (key === 'status.success.fg') return { category: 'success', light: '700', dark: '300', type: 'COLOR' };
-    if (key === 'status.success.border') return { category: 'success', light: '500', dark: '500', type: 'COLOR' };
+    if (key === 'status.success.bg') return { category: 'system.success', light: '100', dark: '900', type: 'COLOR' };
+    if (key === 'status.success.fg') return { category: 'system.success', light: '700', dark: '300', type: 'COLOR' };
+    if (key === 'status.success.border') return { category: 'system.success', light: '500', dark: '500', type: 'COLOR' };
 
     // --- STATUS WARNING (3) ---
-    if (key === 'status.warning.bg') return { category: 'warning', light: '100', dark: '900', type: 'COLOR' };
-    if (key === 'status.warning.fg') return { category: 'warning', light: '700', dark: '300', type: 'COLOR' };
-    if (key === 'status.warning.border') return { category: 'warning', light: '500', dark: '500', type: 'COLOR' };
+    if (key === 'status.warning.bg') return { category: 'system.warning', light: '100', dark: '900', type: 'COLOR' };
+    if (key === 'status.warning.fg') return { category: 'system.warning', light: '700', dark: '300', type: 'COLOR' };
+    if (key === 'status.warning.border') return { category: 'system.warning', light: '500', dark: '500', type: 'COLOR' };
 
     // --- STATUS ERROR (3) ---
-    if (key === 'status.error.bg') return { category: 'error', light: '100', dark: '900', type: 'COLOR' };
-    if (key === 'status.error.fg') return { category: 'error', light: '700', dark: '300', type: 'COLOR' };
-    if (key === 'status.error.border') return { category: 'error', light: '500', dark: '500', type: 'COLOR' };
+    if (key === 'status.error.bg') return { category: 'system.error', light: '100', dark: '900', type: 'COLOR' };
+    if (key === 'status.error.fg') return { category: 'system.error', light: '700', dark: '300', type: 'COLOR' };
+    if (key === 'status.error.border') return { category: 'system.error', light: '500', dark: '500', type: 'COLOR' };
 
     // --- STATUS INFO (3) ---
-    if (key === 'status.info.bg') return { category: 'info', light: '100', dark: '900', type: 'COLOR' };
-    if (key === 'status.info.fg') return { category: 'info', light: '700', dark: '300', type: 'COLOR' };
-    if (key === 'status.info.border') return { category: 'info', light: '500', dark: '500', type: 'COLOR' };
+    if (key === 'status.info.bg') return { category: 'system.info', light: '100', dark: '900', type: 'COLOR' };
+    if (key === 'status.info.fg') return { category: 'system.info', light: '700', dark: '300', type: 'COLOR' };
+    if (key === 'status.info.border') return { category: 'system.info', light: '500', dark: '500', type: 'COLOR' };
 
     // --- OVERLAY (2) ---
     if (key === 'overlay.dim') return { category: 'gray', light: '800', dark: '900', type: 'COLOR' };
@@ -1624,7 +1663,7 @@ function mapSemanticTokens(palettes, preset, options) {
             currentIdx < candidates.length &&
             familyUsedRefs.indexOf(candidates[currentIdx]) !== -1
           ) {
-            (function () { return function () { } })() && console.log("⚠️ Hierarchy Collision (" + mode + "): " + semKey + " wants " + candidates[currentIdx] + " but occupied.");
+            if (DEBUG) console.log("⚠️ Hierarchy Collision (" + mode + "): " + semKey + " wants " + candidates[currentIdx] + " but occupied.");
             currentIdx += direction;
           }
 
@@ -1655,7 +1694,7 @@ function mapSemanticTokens(palettes, preset, options) {
             category: category,
             key: finalRef
           };
-          (function () { return function () { } })() && console.log(`🔗[ALIAS_INFO] ${semKey} -> ${category}.${finalRef} (resolved: ${resolvedValue})`);
+          if (DEBUG) console.log(`🔗[ALIAS_INFO] ${semKey} -> ${category}.${finalRef} (resolved: ${resolvedValue})`);
         } else if (!paletteCat) {
           console.error(`❌ [PALETTE_MISSING] No palette found for category '${category}' in ${mode} mode for token ${semKey}`);
         } else if (!paletteCat[finalRef]) {
@@ -1874,11 +1913,6 @@ function getSemanticType(key) {
   if (!canonical) return 'COLOR'; // Default fallback
   return SEMANTIC_TYPE_MAP[canonical] || 'COLOR';
 }
-
-// ⛔ DEPRECATED - DO NOT USE ⛔
-// SEMANTIC_TOKENS is EMPTY. Use CORE_PRESET_V1.semanticSchema (dot-notation) instead.
-// This array is kept only to prevent runtime errors from legacy code that may reference it.
-var SEMANTIC_TOKENS = [];
 
 // SEMANTIC_TYPE_MAP: Canonical dot-notation keys ONLY (80 tokens)
 var SEMANTIC_TYPE_MAP = {
@@ -2172,17 +2206,13 @@ var SEMANTIC_NAME_MAP = {
   }
 };
 
-
 /**
  * ORCHESTRATOR: Generate Semantic Tokens
  */
 
-
 // ... existing helper functions (checkSemanticContrast, etc.) ...
 
-
 // ... (Rest of original file content: normalizeFloatValue, checkSemanticContrast etc.)
-
 
 function normalizeFloatValue(value) {
   if (typeof value === 'number' && !isNaN(value)) {
@@ -2311,7 +2341,7 @@ function applyContrastAdjustments(semanticTokens, issues, primitives) {
         var newRatio = calculateContrastRatio(darkerGray, semanticTokens['bg.surface']);
         if (newRatio >= 4.5) {
           semanticTokens['text.primary'] = darkerGray;
-          (function () { return function () { } })() && console.log("Adjusted text.primary to " + darkerGray + " (contrast: " + newRatio + ")");
+          if (DEBUG) console.log("Adjusted text.primary to " + darkerGray + " (contrast: " + newRatio + ")");
           break;
         }
       }
@@ -2322,7 +2352,7 @@ function applyContrastAdjustments(semanticTokens, issues, primitives) {
         var newRatioInverse = calculateContrastRatio(lighterGray, semanticTokens['bg.inverse']);
         if (newRatioInverse >= 4.5) {
           semanticTokens['text.inverse'] = lighterGray;
-          (function () { return function () { } })() && console.log("Adjusted text.inverse to " + lighterGray + " (contrast: " + newRatioInverse + ")");
+          if (DEBUG) console.log("Adjusted text.inverse to " + lighterGray + " (contrast: " + newRatioInverse + ")");
           break;
         }
       }
@@ -2336,7 +2366,7 @@ function applyContrastAdjustments(semanticTokens, issues, primitives) {
           var newRatioBtn = calculateContrastRatio('#FFFFFF', darkerColor);
           if (newRatioBtn >= 4.5) {
             semanticTokens['action.primary.default'] = darkerColor;
-            (function () { return function () { } })() && console.log("Adjusted action.primary.default to " + darkerColor + " (brand-" + shade + ", contrast: " + newRatioBtn + ")");
+            if (DEBUG) console.log("Adjusted action.primary.default to " + darkerColor + " (brand-" + shade + ", contrast: " + newRatioBtn + ")");
             break;
           }
         }
@@ -2573,7 +2603,6 @@ function sanitizeValueForUI(value, tokenType) {
       }
     } else {
       // Pour tout autre objet, convertir en string de manière safe
-      // console.warn('Unexpected object value for UI:', value);
       try {
         return JSON.stringify(value);
       } catch (e) {
@@ -2617,7 +2646,7 @@ function resolveSemanticAliasInfo(semanticKey, allTokens, naming) {
 function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
   // Normalize once at entry
   const lib = normalizeLibType(naming);
-  (function () { return function () { } })() && console.log(`🔍 tryResolveSemanticAlias: ${semanticKey} avec lib = ${lib} `);
+  if (DEBUG) console.log(`🔍 tryResolveSemanticAlias: ${semanticKey} avec lib = ${lib} `);
 
   // Debug pour les actions primaires en MUI et Chakra
   if ((lib === 'mui' || lib === 'chakra') && semanticKey.startsWith('action.primary.')) {
@@ -2735,7 +2764,7 @@ function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
     // DIAGNOSTIC LOG ( requested for brand/primary )
     if (semanticKey === 'action.primary.default' && ['ant', 'mui', 'bootstrap'].includes(naming)) {
       var diagnosticKeys = variables.map(function (v) { return v ? extractVariableKey(v, collection.name) : null; }).filter(function (k) { return k !== null; });
-      (function () { return function () { } })() && console.log(`🔍[DIAGNOSTIC] Resolving ${semanticKey} for ${naming}.Available Brand Keys: `, diagnosticKeys);
+      if (DEBUG) console.log(`🔍[DIAGNOSTIC] Resolving ${semanticKey} for ${naming}.Available Brand Keys: `, diagnosticKeys);
     }
 
     // Essayer chaque clé possible dans l'ordre de priorité
@@ -2751,7 +2780,7 @@ function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
         var varKey = extractVariableKey(variable, collection.name);
 
         if (varKey === targetKey) {
-          (function () { return function () { } })() && console.log(`✅ Alias success: ${semanticKey} → ${mapping.category}/${targetKey} (${variable.name})`);
+          if (DEBUG) console.log(`✅ Alias success: ${semanticKey} → ${mapping.category}/${targetKey} (${variable.name})`);
           return variable;
         }
       }
@@ -2769,7 +2798,7 @@ function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
           var varKey = extractVariableKey(variable, collection.name);
 
           if (varKey === fallbackKey) {
-            (function () { return function () { } })() && console.log(`✅ Alias fallback success: ${semanticKey} → ${mapping.category}/${fallbackKey} (via ${targetKey}) (${variable.name})`);
+            if (DEBUG) console.log(`✅ Alias fallback success: ${semanticKey} → ${mapping.category}/${fallbackKey} (via ${targetKey}) (${variable.name})`);
             return variable;
           }
         }
@@ -2793,7 +2822,7 @@ function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
 
               var fallbackVarKey = extractVariableKey(fallbackVar, fallbackCollection.name);
               if (fallbackVarKey === fallbackKey) {
-                (function () { return function () { } })() && console.log(`✅ Alias fallback success: ${semanticKey} → ${mapping.fallback.category}/${fallbackKey} (${fallbackVar.name})`);
+                if (DEBUG) console.log(`✅ Alias fallback success: ${semanticKey} → ${mapping.fallback.category}/${fallbackKey} (${fallbackVar.name})`);
                 return fallbackVar;
               }
             }
@@ -2808,7 +2837,7 @@ function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
       return v ? extractVariableKey(v, collection.name) : null;
     }).filter(function (k) { return k !== null; });
 
-    (function () { return function () { } })() && console.log(`❌ Alias fallback: ${semanticKey} → ${mapping.category} keys [${mapping.keys.join(', ')}] not found. Available: [${availableKeys.join(', ')}]`);
+    if (DEBUG) console.log(`❌ Alias fallback: ${semanticKey} → ${mapping.category} keys [${mapping.keys.join(', ')}] not found. Available: [${availableKeys.join(', ')}]`);
 
     return null;
   } catch (error) {
@@ -2927,9 +2956,7 @@ function extractVariableKey(variable, collectionName) {
   return null;
 }
 
-
 var Utils = {
-
 
   safeGet: function (node, prop, defaultValue) {
     try {
@@ -2942,7 +2969,6 @@ var Utils = {
     }
   },
 
-
   hasProperty: function (node, prop) {
     try {
       return node && node[prop] !== undefined;
@@ -2952,13 +2978,9 @@ var Utils = {
   }
 };
 
-
 function log(msg, data) {
 
 }
-
-
-
 
 var ColorService = {
 
@@ -2975,7 +2997,6 @@ var ColorService = {
     };
   },
 
-
   rgbToHex: function (c) {
 
     var roundToPrecision = function (x) {
@@ -2986,7 +3007,6 @@ var ColorService = {
     var g = roundToPrecision(Math.max(0, Math.min(1, c.g)));
     var b = roundToPrecision(Math.max(0, Math.min(1, c.b)));
 
-
     var r255 = Math.round(r * 255);
     var g255 = Math.round(g * 255);
     var b255 = Math.round(b * 255);
@@ -2995,7 +3015,6 @@ var ColorService = {
     var hex = "#" + n.toString(16).padStart(6, "0").toUpperCase();
     return hex;
   },
-
 
   hexToHsl: function (hex) {
     var rgb = ColorService.hexToRgb(hex);
@@ -3023,7 +3042,6 @@ var ColorService = {
 
     return { h: h, s: s, l: l };
   },
-
 
   hslToHex: function (hsl) {
     var h = hsl.h;
@@ -3054,7 +3072,6 @@ var ColorService = {
     return ColorService.rgbToHex({ r: r, g: g, b: b });
   },
 
-
   adjustLightness: function (hsl, amount) {
     return {
       h: hsl.h,
@@ -3062,7 +3079,6 @@ var ColorService = {
       l: Math.max(0, Math.min(1, hsl.l + amount))
     };
   },
-
 
   mixColors: function (c1, c2, w) {
     var rgb1 = ColorService.hexToRgb(c1);
@@ -3075,9 +3091,6 @@ var ColorService = {
     });
   }
 };
-
-
-
 
 var TokenService = {
 
@@ -3116,7 +3129,6 @@ var TokenService = {
     return tokens;
   },
 
-
   generateSystem: function (naming, brandHex) {
     var tokens = {};
     var brandHsl = ColorService.hexToHsl(brandHex);
@@ -3145,7 +3157,6 @@ var TokenService = {
 
     return tokens;
   },
-
 
   generateGray: function (naming) {
     var tokens = {};
@@ -3182,7 +3193,6 @@ var TokenService = {
     return tokens;
   },
 
-
   generateSpacing: function (naming) {
     var tokens = {};
 
@@ -3200,7 +3210,6 @@ var TokenService = {
 
     return tokens;
   },
-
 
   generateRadius: function (naming) {
     var tokens = {};
@@ -3230,11 +3239,9 @@ var TokenService = {
     return tokens;
   },
 
-
   generateAll: function (msg) {
     var hex = msg.hex || '#4F46E5';
     var naming = msg.naming || CONFIG.naming.default;
-
 
     return {
       brand: TokenService.generateBrand(hex, naming),
@@ -3261,30 +3268,23 @@ var TokenService = {
   }
 };
 
-
-
-
 var FigmaService = {
 
   getCollections: function () {
     return figma.variables.getLocalVariableCollections();
   },
 
-
   getVariableById: function (id) {
     return figma.variables.getVariableById(id);
   },
-
 
   notify: function (msg) {
     figma.notify(msg);
   },
 
-
   getOrCreateCollection: function (name, overwrite) {
     return getOrCreateCollection(name, overwrite);
   },
-
 
   createOrUpdateVariable: async function (collection, name, type, value, category, overwrite, hintKey) {
     return await createOrUpdateVariable(collection, name, type, value, category, overwrite, hintKey);
@@ -3306,7 +3306,6 @@ var Scanner = {
   variablesCache: null,
   cacheTimestamp: 0,
   CACHE_DURATION: 30000,
-
 
   initMap: function () {
     var now = Date.now();
@@ -3404,9 +3403,8 @@ var Scanner = {
         });
       });
     }
-    (function () { return function () { } })() && console.log('🔍 [Scanner.initMap] Finished mapping ' + Scanner.valueMap.size + ' unique values (semantic-only, mode-aware).');
+    if (DEBUG) console.log('🔍 [Scanner.initMap] Finished mapping ' + Scanner.valueMap.size + ' unique values (semantic-only, mode-aware).');
   },
-
 
   _formatVariableValue: function (variable, rawValue) {
     if (variable.resolvedType === CONFIG.variableTypes.COLOR && typeof rawValue === "object") {
@@ -3419,11 +3417,9 @@ var Scanner = {
     return rawValue;
   },
 
-
   _createMapKey: function (type, value) {
     return type + ':' + value;
   },
-
 
   scanSelection: function (ignoreHiddenLayers) {
 
@@ -3444,7 +3440,6 @@ var Scanner = {
     var results = [];
     var processedCount = 0;
 
-
     for (var i = 0; i < selection.length; i++) {
       var node = selection[i];
       Scanner._scanNodeRecursive(node, results, 0, ignoreHiddenLayers);
@@ -3460,7 +3455,6 @@ var Scanner = {
 
     postToUI({ type: "scan-results", results: results });
 
-
     setTimeout(function () {
       if (Scanner.valueMap) {
         Scanner.valueMap.clear();
@@ -3471,28 +3465,23 @@ var Scanner = {
     return results;
   },
 
-
   _scanNodeRecursive: function (node, results, depth, ignoreHiddenLayers) {
 
     if (depth > CONFIG.limits.MAX_DEPTH) {
       return;
     }
 
-
     if (!node) {
       return;
     }
-
 
     if (node.removed) {
       return;
     }
 
-
     if (node.type === 'INSTANCE' && node.mainComponent === null) {
       return;
     }
-
 
     if (!node.id || !node.type) {
       return;
@@ -3503,8 +3492,6 @@ var Scanner = {
       var nodeId = node.id;
       var nodeName = node.name || "Unnamed";
 
-
-
       if (depth === 0 && results.length % 10 === 0) {
         postToUI({
           type: "scan-progress",
@@ -3513,15 +3500,12 @@ var Scanner = {
         });
       }
 
-
       var containerTypes = CONFIG.supportedTypes.spacing;
-
 
       var styleTypes = CONFIG.supportedTypes.fillAndStroke;
 
       var isContainer = containerTypes.indexOf(nodeType) !== -1;
       var hasStyle = styleTypes.indexOf(nodeType) !== -1;
-
 
       if (hasStyle) {
         try {
@@ -3529,7 +3513,6 @@ var Scanner = {
         } catch (propertyAnalysisError) {
         }
       }
-
 
       if (isContainer) {
         try {
@@ -3541,7 +3524,6 @@ var Scanner = {
               try {
                 var child = children[i];
 
-
                 if (!child) {
                   continue;
                 }
@@ -3549,7 +3531,6 @@ var Scanner = {
                 if (child.removed) {
                   continue;
                 }
-
 
                 Scanner._scanNodeRecursive(child, results, depth + 1, ignoreHiddenLayers);
 
@@ -3566,18 +3547,15 @@ var Scanner = {
     }
   },
 
-
   _checkProperties: function (node, results, ignoreHiddenLayers) {
 
     if (!node) {
       return;
     }
 
-
     if (node.removed) {
       return;
     }
-
 
     if (!node.id || !node.name || !node.type) {
       return;
@@ -3586,7 +3564,6 @@ var Scanner = {
     var nodeId = node.id;
     var layerName = node.name;
     var nodeType = node.type;
-
 
     if (ignoreHiddenLayers) {
       try {
@@ -3601,9 +3578,7 @@ var Scanner = {
       }
     }
 
-
     var supportedTypes = CONFIG.supportedTypes.all;
-
 
     var styleSupportedTypes = CONFIG.supportedTypes.fillAndStroke;
 
@@ -3613,7 +3588,6 @@ var Scanner = {
     if (!isContainer) {
       return;
     }
-
 
     if (supportsStyle) {
       try {
@@ -3626,12 +3600,9 @@ var Scanner = {
           Scanner._checkStrokesSafely(node, results);
         }
 
-
         Scanner._checkCornerRadiusSafely(node, results);
 
-
         Scanner._checkNumericPropertiesSafely(node, results);
-
 
         if (node.type === CONFIG.types.TEXT) {
           Scanner._checkTypographyPropertiesSafely(node, results);
@@ -3641,7 +3612,6 @@ var Scanner = {
       }
     }
   },
-
 
   _checkFillsSafely: function (node, results) {
     if (!Scanner.valueMap) {
@@ -3678,7 +3648,6 @@ var Scanner = {
     checkTypographyPropertiesSafely(node, Scanner.valueMap, results);
   }
 };
-
 
 // ============================================================================
 // PREVIEW MANAGER: Gère les snapshots pour preview réversible
@@ -3860,11 +3829,9 @@ function restoreNodeState(node, result, snapshot) {
   }
 }
 
-
 var Fixer = {
 
   applyAndVerify: function (result, variableId) {
-
 
     if (!result) {
       throw new Error('Invalid result or incomplete');
@@ -3876,7 +3843,6 @@ var Fixer = {
       throw new Error('Invalid result: property missing');
     }
 
-
     if (!variableId) {
       throw new Error('No variable ID provided or suggested');
     }
@@ -3886,7 +3852,6 @@ var Fixer = {
       throw new Error('Variable not found: ' + variableId);
     }
 
-
     var node = figma.getNodeById(result.nodeId);
     if (!node) {
       throw new Error('Node not found: ' + result.nodeId);
@@ -3895,28 +3860,23 @@ var Fixer = {
       throw new Error('Node removed: ' + result.nodeId);
     }
 
-
     if (Utils.safeGet(node, 'locked') === true) {
       throw new Error('Cannot modify locked node: ' + result.layerName);
     }
-
 
     if (!Fixer._validatePropertyExists(node, result)) {
       throw new Error('Property no longer exists: ' + result.property);
     }
 
-
     if (!Fixer._validateVariableCanBeApplied(variable, result)) {
       throw new Error('Variable incompatible with property');
     }
-
 
     var applied = Fixer._applyVariableToProperty(node, result, variable);
 
     if (!applied) {
       throw new Error('Failed to apply variable');
     }
-
 
     var verification = Fixer._verifyVariableApplication(node, result, variable);
 
@@ -3927,7 +3887,6 @@ var Fixer = {
     }
   },
 
-
   applySingle: function (result, variableId) {
     try {
       var verification = Fixer.applyAndVerify(result, variableId);
@@ -3936,7 +3895,6 @@ var Fixer = {
       return 0;
     }
   },
-
 
   applyGroup: function (indices, variableId) {
     if (!Scanner.lastScanResults || !Array.isArray(indices)) {
@@ -3971,7 +3929,6 @@ var Fixer = {
     FigmaService.notify(message);
   },
 
-
   applyAll: function () {
     if (!Scanner.lastScanResults || !Array.isArray(Scanner.lastScanResults)) {
       return;
@@ -4003,7 +3960,6 @@ var Fixer = {
 
     FigmaService.notify(message);
   },
-
 
   _validatePropertyExists: function (node, result) {
     if (!node || node.removed) return false;
@@ -4162,9 +4118,6 @@ var Fixer = {
   }
 };
 
-
-
-
 // ============================================================================
 // PLUGIN INITIALIZATION
 // ============================================================================
@@ -4258,7 +4211,6 @@ figma.clientStorage.getAsync("tokenStarter.naming").then(async function (clientS
     savedSemanticTokens: savedSemanticTokens
   });
 });
-
 
 /* ============================================================================
    GENERATION PIPELINE
@@ -4371,8 +4323,8 @@ figma.ui.onmessage = async function (msg) {
         checkAndNotifySelection();
         break;
 
-      case 'generate':
-      case 'generate-tokens':
+      case 'generate':  // ⚡ CANONICAL: Active name used by UI wizard step2
+      case 'generate-tokens':  // LEGACY ALIAS: Kept for compatibility
         try {
           var naming = msg.naming || (await getNamingFromFile()) || "tailwind";
           var themeMode = figma.root.getPluginData("tokenStarter.themeMode") || "light";
@@ -4404,9 +4356,9 @@ figma.ui.onmessage = async function (msg) {
         }
         break;
 
-      case 'import':
-      case 'import-tokens':
-        (function () { return function () { } })() && console.log('🔄 Pipeline d\'import : ' + msg.type + ' → Figma Service');
+      case 'import':  // ⚡ CANONICAL: Active name used by UI
+      case 'import-tokens':  // LEGACY ALIAS: Kept for compatibility
+        if (DEBUG) console.log('🔄 Pipeline d\'import : ' + msg.type + ' → Figma Service');
         try {
           await importTokensToFigma(msg.tokens || cachedTokens, msg.naming, msg.overwrite);
           postToUI({ type: 'import-completed' });
@@ -4433,7 +4385,7 @@ figma.ui.onmessage = async function (msg) {
         (async function () {
           var appliedCount = 0;
           try {
-            var results = Scanner.lastScanResults || lastScanResults;
+            var results = Scanner.lastScanResults;
             var result;
 
             console.log('[PLUGIN] Searching for result...', {
@@ -4498,7 +4450,7 @@ figma.ui.onmessage = async function (msg) {
           var appliedCount = 0;
           var appliedIndices = [];
           var indices = msg.indices || [];
-          var results = Scanner.lastScanResults || lastScanResults;
+          var results = Scanner.lastScanResults;
           for (var i = 0; i < indices.length; i++) {
             var idx = indices[i];
             var res = results[idx];
@@ -4531,7 +4483,7 @@ figma.ui.onmessage = async function (msg) {
         if (DEBUG) console.log('[PREVIEW] Starting preview-fix sequence', { indices: msg.indices, variableId: msg.variableId });
 
         (async function () {
-          var results = Scanner.lastScanResults || lastScanResults;
+          var results = Scanner.lastScanResults;
           var variable = FigmaService.getVariableById(msg.variableId);
 
           if (!variable) {
@@ -4576,11 +4528,11 @@ figma.ui.onmessage = async function (msg) {
         })();
         break;
 
-      case 'rollback-preview':
-      case 'clear-preview':  // Alias pour "Aucune" variable
+      case 'rollback-preview':  // ⚡ CANONICAL: Active name used by UI
+      case 'clear-preview':  // LEGACY ALIAS: Alias pour "Aucune" variable
         // ✅ Vrai rollback: restaure l'état initial depuis les snapshots
         (async function () {
-          var results = Scanner.lastScanResults || lastScanResults;
+          var results = Scanner.lastScanResults;
           var indices = msg.indices || [];
           var restoredCount = 0;
 
@@ -4613,14 +4565,13 @@ figma.ui.onmessage = async function (msg) {
         break;
 
       case 'highlight-nodes':
-        var results = Scanner.lastScanResults || lastScanResults;
+        var results = Scanner.lastScanResults;
         var nodes = (msg.indices || []).map(function (idx) {
           var res = results[idx];
           return res ? figma.getNodeById(res.nodeId) : null;
         }).filter(function (n) { return n !== null; });
         if (nodes.length > 0) {
           figma.currentPage.selection = nodes;
-          // figma.viewport.scrollAndZoomIntoView(nodes); // ❌ Désactivé pour éviter de bouger la caméra
         }
         break;
 
@@ -4650,6 +4601,13 @@ figma.ui.onmessage = async function (msg) {
         figma.ui.resize(msg.width, msg.height);
         break;
 
+      case 'run-tests':
+        // Trigger self-tests from UI
+        console.log('🧪 Running plugin tests...');
+        var testResults = runPluginTests();
+        postToUI({ type: 'test-results', results: testResults });
+        break;
+
       default:
         console.warn("Unknown message type:", msg.type);
     }
@@ -4659,11 +4617,9 @@ figma.ui.onmessage = async function (msg) {
   }
 };
 
-
 var existingCollections = figma.variables.getLocalVariableCollections();
 if (existingCollections.length > 0) {
   postToUI({ type: "has-variables", value: true });
-
 
   try {
     var existingTokens = extractExistingTokens();
@@ -4720,16 +4676,10 @@ if (existingCollections.length > 0) {
   }
 }
 
-
-
-
-
-
-
 function extractExistingTokens() {
-  (function () { return function () { } })() && console.log('🔍 extractExistingTokens: starting extraction');
+  if (DEBUG) console.log('🔍 extractExistingTokens: starting extraction');
   var collections = figma.variables.getLocalVariableCollections();
-  (function () { return function () { } })() && console.log('📚 Found collections:', collections.map(function (c) { return c.name; }));
+  if (DEBUG) console.log('📚 Found collections:', collections.map(function (c) { return c.name; }));
 
   var tokens = {
     brand: {},
@@ -4891,7 +4841,6 @@ function extractExistingTokens() {
           formattedValue = String(value || "");
         }
 
-
         // Re-catégorisation intelligente (UNIQUEMENT pour "unknown", pas pour "brand" ou "system")
         // Les tokens Brand (50-950) et System (success, warning, etc.) ne doivent PAS être re-catégorisés
         var finalCategory = effectiveCategory;
@@ -4933,7 +4882,7 @@ function extractExistingTokens() {
   if (libraryScores.bootstrap > maxScore) { maxScore = libraryScores.bootstrap; detectedLibrary = "bootstrap"; }
   if (libraryScores.chakra > maxScore) { maxScore = libraryScores.chakra; detectedLibrary = "chakra"; }
 
-  (function () { return function () { } })() && console.log('📦 extractExistingTokens result:', {
+  if (DEBUG) console.log('📦 extractExistingTokens result:', {
     brand: Object.keys(tokens.brand).length,
     semanticModes: Object.keys(tokens.semantic.modes || {}),
     detectedLibrary: detectedLibrary,
@@ -4945,10 +4894,6 @@ function extractExistingTokens() {
     library: detectedLibrary
   };
 }
-
-
-
-
 
 function hexToRgb(hex) {
   // Si c'est déjà un objet RGB, le retourner tel quel
@@ -5043,21 +4988,8 @@ function hslToHex(h, s, l) {
   return rgbToHex({ r: r, g: g, b: b });
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
 // NOTE: semanticScopesMapping est défini plus bas (ligne ~4519) avec primitiveScopesMapping
 // pour garantir une seule source de vérité
-
 
 // ===== SCOPE ENGINE =====
 // Engine de scope unifié pour variables primitives et sémantiques
@@ -5123,6 +5055,16 @@ function inferSemanticFamily(normalizedKey) {
   // 6. STATUS (badges, alerts, notifications)
   if (normalizedKey.startsWith('status-') || normalizedKey.includes('-status-')) {
     return 'status';
+  }
+
+  // 6b. DIVIDER (lignes de séparation)
+  if (normalizedKey.startsWith('divider-') || normalizedKey.includes('-divider-')) {
+    return 'divider';
+  }
+
+  // 6c. OVERLAY (fonds semi-transparents pour modals, dim, scrim)
+  if (normalizedKey.startsWith('overlay-') || normalizedKey.includes('-overlay-')) {
+    return 'overlay';
   }
 
   // 7. DIMENSIONS
@@ -5217,7 +5159,7 @@ var primitiveScopesMapping = {
   border: [],     // ❌ Jamais proposé - Utiliser les sémantiques (border-*)
   radius: [],     // ❌ Jamais proposé - Utiliser les sémantiques (radius-*)
   spacing: [],    // ❌ Jamais proposé - Utiliser les sémantiques (space-*)
-  stroke: ["STROKE_FLOAT"],  // ✅ Primitives stroke ont le scope pour l'application
+  stroke: [],      // ❌ Jamais proposé - Utiliser les sémantiques (stroke-*)
   typography: []  // ❌ Jamais proposé - Utiliser les sémantiques (font-size-*)
 };
 
@@ -5266,6 +5208,19 @@ var semanticScopesMapping = {
 
   // ===== ACCENT (LEGACY) =====
   accent: ["FRAME_FILL", "SHAPE_FILL", "STROKE_COLOR"],
+
+  // ===== DIVIDER (LIGNES DE SÉPARATION) =====
+  divider: ["STROKE_COLOR"],
+  // Intention: Lignes de séparation entre sections
+  // Exemples: divider-default
+  // Note: Toujours utilisé comme couleur de stroke
+
+  // ===== OVERLAY (FONDS SEMI-TRANSPARENTS) =====
+  overlay: ["FRAME_FILL", "SHAPE_FILL"],
+  // Intention: Fonds pour modals, dim effects, scrim
+  // Exemples: overlay-dim, overlay-scrim
+  // Note: Utilisé sur des frames/shapes couvrant l'écran
+
 
   // ===== DIMENSIONS (FLOAT) =====
   radius: ["CORNER_RADIUS"],
@@ -5611,7 +5566,6 @@ function normalizeTokenName(name) {
  * This is the core of the new suggestion engine
  */
 
-
 /**
  * Helper: Check if variable has required scopes
  */
@@ -5806,7 +5760,6 @@ function rankAndDeduplicate(suggestions) {
 
   return unique;
 }
-
 
 // ============================================================================
 // DATA MODEL FACTORIES
@@ -6458,11 +6411,11 @@ function applyScopes(figmaVar, scopes, debugLabel) {
     if (hasSetScopes) {
       figmaVar.setScopes(scopes);
       // Log pour debug
-      (function () { return function () { } })() && console.log(`🔧 Scopes applied to ${figmaVar.name}:`, scopes);
+      if (DEBUG) console.log(`🔧 Scopes applied to ${figmaVar.name}:`, scopes);
     } else if (hasScopesProp) {
       figmaVar.scopes = scopes;
       // Log pour debug
-      (function () { return function () { } })() && console.log(`🔧 Scopes set to ${figmaVar.name}:`, scopes);
+      if (DEBUG) console.log(`🔧 Scopes set to ${figmaVar.name}:`, scopes);
     }
 
     // Log APRÈS application (vérification)
@@ -6508,12 +6461,6 @@ function applyVariableScopes(figmaVar, context) {
   applyScopes(figmaVar, scopes, debugLabel);
 }
 
-
-
-
-
-
-
 function getOrCreateCollection(name, overwrite) {
   var collections = figma.variables.getLocalVariableCollections();
 
@@ -6531,7 +6478,6 @@ function getOrCreateCollection(name, overwrite) {
   }
   return figma.variables.createVariableCollection(name);
 }
-
 
 // Fonction spécialisée pour appliquer la valeur appropriée à une variable sémantique
 // Helper pour détecter si une valeur Figma est un alias de variable
@@ -6569,7 +6515,7 @@ function applySemanticValue(variable, semanticData, semanticKey, explicitModeId)
         if (semanticData.resolvedValue != null && semanticData.resolvedValue !== undefined) {
           processedValue = getProcessedValueFromResolved(semanticData.resolvedValue, semanticData.type);
           valueType = 'raw';
-          (function () { return function () { } })() && console.log(`💾 [APPLY] ${semanticKey} => raw (type mismatch) => ${semanticData.resolvedValue}`);
+          if (DEBUG) console.log(`💾 [APPLY] ${semanticKey} => raw (type mismatch) => ${semanticData.resolvedValue}`);
         } else {
           return; // EARLY RETURN - pas d'écrasement
         }
@@ -6595,7 +6541,7 @@ function applySemanticValue(variable, semanticData, semanticKey, explicitModeId)
           if (semanticData.resolvedValue != null && semanticData.resolvedValue !== undefined) {
             processedValue = getProcessedValueFromResolved(semanticData.resolvedValue, semanticData.type);
             valueType = 'raw';
-            (function () { return function () { } })() && console.log(`💾 [APPLY] ${semanticKey} => raw (no valid value) => ${semanticData.resolvedValue}`);
+            if (DEBUG) console.log(`💾 [APPLY] ${semanticKey} => raw (no valid value) => ${semanticData.resolvedValue}`);
           } else {
             return; // EARLY RETURN - pas d'écrasement
           }
@@ -6603,7 +6549,7 @@ function applySemanticValue(variable, semanticData, semanticKey, explicitModeId)
           // ✅ ALIAS VALIDE : créer VARIABLE_ALIAS, jamais de fallback destructeur
           processedValue = { type: "VARIABLE_ALIAS", id: norm.variableId };
           valueType = 'alias';
-          (function () { return function () { } })() && console.log(`🔗 [APPLY] ${semanticKey} alias => id=${norm.variableId}`);
+          if (DEBUG) console.log(`🔗 [APPLY] ${semanticKey} alias => id=${norm.variableId}`);
         }
       }
     } else {
@@ -6616,7 +6562,7 @@ function applySemanticValue(variable, semanticData, semanticKey, explicitModeId)
     var currentValue = variable.valuesByMode[modeId];
     if (isFigmaAliasValue(currentValue)) {
       // ✅ VARIABLE DÉJÀ EN ALIAS : préserver l'alias existant
-      (function () { return function () { } })() && console.log(`🛡️ [ALIAS_PRESERVED] ${semanticKey} kept existing alias in Figma (not overwriting with raw value)`);
+      if (DEBUG) console.log(`🛡️ [ALIAS_PRESERVED] ${semanticKey} kept existing alias in Figma (not overwriting with raw value)`);
       return; // EARLY RETURN - pas d'écrasement
     }
 
@@ -6624,10 +6570,10 @@ function applySemanticValue(variable, semanticData, semanticKey, explicitModeId)
     if (semanticData.resolvedValue != null && semanticData.resolvedValue !== undefined) {
       processedValue = getProcessedValueFromResolved(semanticData.resolvedValue, semanticData.type);
       valueType = 'raw';
-      (function () { return function () { } })() && console.log(`💾 [APPLY] ${semanticKey} => raw => ${semanticData.resolvedValue}`);
+      if (DEBUG) console.log(`💾 [APPLY] ${semanticKey} => raw => ${semanticData.resolvedValue}`);
     } else {
       // ❌ Pas d'alias ET resolvedValue null/undefined : NE PAS écraser
-      (function () { return function () { } })() && console.log(`⏭️ [APPLY_SKIP] ${semanticKey}: no alias and resolvedValue is null/undefined (keeping existing value)`);
+      if (DEBUG) console.log(`⏭️ [APPLY_SKIP] ${semanticKey}: no alias and resolvedValue is null/undefined (keeping existing value)`);
       return; // EARLY RETURN - pas d'écrasement destructeur
     }
   }
@@ -6643,7 +6589,7 @@ function applySemanticValue(variable, semanticData, semanticKey, explicitModeId)
         if (semanticData.resolvedValue != null && semanticData.resolvedValue !== undefined) {
           processedValue = getProcessedValueFromResolved(semanticData.resolvedValue, semanticData.type);
           valueType = 'raw';
-          (function () { return function () { } })() && console.log(`💾 [APPLY] ${semanticKey} => raw (variable deleted) => ${semanticData.resolvedValue}`);
+          if (DEBUG) console.log(`💾 [APPLY] ${semanticKey} => raw (variable deleted) => ${semanticData.resolvedValue}`);
         } else {
           return; // EARLY RETURN - pas d'écrasement
         }
@@ -6651,7 +6597,7 @@ function applySemanticValue(variable, semanticData, semanticKey, explicitModeId)
     }
 
     variable.setValueForMode(modeId, processedValue);
-    (function () { return function () { } })() && console.log(`✅ [APPLY] ${semanticKey} => success (${valueType})`);
+    if (DEBUG) console.log(`✅ [APPLY] ${semanticKey} => success (${valueType})`);
   } catch (e) {
     console.error(`❌ [APPLY_FAIL] ${semanticKey}: failed to set value:`, e);
     // En cas d'erreur, ne pas créer d'alias cassé - utiliser resolvedValue si disponible
@@ -6659,7 +6605,7 @@ function applySemanticValue(variable, semanticData, semanticKey, explicitModeId)
       try {
         var fallbackValue = getProcessedValueFromResolved(semanticData.resolvedValue, semanticData.type);
         variable.setValueForMode(modeId, fallbackValue);
-        (function () { return function () { } })() && console.log(`💾 [APPLY_FALLBACK] ${semanticKey} => raw value after alias failure => ${semanticData.resolvedValue}`);
+        if (DEBUG) console.log(`💾 [APPLY_FALLBACK] ${semanticKey} => raw value after alias failure => ${semanticData.resolvedValue}`);
       } catch (fallbackError) {
         console.error(`❌ [APPLY_FALLBACK_FAIL] ${semanticKey}: failed to set fallback value:`, fallbackError);
       }
@@ -6718,8 +6664,6 @@ function getProcessedValueFromResolved(resolvedValue, variableType) {
   }
 }
 
-
-
 // Fonction helper pour déterminer si on doit protéger un token sémantique existant
 function shouldPreserveExistingSemantic(existingToken, incomingToken) {
   if (!existingToken) return false;
@@ -6753,9 +6697,8 @@ function shouldPreserveExistingSemantic(existingToken, incomingToken) {
   return false;
 }
 
-
 async function createOrUpdateVariable(collection, name, type, value, category, overwrite, hintKey) {
-  (function () { return function () { } })() && console.log('🔧 createOrUpdateVariable:', category, name, type, typeof value);
+  if (DEBUG) console.log('🔧 createOrUpdateVariable:', category, name, type, typeof value);
 
   var allVariables = figma.variables.getLocalVariables();
   var variable = null;
@@ -6767,11 +6710,10 @@ async function createOrUpdateVariable(collection, name, type, value, category, o
     }
   }
 
-
   if (!variable) {
     try {
       variable = figma.variables.createVariable(name, collection, type);
-      (function () { return function () { } })() && console.log('✅ Variable created:', name);
+      if (DEBUG) console.log('✅ Variable created:', name);
 
       // Appliquer les scopes IMMÉDIATEMENT après création (avant valeur)
       var context = createScopeContext(variable, hintKey || name, category);
@@ -6784,14 +6726,14 @@ async function createOrUpdateVariable(collection, name, type, value, category, o
           console.error('❌ Created variable not found by ID');
           return null;
         }
-        (function () { return function () { } })() && console.log('✅ Variable retrieved after creation:', variable.name, 'collection:', variable.variableCollection ? variable.variableCollection.name : 'NONE');
+        if (DEBUG) console.log('✅ Variable retrieved after creation:', variable.name, 'collection:', variable.variableCollection ? variable.variableCollection.name : 'NONE');
       }
     } catch (e) {
       console.error('❌ Failed to create variable:', name, e);
       return null;
     }
   } else {
-    (function () { return function () { } })() && console.log('📝 Variable exists:', name);
+    if (DEBUG) console.log('📝 Variable exists:', name);
 
     // ✅ FIX: Appliquer les scopes aussi pour les variables existantes
     // (pas seulement lors de la création)
@@ -6799,20 +6741,19 @@ async function createOrUpdateVariable(collection, name, type, value, category, o
     applyVariableScopes(variable, context);
   }
 
-
   if (variable) {
     // N'appliquer la valeur que si elle est fournie (pour les sémantiques, on utilise applySemanticValue)
     if (value !== null && value !== undefined) {
       var modeId = collection.modes[0].modeId;
       try {
         variable.setValueForMode(modeId, value);
-        (function () { return function () { } })() && console.log('💾 Value set for', name + ':', typeof value, value);
+        if (DEBUG) console.log('💾 Value set for', name + ':', typeof value, value);
       } catch (e) {
         console.error('❌ Failed to set value for', name + ':', e);
       }
     } else if (category === 'semantic' && hintKey) {
       // Pour les variables sémantiques créées sans valeur, essayer automatiquement de créer un alias
-      (function () { return function () { } })() && console.log(`🔍 [AUTO_ALIAS] Trying to create automatic alias for semantic variable: ${hintKey}`);
+      if (DEBUG) console.log(`🔍 [AUTO_ALIAS] Trying to create automatic alias for semantic variable: ${hintKey}`);
 
       // Construire une map globale des variables existantes pour la résolution d'alias
       var globalVariableMap = buildGlobalVariableMap();
@@ -6829,9 +6770,9 @@ async function createOrUpdateVariable(collection, name, type, value, category, o
         };
 
         applySemanticValue(variable, semanticValueData, hintKey);
-        (function () { return function () { } })() && console.log(`✅ [AUTO_ALIAS] Successfully created alias for ${hintKey}: ${finalAliasTo.collection}/${finalAliasTo.key}`);
+        if (DEBUG) console.log(`✅ [AUTO_ALIAS] Successfully created alias for ${hintKey}: ${finalAliasTo.collection}/${finalAliasTo.key}`);
       } else {
-        (function () { return function () { } })() && console.log(`⚠️ [AUTO_ALIAS] No alias found for semantic variable: ${hintKey}`);
+        if (DEBUG) console.log(`⚠️ [AUTO_ALIAS] No alias found for semantic variable: ${hintKey}`);
       }
     }
 
@@ -6844,7 +6785,7 @@ async function createOrUpdateVariable(collection, name, type, value, category, o
 }
 
 async function importTokensToFigma(tokens, naming, overwrite) {
-  (function () { return function () { } })() && console.log('🔄 ENGINE SYNC: Starting importTokensToFigma (Refactored) - PATCH 747 ACTIVE');
+  if (DEBUG) console.log('🔄 ENGINE SYNC: Starting importTokensToFigma (Refactored) - PATCH 747 ACTIVE');
 
   // Pre-fetch all local data once to avoid 1000s of API calls
   var allLocalVariables = figma.variables.getLocalVariables();
@@ -6872,8 +6813,8 @@ async function importTokensToFigma(tokens, naming, overwrite) {
     var firstSemanticKey = Object.keys(tokens.semantic)[0];
     if (firstSemanticKey) {
       var firstToken = tokens.semantic[firstSemanticKey];
-      (function () { return function () { } })() && console.log(`🔍 [IMPORT_DIAGNOSTIC] First semantic token (${firstSemanticKey}):`, JSON.stringify(firstToken, null, 2));
-      (function () { return function () { } })() && console.log(`🔍 [IMPORT_DIAGNOSTIC] Has modes structure: ${!!(firstToken && firstToken.modes)}`);
+      if (DEBUG) console.log(`🔍 [IMPORT_DIAGNOSTIC] First semantic token (${firstSemanticKey}):`, JSON.stringify(firstToken, null, 2));
+      if (DEBUG) console.log(`🔍 [IMPORT_DIAGNOSTIC] Has modes structure: ${!!(firstToken && firstToken.modes)}`);
     }
   }
 
@@ -6938,7 +6879,7 @@ async function importTokensToFigma(tokens, naming, overwrite) {
       var variable = await createOrUpdateVariable(grayCollection, grayName, "COLOR", hexToRgb(tokens.gray[gKey]), "gray", overwrite, undefined);
       if (variable) {
         registerPrimitive('gray', gKey, variable.id);
-        (function () { return function () { } })() && console.log(`📝 [PRIMITIVE_REGISTER] gray.${gKey} -> ${variable.id} (${grayName})`);
+        if (DEBUG) console.log(`📝 [PRIMITIVE_REGISTER] gray.${gKey} -> ${variable.id} (${grayName})`);
       }
     }
   }
@@ -7033,7 +6974,7 @@ async function importTokensToFigma(tokens, naming, overwrite) {
   // --- SEMANTICS SYNC ---
 
   if (tokens.semantic) {
-    (function () { return function () { } })() && console.log("Processing Semantic Tokens (Engine Mode - NEW STRUCTURE)...");
+    if (DEBUG) console.log("Processing Semantic Tokens (Engine Mode - NEW STRUCTURE)...");
     var semanticCollection = getOrCreateCollection("Semantic", overwrite);
 
     // ✅ Ensure modes exist
@@ -7047,7 +6988,7 @@ async function importTokensToFigma(tokens, naming, overwrite) {
       try {
         var modeId = semanticCollection.addMode("Dark");
         darkMode = semanticCollection.modes.find(function (m) { return m.modeId === modeId; });
-        (function () { return function () { } })() && console.log("✅ Created Dark mode:", darkMode.modeId);
+        if (DEBUG) console.log("✅ Created Dark mode:", darkMode.modeId);
       } catch (e) {
         console.error("❌ Failed to create Dark mode:", e);
       }
@@ -7111,8 +7052,6 @@ async function importTokensToFigma(tokens, naming, overwrite) {
           // Cela évite l'erreur "No data for ... in dark mode"
           if (modeInfo.name === 'dark' && modesToProcess[0].data) {
             modeInfo.data = modesToProcess[0].data; // Fallback to Light data
-            // On ne loggue pas en erreur pour ne pas spammer, un warn suffit
-            // (function () { return function () { } })() && console.warn(`⚠️ [SYNC_FALLBACK] Using Light data for Dark mode on ${key}`);
           } else {
             console.error(`❌ [SYNC_ERROR] No data for ${key} in ${modeInfo.name} mode! Token structure:`, JSON.stringify(tokenData, null, 2));
             continue;
@@ -7128,25 +7067,65 @@ async function importTokensToFigma(tokens, naming, overwrite) {
         if (aliasRef && aliasRef.category && aliasRef.key) {
           var foundVariableId = null;
 
-          // A) Try local primitiveMap
-          if (primitiveMap[aliasRef.category] && primitiveMap[aliasRef.category][aliasRef.key]) {
-            foundVariableId = primitiveMap[aliasRef.category][aliasRef.key];
+          // A) Try local primitiveMap - with support for nested categories (e.g., system.success)
+          var categoryParts = aliasRef.category.split('.');
+          if (categoryParts.length === 2) {
+            // Nested category like 'system.success' → look for 'system' with key 'success-100'
+            var parentCategory = categoryParts[0]; // 'system'
+            var subCategory = categoryParts[1];    // 'success'
+            var flatKey = subCategory + '-' + aliasRef.key; // 'success-100'
+
+            if (primitiveMap[parentCategory] && primitiveMap[parentCategory][flatKey]) {
+              foundVariableId = primitiveMap[parentCategory][flatKey];
+              console.log(`✅ [NESTED_RESOLVE] ${key} → ${parentCategory}[${flatKey}] = ${foundVariableId}`);
+            }
+          } else {
+            // Simple category like 'gray', 'brand'
+            if (primitiveMap[aliasRef.category] && primitiveMap[aliasRef.category][aliasRef.key]) {
+              foundVariableId = primitiveMap[aliasRef.category][aliasRef.key];
+            }
           }
 
           // B) GLOBAL FALLBACK : Search in ALL variables if not in local map
           if (!foundVariableId) {
-            var searchName = aliasRef.key.replace(/\./g, ' / ');
-            var searchCollectionName = aliasRef.category.charAt(0).toUpperCase() + aliasRef.category.slice(1);
-            if (searchCollectionName === 'Spacing') searchCollectionName = 'Spacing'; // ensure case
-            if (searchCollectionName === 'Radius') searchCollectionName = 'Radius';
+            // Determine collection name based on category
+            var searchCollectionName = null;
+            var searchVariableName = null;
 
-            for (var i = 0; i < allLocalVariables.length; i++) {
-              var v = allLocalVariables[i];
-              var c = allLocalCollections.find(function (col) { return col.id === v.variableCollectionId; });
-              if (c && c.name === searchCollectionName && v.name === searchName) {
-                foundVariableId = v.id;
-                console.log(`📡 [GLOBAL_RESOLVE] Found ${key} target ${searchCollectionName}/${searchName} via Global search`);
-                break;
+            if (categoryParts.length === 2 && categoryParts[0] === 'system') {
+              // system.success with key '100' → "System Colors" / "success / 100"
+              searchCollectionName = 'System Colors';
+              searchVariableName = categoryParts[1] + ' / ' + aliasRef.key;
+            } else if (aliasRef.category === 'gray') {
+              searchCollectionName = 'Grayscale';
+              searchVariableName = aliasRef.key;
+            } else if (aliasRef.category === 'brand') {
+              searchCollectionName = 'Brand Colors';
+              searchVariableName = aliasRef.key;
+            } else if (aliasRef.category === 'spacing') {
+              searchCollectionName = 'Spacing';
+              searchVariableName = aliasRef.key.replace(/\./g, ' / ');
+            } else if (aliasRef.category === 'radius') {
+              searchCollectionName = 'Radius';
+              searchVariableName = aliasRef.key.replace(/\./g, ' / ');
+            } else if (aliasRef.category === 'stroke') {
+              searchCollectionName = 'Stroke';
+              searchVariableName = aliasRef.key.replace(/\./g, ' / ');
+            } else {
+              // Generic fallback
+              searchCollectionName = aliasRef.category.charAt(0).toUpperCase() + aliasRef.category.slice(1);
+              searchVariableName = aliasRef.key.replace(/\./g, ' / ');
+            }
+
+            if (searchCollectionName && searchVariableName) {
+              for (var i = 0; i < allLocalVariables.length; i++) {
+                var v = allLocalVariables[i];
+                var c = allLocalCollections.find(function (col) { return col.id === v.variableCollectionId; });
+                if (c && c.name === searchCollectionName && v.name === searchVariableName) {
+                  foundVariableId = v.id;
+                  console.log(`📡 [GLOBAL_RESOLVE] Found ${key} target ${searchCollectionName}/${searchVariableName} via Global search`);
+                  break;
+                }
               }
             }
           }
@@ -7154,6 +7133,8 @@ async function importTokensToFigma(tokens, naming, overwrite) {
           if (foundVariableId) {
             resolvedAliasTo = { variableId: foundVariableId };
             console.log(`✅ [ALIAS_RESOLVE] ${key} (${modeInfo.name}) → id: ${foundVariableId}`);
+          } else {
+            console.warn(`⚠️ [ALIAS_MISS] ${key}: Could not resolve alias ${aliasRef.category}/${aliasRef.key}`);
           }
         }
 
@@ -7193,14 +7174,10 @@ async function importTokensToFigma(tokens, naming, overwrite) {
   postToUI({ type: 'import-completed' });
 }
 
-
-
-
-
 // Fonction pour construire une map globale des variables existantes pour la résolution des alias
 // VERSION AMÉLIORÉE avec plus de variantes de clés
 function buildGlobalVariableMap() {
-  (function () { return function () { } })() && console.log('🔍 Building global variable map for semantic alias resolution');
+  if (DEBUG) console.log('🔍 Building global variable map for semantic alias resolution');
 
   var vars = figma.variables.getLocalVariables();
   var byName = new Map();
@@ -7253,10 +7230,10 @@ function buildGlobalVariableMap() {
     }
   }
 
-  (function () { return function () { } })() && console.log(`✅ Global variable map built: ${byName.size} variables mapped`);
+  if (DEBUG) console.log(`✅ Global variable map built: ${byName.size} variables mapped`);
   // Debug: montrer quelques clés
   var keys = Array.from(byName.keys()).slice(0, 10);
-  (function () { return function () { } })() && console.log(`🔍 Sample keys: ${keys.join(', ')}`);
+  if (DEBUG) console.log(`🔍 Sample keys: ${keys.join(', ')}`);
   return byName;
 }
 
@@ -7271,9 +7248,9 @@ function getPrimitiveMappingForSemantic(semanticKey, lib) {
   // Les clés correspondent aux valeurs extraites par extractVariableKey
   const mappings = {
     tailwind: {
-      // Background
-      'bg.canvas': { category: 'gray', keys: ['50'], darkKeys: ['950'] },
-      'bg.surface': { category: 'gray', keys: ['100'], darkKeys: ['900'] },
+      // Background - NOTE: bg.canvas is DARKER than bg.surface
+      'bg.canvas': { category: 'gray', keys: ['100'], darkKeys: ['900'] },
+      'bg.surface': { category: 'gray', keys: ['50'], darkKeys: ['950'] },
       'bg.elevated': { category: 'gray', keys: ['200'], darkKeys: ['800'] },
       'bg.subtle': { category: 'gray', keys: ['300'], darkKeys: ['700'] },
       'bg.muted': { category: 'gray', keys: ['400'], darkKeys: ['600'] },
@@ -7339,7 +7316,8 @@ function getPrimitiveMappingForSemantic(semanticKey, lib) {
       'font.weight.bold': { category: 'typography', keys: ['700'] }
     },
     ant: {
-      'bg.canvas': { category: 'gray', keys: ['1'] },
+      // Background - NOTE: bg.canvas is DARKER than bg.surface
+      'bg.canvas': { category: 'gray', keys: ['2'] },
       'bg.surface': { category: 'gray', keys: ['1'] },
       'bg.elevated': { category: 'gray', keys: ['2'] },
       'bg.muted': { category: 'gray', keys: ['2'] },
@@ -7374,8 +7352,9 @@ function getPrimitiveMappingForSemantic(semanticKey, lib) {
       'font.weight.base': { category: 'typography', keys: ['400'] }
     },
     bootstrap: {
-      'bg.canvas': { category: 'gray', keys: ['white', '100'] },
-      'bg.surface': { category: 'gray', keys: ['100', '200'] },
+      // Background - NOTE: bg.canvas is DARKER than bg.surface
+      'bg.canvas': { category: 'gray', keys: ['100', '200'] },
+      'bg.surface': { category: 'gray', keys: ['white', '100'] },
       'bg.elevated': { category: 'gray', keys: ['200', '300'] },
       'bg.muted': { category: 'gray', keys: ['300', '400'] },
       'bg.inverse': { category: 'gray', keys: ['900', 'dark'] },
@@ -7402,8 +7381,9 @@ function getPrimitiveMappingForSemantic(semanticKey, lib) {
       'font.weight.base': { category: 'typography', keys: ['normal', '400'] }
     },
     mui: {
-      'bg.canvas': { category: 'gray', keys: ['50', 'white'] },
-      'bg.surface': { category: 'gray', keys: ['100', 'grey.50'] },
+      // Background - NOTE: bg.canvas is DARKER than bg.surface
+      'bg.canvas': { category: 'gray', keys: ['100', 'grey.50'] },
+      'bg.surface': { category: 'gray', keys: ['50', 'white'] },
       'bg.elevated': { category: 'gray', keys: ['200', 'grey.100'] },
       'bg.muted': { category: 'gray', keys: ['300', 'grey.200'] },
       'bg.inverse': { category: 'gray', keys: ['900'] },
@@ -7430,8 +7410,9 @@ function getPrimitiveMappingForSemantic(semanticKey, lib) {
       'font.weight.base': { category: 'typography', keys: ['regular', '400'] }
     },
     chakra: {
-      'bg.canvas': { category: 'gray', keys: ['50'] },
-      'bg.surface': { category: 'gray', keys: ['100'] },
+      // Background - NOTE: bg.canvas is DARKER than bg.surface
+      'bg.canvas': { category: 'gray', keys: ['100'] },
+      'bg.surface': { category: 'gray', keys: ['50'] },
       'bg.elevated': { category: 'gray', keys: ['200'] },
       'bg.muted': { category: 'gray', keys: ['300'] },
       'bg.inverse': { category: 'gray', keys: ['900', '800'] },
@@ -7584,7 +7565,6 @@ function resolveSemanticAliasFromMap(semanticKey, allTokens, naming, globalVaria
     const mapping = getPrimitiveMappingForSemantic(semanticKey, lib);
 
     if (!mapping) {
-      // console.warn(`⚠️ [ALIAS_RESOLVE] No mapping found for ${semanticKey} with ${naming}, using legacy method`);
       // FALLBACK vers l'ancienne logique si pas de mapping
       return resolveSemanticAliasFromMapLegacy(semanticKey, allTokens, naming, globalVariableMap);
     }
@@ -7593,13 +7573,13 @@ function resolveSemanticAliasFromMap(semanticKey, allTokens, naming, globalVaria
     const isDark = (modeName && modeName.toLowerCase() === 'dark');
     const targetKeys = (isDark && mapping.darkKeys) ? mapping.darkKeys : mapping.keys;
 
-    (function () { return function () { } })() && console.log(`🎯 [ALIAS_RESOLVE] ${semanticKey}: ${JSON.stringify(mapping)} (Mode: ${modeName || 'light'}) -> targetKeys: [${targetKeys.join(', ')}]`);
+    if (DEBUG) console.log(`🎯 [ALIAS_RESOLVE] ${semanticKey}: ${JSON.stringify(mapping)} (Mode: ${modeName || 'light'}) -> targetKeys: [${targetKeys.join(', ')}]`);
 
     // Chercher directement dans la map globale avec toutes les variantes possibles
     for (var i = 0; i < targetKeys.length; i++) {
       var targetKey = targetKeys[i];
 
-      (function () { return function () { } })() && console.log(`🔍 [TARGET_KEY] ${semanticKey} -> targetKey: "${targetKey}" (type: ${typeof targetKey})`);
+      if (DEBUG) console.log(`🔍 [TARGET_KEY] ${semanticKey} -> targetKey: "${targetKey}" (type: ${typeof targetKey})`);
 
       // Générer les clés dans l'ordre de priorité STRICTE pour éviter les collisions
       var possibleKeys = [];
@@ -7632,13 +7612,13 @@ function resolveSemanticAliasFromMap(semanticKey, allTokens, naming, globalVaria
         }
       }
 
-      (function () { return function () { } })() && console.log(`🔍 [SEARCH_KEYS] ${semanticKey} -> targetKey: '${targetKey}' -> possibleKeys: [${possibleKeys.join(', ')}] (${possibleKeys.length} keys)`);
+      if (DEBUG) console.log(`🔍 [SEARCH_KEYS] ${semanticKey} -> targetKey: '${targetKey}' -> possibleKeys: [${possibleKeys.join(', ')}] (${possibleKeys.length} keys)`);
 
       // Chercher dans la map
       for (var j = 0; j < possibleKeys.length; j++) {
         var searchKey = possibleKeys[j];
         var variableId = globalVariableMap.get(searchKey);
-        (function () { return function () { } })() && console.log(`🔎 [SEARCH_ATTEMPT] ${semanticKey} -> checking '${searchKey}' in map -> ${variableId ? 'FOUND (ID: ' + variableId + ')' : 'NOT FOUND'}`);
+        if (DEBUG) console.log(`🔎 [SEARCH_ATTEMPT] ${semanticKey} -> checking '${searchKey}' in map -> ${variableId ? 'FOUND (ID: ' + variableId + ')' : 'NOT FOUND'}`);
         if (variableId) {
           // VÉRIFICATION ANTI-COLLISION : Désactivée temporairement car elle cause des blocages 
           // et empêche le partage légitime de primitives entre tokens (ex: disabled states)
@@ -7648,18 +7628,18 @@ function resolveSemanticAliasFromMap(semanticKey, allTokens, naming, globalVaria
           var collisionKey = scope + ':' + variableId + ':' + currentMode;
 
           if (resolveSemanticAliasFromMap.usedVariables.has(collisionKey)) {
-            (function () { return function () { } })() && console.log(`⚠️ [COLLISION_AVOIDED] ${semanticKey} -> '${searchKey}' already used by another token in scope '${scope}' for mode '${currentMode}' (ID: ${variableId}), skipping`);
+            if (DEBUG) console.log(`⚠️ [COLLISION_AVOIDED] ${semanticKey} -> '${searchKey}' already used by another token in scope '${scope}' for mode '${currentMode}' (ID: ${variableId}), skipping`);
             continue;
           }
           */
 
-          (function () { return function () { } })() && console.log(`✅ [MAP_HIT] ${semanticKey} -> '${searchKey}' found in global map (ID: ${variableId})`);
+          if (DEBUG) console.log(`✅ [MAP_HIT] ${semanticKey} -> '${searchKey}' found in global map (ID: ${variableId})`);
           var variable = figma.variables.getVariableById(variableId);
           if (variable) {
             // Vérifier que c'est bien la bonne collection
             var collection = figma.variables.getVariableCollectionById(variable.variableCollectionId);
             if (collection && isCollectionCategory(collection.name, mapping.category)) {
-              (function () { return function () { } })() && console.log(`🎯 [ALIAS_FOUND] ${semanticKey} -> ${searchKey} -> ${collection.name}/${variable.name} (ID: ${variableId})`);
+              if (DEBUG) console.log(`🎯 [ALIAS_FOUND] ${semanticKey} -> ${searchKey} -> ${collection.name}/${variable.name} (ID: ${variableId})`);
               // ✅ VÉRIFICATION SUPPLÉMENTAIRE : s'assurer que la variable a une valeur valide dans au moins un mode
               var hasValidValue = false;
               if (collection.modes && collection.modes.length > 0) {
@@ -7676,7 +7656,7 @@ function resolveSemanticAliasFromMap(semanticKey, allTokens, naming, globalVaria
               if (hasValidValue) {
                 // MARQUER COMME UTILISÉE pour éviter les futures collisions DANS CE SCOPE + MODE
                 resolveSemanticAliasFromMap.usedVariables.add(collisionKey);
-                (function () { return function () { } })() && console.log(`✅ [ALIAS_RESOLVE] Found via map: ${semanticKey} → ${possibleKeys[j]} (${variable.name}) - marked as used for scope '${scope}' in mode '${currentMode}' (key: ${collisionKey})`);
+                if (DEBUG) console.log(`✅ [ALIAS_RESOLVE] Found via map: ${semanticKey} → ${possibleKeys[j]} (${variable.name}) - marked as used for scope '${scope}' in mode '${currentMode}' (key: ${collisionKey})`);
                 return {
                   variableId: variableId,
                   collection: mapping.category,
@@ -7692,7 +7672,6 @@ function resolveSemanticAliasFromMap(semanticKey, allTokens, naming, globalVaria
       }
     }
 
-    // console.warn(`⚠️ [ALIAS_RESOLVE] Not found in map after trying ${targetKeys.length} keys, trying legacy method`);
     // FALLBACK vers l'ancienne logique si la nouvelle ne trouve rien
     // Note: l'ancienne logique n'est pas mode-aware, donc risque d'erreur pour Dark mode
     return resolveSemanticAliasFromMapLegacy(semanticKey, allTokens, naming, globalVariableMap);
@@ -7704,12 +7683,7 @@ function resolveSemanticAliasFromMap(semanticKey, allTokens, naming, globalVaria
 }
 
 var cachedTokens = null;
-var lastScanResults = null;
-
-
-
-
-
+// P0-A Phase 3: lastScanResults removed, use Scanner.lastScanResults instead
 
 function resolveVariableValue(variable, modeId, visitedVariables) {
   if (!visitedVariables) visitedVariables = new Set();
@@ -7762,7 +7736,6 @@ function resolveVariableValue(variable, modeId, visitedVariables) {
   }
 }
 
-
 // Tâche A — Normaliser le format aliasTo (string OU objet)
 function normalizeAliasToDescriptor(aliasTo) {
   // returns { variableId: string|null, raw: any, isValid: boolean }
@@ -7798,7 +7771,6 @@ function createValueToVariableMap() {
   var map = new Map();
   var localCollections = figma.variables.getLocalVariableCollections();
 
-
   localCollections.forEach(function (collection) {
     collection.variableIds.forEach(function (variableId) {
       var variable = figma.variables.getVariableById(variableId);
@@ -7808,7 +7780,6 @@ function createValueToVariableMap() {
 
       collection.modes.forEach(function (mode) {
         var modeId = mode.modeId;
-
 
         var resolvedValue = resolveVariableValue(variable, modeId);
 
@@ -7857,7 +7828,6 @@ function isColorValue(value) {
   return value && typeof value === 'object' && 'r' in value && 'g' in value && 'b' in value;
 }
 
-
 function getColorDistance(hex1, hex2) {
 
   function hexToRgb(hex) {
@@ -7874,15 +7844,12 @@ function getColorDistance(hex1, hex2) {
 
   if (!rgb1 || !rgb2) return 999;
 
-
   var dr = rgb1.r - rgb2.r;
   var dg = rgb1.g - rgb2.g;
   var db = rgb1.b - rgb2.b;
 
   return Math.sqrt(dr * dr + dg * dg + db * db);
 }
-
-
 
 function getScopesForProperty(propertyType) {
   var propertyScopes = {
@@ -7895,13 +7862,11 @@ function getScopesForProperty(propertyType) {
     "Local Fill Style": ["ALL_FILLS", "FRAME_FILL", "SHAPE_FILL"], // ❌ Retiré TEXT_FILL
     "Local Stroke Style": ["STROKE_COLOR"],
 
-
     "CORNER RADIUS": ["CORNER_RADIUS"],
     "TOP LEFT RADIUS": ["CORNER_RADIUS"],
     "TOP RIGHT RADIUS": ["CORNER_RADIUS"],
     "BOTTOM LEFT RADIUS": ["CORNER_RADIUS"],
     "BOTTOM RIGHT RADIUS": ["CORNER_RADIUS"],
-
 
     "Item Spacing": ["GAP"],
     "Padding Left": ["INDIVIDUAL_PADDING", "GAP"],
@@ -7909,13 +7874,11 @@ function getScopesForProperty(propertyType) {
     "Padding Top": ["INDIVIDUAL_PADDING", "GAP"],
     "Padding Bottom": ["INDIVIDUAL_PADDING", "GAP"],
 
-
     "Font Size": ["FONT_SIZE"]
   };
 
   return propertyScopes[propertyType] || [];
 }
-
 
 function filterVariablesByScopes(variables, requiredScopes) {
   if (!requiredScopes || requiredScopes.length === 0) {
@@ -8721,19 +8684,15 @@ function enrichSuggestionsWithRealValues(suggestions, contextModeId) {
   });
 }
 
-
-
 function checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLayers) {
 
   if (!node) {
     return;
   }
 
-
   if (node.removed) {
     return;
   }
-
 
   if (!node.id || !node.name || !node.type) {
     return;
@@ -8743,12 +8702,9 @@ function checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLaye
   var layerName = node.name;
   var nodeType = node.type;
 
-
   if (!node || !node.id || !node.type) {
     return;
   }
-
-
 
   if (ignoreHiddenLayers) {
     try {
@@ -8763,9 +8719,7 @@ function checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLaye
     }
   }
 
-
   var supportedTypes = CONFIG.supportedTypes.all;
-
 
   var styleSupportedTypes = CONFIG.supportedTypes.fillAndStroke;
 
@@ -8776,7 +8730,6 @@ function checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLaye
     return;
   }
 
-
   if (supportsStyle) {
     try {
 
@@ -8784,17 +8737,13 @@ function checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLaye
         checkFillsSafely(node, valueToVariableMap, results);
       }
 
-
       if (node.strokes !== undefined && node.strokes !== figma.mixed) {
         checkStrokesSafely(node, valueToVariableMap, results);
       }
 
-
       checkCornerRadiusSafely(node, valueToVariableMap, results);
 
-
       checkNumericPropertiesSafely(node, valueToVariableMap, results);
-
 
       if (node.type === CONFIG.types.TEXT) {
         checkTypographyPropertiesSafely(node, valueToVariableMap, results);
@@ -8808,7 +8757,6 @@ function checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLaye
     }
   }
 }
-
 
 function checkTypographyPropertiesSafely(node, valueToVariableMap, results) {
   try {
@@ -8924,7 +8872,6 @@ function checkTypographyPropertiesSafely(node, valueToVariableMap, results) {
   }
 }
 
-
 function checkLocalStylesSafely(node, valueToVariableMap, results) {
   try {
     var contextModeId = detectNodeModeId(node);
@@ -9019,8 +8966,6 @@ function checkLocalStylesSafely(node, valueToVariableMap, results) {
     }
   } catch (localStylesError) { }
 }
-
-
 
 // ============================================================================
 // DIAGNOSTIC SYSTEM FOR BG/INVERSE MISSING FROM SUGGESTIONS
@@ -9470,7 +9415,6 @@ function checkStrokesSafely(node, valueToVariableMap, results) {
   }
 }
 
-
 function checkCornerRadiusSafely(node, valueToVariableMap, results) {
   try {
     var radiusSupportedTypes = CONFIG.supportedTypes.radius;
@@ -9592,7 +9536,6 @@ function checkCornerRadiusSafely(node, valueToVariableMap, results) {
     if (DEBUG) console.error('[SCAN ERROR] checkCornerRadiusSafely', globalRadiusError);
   }
 }
-
 
 function checkNumericPropertiesSafely(node, valueToVariableMap, results) {
   try {
@@ -9810,7 +9753,6 @@ function checkNumericPropertiesSafely(node, valueToVariableMap, results) {
   }
 }
 
-
 function isPropertyBoundToVariable(boundVariables, propertyPath, index) {
   try {
     if (!boundVariables || typeof boundVariables !== 'object') return false;
@@ -9840,7 +9782,6 @@ function isPropertyBoundToVariable(boundVariables, propertyPath, index) {
       return false;
     }
 
-
     var variable = figma.variables.getVariableById(binding.id);
     return variable !== null && variable !== undefined;
 
@@ -9848,8 +9789,6 @@ function isPropertyBoundToVariable(boundVariables, propertyPath, index) {
     return false;
   }
 }
-
-
 
 function scanNodeRecursive(node, valueToVariableMap, results, depth, ignoreHiddenLayers) {
 
@@ -9859,37 +9798,29 @@ function scanNodeRecursive(node, valueToVariableMap, results, depth, ignoreHidde
     return;
   }
 
-
   if (!node) {
     return;
   }
-
 
   if (node.removed) {
     return;
   }
 
-
   if (!node.id || !node.type) {
     return;
   }
-
 
   try {
     var nodeType = node.type;
     var nodeId = node.id;
     var nodeName = node.name || "Unnamed";
 
-
-
     var containerTypes = CONFIG.supportedTypes.spacing;
-
 
     var styleTypes = CONFIG.supportedTypes.fillAndStroke;
 
     var isContainer = containerTypes.indexOf(nodeType) !== -1;
     var hasStyle = styleTypes.indexOf(nodeType) !== -1;
-
 
     if (hasStyle) {
       try {
@@ -9897,9 +9828,6 @@ function scanNodeRecursive(node, valueToVariableMap, results, depth, ignoreHidde
       } catch (propertyAnalysisError) {
       }
     }
-
-
-
 
     if (isContainer) {
       try {
@@ -9911,7 +9839,6 @@ function scanNodeRecursive(node, valueToVariableMap, results, depth, ignoreHidde
             try {
               var child = children[i];
 
-
               if (!child) {
                 continue;
               }
@@ -9919,7 +9846,6 @@ function scanNodeRecursive(node, valueToVariableMap, results, depth, ignoreHidde
               if (child.removed) {
                 continue;
               }
-
 
               scanNodeRecursive(child, valueToVariableMap, results, depth + 1, ignoreHiddenLayers);
 
@@ -9941,7 +9867,6 @@ function scanNodeRecursive(node, valueToVariableMap, results, depth, ignoreHidde
   }
 }
 
-
 function scanSelection(ignoreHiddenLayers) {
 
   try {
@@ -9953,15 +9878,11 @@ function scanSelection(ignoreHiddenLayers) {
       return [];
     }
 
-
     if (selection.length === 0) {
       figma.notify("📄 Aucune sélection : Analyse de la page entière...");
 
-
       return scanPage(ignoreHiddenLayers);
     }
-
-
 
     var valueToVariableMap;
     try {
@@ -9978,7 +9899,6 @@ function scanSelection(ignoreHiddenLayers) {
       return [];
     }
 
-
     startAsyncScan(selection, valueToVariableMap, ignoreHiddenLayers);
 
   } catch (scanError) {
@@ -9986,7 +9906,6 @@ function scanSelection(ignoreHiddenLayers) {
     postToUI({ type: "scan-results", results: [] });
   }
 }
-
 
 function scanPage(ignoreHiddenLayers) {
 
@@ -10001,7 +9920,6 @@ function scanPage(ignoreHiddenLayers) {
       return [];
     }
 
-
     var valueToVariableMap;
     try {
       valueToVariableMap = createValueToVariableMap();
@@ -10016,7 +9934,6 @@ function scanPage(ignoreHiddenLayers) {
       return [];
     }
 
-
     startAsyncScan(pageChildren, valueToVariableMap, ignoreHiddenLayers);
 
   } catch (pageScanError) {
@@ -10025,13 +9942,11 @@ function scanPage(ignoreHiddenLayers) {
   }
 }
 
-
 function startAsyncScan(nodes, valueToVariableMap, ignoreHiddenLayers) {
   var CHUNK_SIZE = 50;
   var currentIndex = 0;
   var results = [];
   var totalNodes = nodes.length;
-
 
   postToUI({
     type: "scan-progress",
@@ -10040,21 +9955,17 @@ function startAsyncScan(nodes, valueToVariableMap, ignoreHiddenLayers) {
     status: "Démarrage de l'analyse..."
   });
 
-
   function processChunk() {
     var chunkEnd = Math.min(currentIndex + CHUNK_SIZE, totalNodes);
     var processedInChunk = 0;
-
 
     for (var i = currentIndex; i < chunkEnd; i++) {
       try {
         var node = nodes[i];
 
-
         if (!node || node.removed) {
           continue;
         }
-
 
         scanNodeRecursive(node, valueToVariableMap, results, 0, ignoreHiddenLayers);
         processedInChunk++;
@@ -10065,7 +9976,6 @@ function startAsyncScan(nodes, valueToVariableMap, ignoreHiddenLayers) {
 
     currentIndex = chunkEnd;
 
-
     var progress = (currentIndex / totalNodes) * 100;
     postToUI({
       type: "scan-progress",
@@ -10074,7 +9984,6 @@ function startAsyncScan(nodes, valueToVariableMap, ignoreHiddenLayers) {
       total: totalNodes,
       status: "Analyse en cours... " + currentIndex + "/" + totalNodes
     });
-
 
     if (currentIndex < totalNodes) {
 
@@ -10085,28 +9994,18 @@ function startAsyncScan(nodes, valueToVariableMap, ignoreHiddenLayers) {
     }
   }
 
-
   setTimeout(processChunk, 10);
 }
 
-
-
 function finishScan(results) {
-
-
-
-  lastScanResults = results;
-
+  // P0-A Phase 3: Scanner.lastScanResults is the single source of truth
   Scanner.lastScanResults = results;
-
-
 
   if (results.length > 0) {
     FigmaService.notify("✅ Analyse terminée - " + results.length + " problème(s) détecté(s)");
   } else {
     FigmaService.notify("✅ Analyse terminée - Aucun problème détecté");
   }
-
 
   setTimeout(function () {
 
@@ -10128,12 +10027,6 @@ function finishScan(results) {
   }, 100);
 }
 
-
-
-
-
-
-
 function diagnoseApplicationFailure(result, variableId, error) {
 
   var diagnosis = {
@@ -10154,10 +10047,8 @@ function diagnoseApplicationFailure(result, variableId, error) {
       return diagnosis;
     }
 
-
     var requiredScopes = getScopesForProperty(result.property);
     var variableScopes = variable.scopes || [];
-
 
     var hasRequiredScopes = requiredScopes.some(function (scope) { return variableScopes.includes(scope); });
     if (!hasRequiredScopes && requiredScopes.length > 0) {
@@ -10168,7 +10059,6 @@ function diagnoseApplicationFailure(result, variableId, error) {
       diagnosis.details.variableScopes = variableScopes;
     }
 
-
     var expectedType = getExpectedVariableType(result.property);
     if (variable.resolvedType !== expectedType) {
       diagnosis.issue = 'type_mismatch';
@@ -10177,7 +10067,6 @@ function diagnoseApplicationFailure(result, variableId, error) {
       diagnosis.details.expectedType = expectedType;
       diagnosis.details.actualType = variable.resolvedType;
     }
-
 
     var node = figma.getNodeById(result.nodeId);
     if (!node) {
@@ -10194,12 +10083,10 @@ function diagnoseApplicationFailure(result, variableId, error) {
       return diagnosis;
     }
 
-
     var propertyCheck = checkSpecificPropertyIssue(node, result);
     if (propertyCheck.issue) {
       diagnosis = propertyCheck;
     }
-
 
     if (diagnosis.issue === 'unknown') {
       diagnosis.issue = 'technical_error';
@@ -10216,7 +10103,6 @@ function diagnoseApplicationFailure(result, variableId, error) {
 
   return diagnosis;
 }
-
 
 function getExpectedVariableType(property) {
   switch (property) {
@@ -10238,7 +10124,6 @@ function getExpectedVariableType(property) {
       return "UNKNOWN";
   }
 }
-
 
 function checkSpecificPropertyIssue(node, result) {
   var diagnosis = { issue: null, confidence: 'low', recommendations: [], details: {} };
@@ -10290,11 +10175,6 @@ function checkSpecificPropertyIssue(node, result) {
   return diagnosis;
 }
 
-
-
-
-
-
 async function applyAndVerifyFix(result, variableId) {
 
   var startTime = Date.now();
@@ -10313,8 +10193,6 @@ async function applyAndVerifyFix(result, variableId) {
 
   try {
 
-
-
     if (!result) {
       throw new Error('Résultat invalide ou incomplet');
     }
@@ -10325,7 +10203,6 @@ async function applyAndVerifyFix(result, variableId) {
       throw new Error('Résultat invalide: property manquant');
     }
 
-
     var finalVariableId = variableId || result.suggestedVariableId;
 
     if (!finalVariableId) {
@@ -10333,14 +10210,11 @@ async function applyAndVerifyFix(result, variableId) {
     }
     verificationResult.details.variableId = finalVariableId;
 
-
     var variable = figma.variables.getVariableById(finalVariableId);
     if (variable) {
     }
 
     if (!variable) {
-
-
 
       var allVars = figma.variables.getLocalVariables().slice(0, 5);
       throw new Error('Variable introuvable: ' + finalVariableId);
@@ -10364,14 +10238,11 @@ async function applyAndVerifyFix(result, variableId) {
       throw new Error('Propriété n\'existe plus: ' + result.property);
     }
 
-
     if (!validateVariableCanBeApplied(variable, result)) {
       throw new Error('Variable incompatible: ' + variable.name + ' (' + variable.resolvedType + ') pour ' + result.property);
     }
 
     var stateBefore = captureNodeState(node, result);
-
-
 
     var applied = await applyVariableToProperty(node, variable, result);
 
@@ -10400,11 +10271,9 @@ async function applyAndVerifyFix(result, variableId) {
     // ✅ FIX: Succès si application OK, même si vérification KO
     verificationResult.success = true;
 
-
   } catch (error) {
     verificationResult.error = error.message;
     verificationResult.success = false;
-
 
     try {
       var diagnosis = diagnoseApplicationFailure(result, verificationResult.details.variableId, error);
@@ -10421,7 +10290,6 @@ async function applyAndVerifyFix(result, variableId) {
   return verificationResult;
 }
 
-
 async function applySingleFix(result, selectedVariableId) {
   console.log('[APPLY] applySingleFix called', {
     nodeId: result.nodeId,
@@ -10435,7 +10303,6 @@ async function applySingleFix(result, selectedVariableId) {
 
   return verificationResult.success ? 1 : 0;
 }
-
 
 function getNodePropertyDebugInfo(node, result) {
   var debugInfo = {
@@ -10508,7 +10375,6 @@ function getNodePropertyDebugInfo(node, result) {
   return debugInfo;
 }
 
-
 function captureNodeState(node, result) {
   var state = {
     nodeId: node.id,
@@ -10521,7 +10387,6 @@ function captureNodeState(node, result) {
     if (node.boundVariables) {
       state.boundVariables = JSON.parse(JSON.stringify(node.boundVariables));
     }
-
 
     switch (result.property) {
       case "Fill":
@@ -10563,45 +10428,44 @@ function captureNodeState(node, result) {
   return state;
 }
 
-
 function verifyVariableApplication(node, variable, result, stateBefore, stateAfter) {
   try {
-    (function () { return function () { } })() && console.log('Verify Application: Checking property', result.property, 'for node', node.id);
+    if (DEBUG) console.log('Verify Application: Checking property', result.property, 'for node', node.id);
 
     // Pour les styles locaux, ne pas utiliser la vérification générale des boundVariables
     // car les variables sont appliquées aux fills/strokes individuels, pas au nœud principal
     if (result.property !== 'Local Fill Style' && result.property !== 'Local Stroke Style') {
-      (function () { return function () { } })() && console.log('Verify Application: Checking boundVariables change');
+      if (DEBUG) console.log('Verify Application: Checking boundVariables change');
       var boundVariablesChanged = JSON.stringify(stateBefore.boundVariables) !== JSON.stringify(stateAfter.boundVariables);
-      (function () { return function () { } })() && console.log('Verify Application: boundVariables changed:', boundVariablesChanged);
-      (function () { return function () { } })() && console.log('Verify Application: Before:', stateBefore.boundVariables);
-      (function () { return function () { } })() && console.log('Verify Application: After:', stateAfter.boundVariables);
+      if (DEBUG) console.log('Verify Application: boundVariables changed:', boundVariablesChanged);
+      if (DEBUG) console.log('Verify Application: Before:', stateBefore.boundVariables);
+      if (DEBUG) console.log('Verify Application: After:', stateAfter.boundVariables);
 
       if (boundVariablesChanged) {
-        (function () { return function () { } })() && console.log('Verify Application: Bound variables changed, success!');
+        if (DEBUG) console.log('Verify Application: Bound variables changed, success!');
         return true;
       }
     }
 
     switch (result.property) {
       case "Fill":
-        (function () { return function () { } })() && console.log('Verify Application: Using verifyFillApplication');
+        if (DEBUG) console.log('Verify Application: Using verifyFillApplication');
         return verifyFillApplication(node, variable, result.fillIndex, stateBefore, stateAfter);
 
       case "Stroke":
-        (function () { return function () { } })() && console.log('Verify Application: Using verifyStrokeApplication');
+        if (DEBUG) console.log('Verify Application: Using verifyStrokeApplication');
         return verifyStrokeApplication(node, variable, result.strokeIndex, stateBefore, stateAfter);
 
       case "Local Fill Style":
-        (function () { return function () { } })() && console.log('Verify Application: Using verifyLocalStyleApplication (fill)');
+        if (DEBUG) console.log('Verify Application: Using verifyLocalStyleApplication (fill)');
         return verifyLocalStyleApplication(node, variable, 'fill', stateBefore, stateAfter);
 
       case "Local Stroke Style":
-        (function () { return function () { } })() && console.log('Verify Application: Using verifyLocalStyleApplication (stroke)');
+        if (DEBUG) console.log('Verify Application: Using verifyLocalStyleApplication (stroke)');
         return verifyLocalStyleApplication(node, variable, 'stroke', stateBefore, stateAfter);
 
       default:
-        (function () { return function () { } })() && console.log('Verify Application: Using verifyNumericApplication for', result.property);
+        if (DEBUG) console.log('Verify Application: Using verifyNumericApplication for', result.property);
         return verifyNumericApplication(node, variable, result, stateBefore, stateAfter);
     }
 
@@ -10610,27 +10474,26 @@ function verifyVariableApplication(node, variable, result, stateBefore, stateAft
   }
 }
 
-
 function verifyLocalStyleApplication(node, variable, styleType, stateBefore, stateAfter) {
   try {
-    (function () { return function () { } })() && console.log('🔍 Verify Local Style:', styleType, 'for node', node.id, 'expected var:', variable.id);
+    if (DEBUG) console.log('🔍 Verify Local Style:', styleType, 'for node', node.id, 'expected var:', variable.id);
 
     // Vérifier que le style local a été supprimé
     if (styleType === 'fill' && node.fillStyleId) {
-      (function () { return function () { } })() && console.log('❌ Verify Local Style: fillStyleId still exists');
+      if (DEBUG) console.log('❌ Verify Local Style: fillStyleId still exists');
       return false;
     }
     if (styleType === 'stroke' && node.strokeStyleId) {
-      (function () { return function () { } })() && console.log('❌ Verify Local Style: strokeStyleId still exists');
+      if (DEBUG) console.log('❌ Verify Local Style: strokeStyleId still exists');
       return false;
     }
 
-    (function () { return function () { } })() && console.log('✅ Verify Local Style: Style correctly removed');
+    if (DEBUG) console.log('✅ Verify Local Style: Style correctly removed');
 
     // Vérifier que LA VARIABLE SPÉCIFIQUE est appliquée (comme pour les autres propriétés)
     var targetArray = styleType === 'fill' ? node.fills : node.strokes;
     if (!targetArray || targetArray.length === 0) {
-      (function () { return function () { } })() && console.log('❌ Verify Local Style: No fills/strokes found');
+      if (DEBUG) console.log('❌ Verify Local Style: No fills/strokes found');
       return false;
     }
 
@@ -10639,22 +10502,21 @@ function verifyLocalStyleApplication(node, variable, styleType, stateBefore, sta
       var item = targetArray[i];
       if (item && item.boundVariables && item.boundVariables.color) {
         var boundVar = item.boundVariables.color;
-        (function () { return function () { } })() && console.log('Verify Local Style: Found variable', boundVar.id, 'type:', boundVar.type);
+        if (DEBUG) console.log('Verify Local Style: Found variable', boundVar.id, 'type:', boundVar.type);
         if (boundVar.type === 'VARIABLE_ALIAS' && boundVar.id === variable.id) {
-          (function () { return function () { } })() && console.log('✅ Verify Local Style: Correct variable found');
+          if (DEBUG) console.log('✅ Verify Local Style: Correct variable found');
           return true;
         }
       }
     }
 
-    (function () { return function () { } })() && console.log('❌ Verify Local Style: Expected variable not found');
+    if (DEBUG) console.log('❌ Verify Local Style: Expected variable not found');
     return false;
   } catch (error) {
     console.error('❌ Verify Local Style: Exception:', error.message);
     return false;
   }
 }
-
 
 function verifyFillApplication(node, variable, fillIndex, stateBefore, stateAfter) {
   try {
@@ -10663,7 +10525,6 @@ function verifyFillApplication(node, variable, fillIndex, stateBefore, stateAfte
     }
 
     var currentFill = node.fills[fillIndex];
-
 
     if (currentFill.boundVariables && currentFill.boundVariables.color) {
       var boundVar = currentFill.boundVariables.color;
@@ -10679,7 +10540,6 @@ function verifyFillApplication(node, variable, fillIndex, stateBefore, stateAfte
   }
 }
 
-
 function verifyStrokeApplication(node, variable, strokeIndex, stateBefore, stateAfter) {
   try {
     if (!node.strokes || !node.strokes[strokeIndex]) {
@@ -10687,7 +10547,6 @@ function verifyStrokeApplication(node, variable, strokeIndex, stateBefore, state
     }
 
     var currentStroke = node.strokes[strokeIndex];
-
 
     if (currentStroke.boundVariables && currentStroke.boundVariables.color) {
       var boundVar = currentStroke.boundVariables.color;
@@ -10703,37 +10562,36 @@ function verifyStrokeApplication(node, variable, strokeIndex, stateBefore, state
   }
 }
 
-
 function verifyNumericApplication(node, variable, result, stateBefore, stateAfter) {
   try {
-    (function () { return function () { } })() && console.log('Verify Numeric: Checking property', result.property, 'figmaProperty:', result.figmaProperty);
+    if (DEBUG) console.log('Verify Numeric: Checking property', result.property, 'figmaProperty:', result.figmaProperty);
 
     if (!result.figmaProperty) {
-      (function () { return function () { } })() && console.log('Verify Numeric: No figmaProperty specified');
+      if (DEBUG) console.log('Verify Numeric: No figmaProperty specified');
       return false;
     }
 
-    (function () { return function () { } })() && console.log('Verify Numeric: Current boundVariables:', node.boundVariables);
-    (function () { return function () { } })() && console.log('Verify Numeric: Looking for', result.figmaProperty);
+    if (DEBUG) console.log('Verify Numeric: Current boundVariables:', node.boundVariables);
+    if (DEBUG) console.log('Verify Numeric: Looking for', result.figmaProperty);
 
     if (node.boundVariables && node.boundVariables[result.figmaProperty]) {
       var boundVar = node.boundVariables[result.figmaProperty];
-      (function () { return function () { } })() && console.log('Verify Numeric: Found bound variable:', boundVar, 'expected variable id:', variable.id);
+      if (DEBUG) console.log('Verify Numeric: Found bound variable:', boundVar, 'expected variable id:', variable.id);
 
       // ✅ FIX: boundVar peut être un tableau pour certaines propriétés (fontSize, etc.)
       var actualBoundVar = Array.isArray(boundVar) ? boundVar[0] : boundVar;
 
       if (actualBoundVar && actualBoundVar.type === 'VARIABLE_ALIAS' && actualBoundVar.id === variable.id) {
-        (function () { return function () { } })() && console.log('Verify Numeric: Variable correctly applied!');
+        if (DEBUG) console.log('Verify Numeric: Variable correctly applied!');
         return true;
       } else {
-        (function () { return function () { } })() && console.log('Verify Numeric: Wrong variable or type. Got:', actualBoundVar);
+        if (DEBUG) console.log('Verify Numeric: Wrong variable or type. Got:', actualBoundVar);
       }
     } else {
-      (function () { return function () { } })() && console.log('Verify Numeric: No bound variable found for', result.figmaProperty);
+      if (DEBUG) console.log('Verify Numeric: No bound variable found for', result.figmaProperty);
     }
 
-    (function () { return function () { } })() && console.log('Verify Numeric: Verification failed');
+    if (DEBUG) console.log('Verify Numeric: Verification failed');
     return false;
 
   } catch (error) {
@@ -10741,11 +10599,6 @@ function verifyNumericApplication(node, variable, result, stateBefore, stateAfte
     return false;
   }
 }
-
-
-
-
-
 
 function validatePropertyExists(node, result) {
   try {
@@ -10814,7 +10667,6 @@ function validatePropertyExists(node, result) {
   }
 }
 
-
 function validateVariableCanBeApplied(variable, result) {
   try {
 
@@ -10859,7 +10711,6 @@ function validateVariableCanBeApplied(variable, result) {
     return false;
   }
 }
-
 
 async function applyVariableToProperty(node, variable, result) {
   if (DEBUG) console.log('[APPLY] applyVariableToProperty start', { node: node.name, property: result.property, variable: variable.name });
@@ -10956,7 +10807,6 @@ async function applyVariableToProperty(node, variable, result) {
   }
 }
 
-
 function findFillIndexWithLocalStyleColor(node) {
   // Par défaut, on utilise l'index 0, mais on pourrait améliorer cette logique
   // en comparant les couleurs des fills avec la couleur du style local
@@ -10971,7 +10821,7 @@ function findStrokeIndexWithLocalStyleColor(node) {
 
 function applyVariableToLocalStyle(node, variable, styleType, result) {
   try {
-    (function () { return function () { } })() && console.log('Local Style Application: Applying', styleType, 'style to node', node.id, 'variable:', variable.name);
+    if (DEBUG) console.log('Local Style Application: Applying', styleType, 'style to node', node.id, 'variable:', variable.name);
 
     // Vérifier l'état avant application
     var targetArray = styleType === 'fill' ? node.fills : node.strokes;
@@ -10981,36 +10831,36 @@ function applyVariableToLocalStyle(node, variable, styleType, result) {
     if (targetArray && targetArray[targetIndex] && targetArray[targetIndex].boundVariables && targetArray[targetIndex].boundVariables.color) {
       var existingVar = targetArray[targetIndex].boundVariables.color;
       if (existingVar.id === variable.id) {
-        (function () { return function () { } })() && console.log('Local Style Application: Variable already applied from preview, success');
+        if (DEBUG) console.log('Local Style Application: Variable already applied from preview, success');
         hasExistingVariable = true;
       } else {
-        (function () { return function () { } })() && console.log('Local Style Application: Different variable already applied:', existingVar.id);
+        if (DEBUG) console.log('Local Style Application: Different variable already applied:', existingVar.id);
       }
     }
 
     // Supprimer le style local
     if (styleType === 'fill' && node.fillStyleId) {
-      (function () { return function () { } })() && console.log('Local Style Application: Removing fillStyleId:', node.fillStyleId);
+      if (DEBUG) console.log('Local Style Application: Removing fillStyleId:', node.fillStyleId);
       node.fillStyleId = '';
     } else if (styleType === 'stroke' && node.strokeStyleId) {
-      (function () { return function () { } })() && console.log('Local Style Application: Removing strokeStyleId:', node.strokeStyleId);
+      if (DEBUG) console.log('Local Style Application: Removing strokeStyleId:', node.strokeStyleId);
       node.strokeStyleId = '';
     }
 
     // IMPORTANT: Pour les styles locaux, on doit supprimer le style local et appliquer la variable
-    (function () { return function () { } })() && console.log('Local Style Application: Processing', styleType, 'style');
+    if (DEBUG) console.log('Local Style Application: Processing', styleType, 'style');
 
     // Supprimer le style local
     if (styleType === 'fill' && node.fillStyleId) {
       node.fillStyleId = '';
-      (function () { return function () { } })() && console.log('Local Style Application: fillStyleId removed');
+      if (DEBUG) console.log('Local Style Application: fillStyleId removed');
     } else if (styleType === 'stroke' && node.strokeStyleId) {
       node.strokeStyleId = '';
-      (function () { return function () { } })() && console.log('Local Style Application: strokeStyleId removed');
+      if (DEBUG) console.log('Local Style Application: strokeStyleId removed');
     }
 
     // Appliquer la variable (toujours, même si elle semble déjà appliquée)
-    (function () { return function () { } })() && console.log('Local Style Application: Applying variable to', styleType);
+    if (DEBUG) console.log('Local Style Application: Applying variable to', styleType);
     if (styleType === 'fill') {
       return applyColorVariableToFill(node, variable, 0);
     } else if (styleType === 'stroke') {
@@ -11023,7 +10873,6 @@ function applyVariableToLocalStyle(node, variable, styleType, result) {
     return false;
   }
 }
-
 
 async function applyColorVariableToFill(node, variable, fillIndex, result) {
   try {
@@ -11094,7 +10943,6 @@ async function applyColorVariableToFill(node, variable, fillIndex, result) {
   }
 }
 
-
 async function applyColorVariableToStroke(node, variable, strokeIndex, result) {
   try {
     var strokePath = 'strokes[' + (strokeIndex || 0) + '].color';
@@ -11162,7 +11010,6 @@ async function applyColorVariableToStroke(node, variable, strokeIndex, result) {
   }
 }
 
-
 async function applyNumericVariable(node, variable, figmaProperty, displayProperty, result) {
   try {
     if (figmaProperty === 'itemSpacing' && node.primaryAxisAlignItems === 'SPACE_BETWEEN') {
@@ -11228,12 +11075,14 @@ async function applyAllFixes() {
   var failedCount = 0;
   var results = [];
 
-  if (!lastScanResults || lastScanResults.length === 0) {
+  // P0-A Phase 2: Use Scanner.lastScanResults as source of truth
+  var scanResults = Scanner.lastScanResults;
+  if (!scanResults || scanResults.length === 0) {
     return 0;
   }
 
-  for (var i = 0; i < lastScanResults.length; i++) {
-    var result = lastScanResults[i];
+  for (var i = 0; i < scanResults.length; i++) {
+    var result = scanResults[i];
     try {
       var verificationResult = await applyAndVerifyFix(result, result.suggestedVariableId);
       results.push({
@@ -11262,10 +11111,6 @@ async function applyAllFixes() {
   return appliedCount;
 }
 
-
-
-
-
 function checkAndNotifySelection() {
   var selection = figma.currentPage.selection;
   var hasValidSelection = selection.length > 0 && selection.some(function (node) {
@@ -11275,7 +11120,6 @@ function checkAndNotifySelection() {
       node.type === "INSTANCE" ||
       node.type === "SECTION";
   });
-
 
   var selectedFrameName = null;
   if (hasValidSelection) {
@@ -11290,7 +11134,6 @@ function checkAndNotifySelection() {
       selectedFrameName = firstValidNode.name;
     }
   }
-
 
   var selectionId = selection.map(function (n) { return n.id; }).sort().join('|');
 
@@ -11322,7 +11165,7 @@ function safeGetModeId(variable) {
       if (collection && collection.modes && collection.modes.length > 0) {
         return collection.modes[0].modeId;
       }
-      (function () { return function () { } })() && console.log(`⚠️ [SAFE_MODE] No collection modes for var=${variable.name} id=${variable.id} collectionId=${variable.variableCollectionId}`);
+      if (DEBUG) console.log(`⚠️ [SAFE_MODE] No collection modes for var=${variable.name} id=${variable.id} collectionId=${variable.variableCollectionId}`);
     } catch (e) {
       console.warn(`⚠️ [SAFE_MODE] Error getting collection for var=${variable.name} id=${variable.id} collectionId=${variable.variableCollectionId}:`, e);
     }
@@ -11332,13 +11175,13 @@ function safeGetModeId(variable) {
   if (variable.valuesByMode && typeof variable.valuesByMode === 'object') {
     var modeKeys = Object.keys(variable.valuesByMode);
     if (modeKeys.length > 0) {
-      (function () { return function () { } })() && console.log(`🔄 [SAFE_MODE] Using fallback mode "${modeKeys[0]}" for var=${variable.name} id=${variable.id} (no collection)`);
+      if (DEBUG) console.log(`🔄 [SAFE_MODE] Using fallback mode "${modeKeys[0]}" for var=${variable.name} id=${variable.id} (no collection)`);
       return modeKeys[0];
     }
-    (function () { return function () { } })() && console.log(`⚠️ [SAFE_MODE] No valuesByMode for var=${variable.name} id=${variable.id}`);
+    if (DEBUG) console.log(`⚠️ [SAFE_MODE] No valuesByMode for var=${variable.name} id=${variable.id}`);
   }
 
-  (function () { return function () { } })() && console.log(`❌ [SAFE_MODE] Cannot determine modeId for var=${variable.name || 'unknown'} id=${variable.id || 'unknown'}`);
+  if (DEBUG) console.log(`❌ [SAFE_MODE] Cannot determine modeId for var=${variable.name || 'unknown'} id=${variable.id || 'unknown'}`);
   return null;
 }
 
@@ -11358,7 +11201,7 @@ function mergeSemanticWithExistingAliases(generated, existing) {
     }
   }
 
-  (function () { return function () { } })() && console.log(`🔍 [MERGE] isGeneratedMultiMode: ${isGeneratedMultiMode}`);
+  if (DEBUG) console.log(`🔍 [MERGE] isGeneratedMultiMode: ${isGeneratedMultiMode}`);
 
   // Déterminer le mode actuel depuis les settings sauvegardés
   var currentThemeMode = 'light'; // Valeur par défaut
@@ -11372,7 +11215,7 @@ function mergeSemanticWithExistingAliases(generated, existing) {
 
   // Si c'est une structure multi-mode PAR TOKEN, préserver la structure
   if (isGeneratedMultiMode) {
-    (function () { return function () { } })() && console.log(`✅ [MERGE] Preserving per-token modes structure`);
+    if (DEBUG) console.log(`✅ [MERGE] Preserving per-token modes structure`);
     var merged = {};
     for (var key in generated) {
       if (!generated.hasOwnProperty(key)) continue;
@@ -11388,7 +11231,7 @@ function mergeSemanticWithExistingAliases(generated, existing) {
           merged[key].aliasTo = existingToken.aliasTo;
         }
 
-        (function () { return function () { } })() && console.log(`✅ [MERGE] ${key}: preserved modes structure (light: ${!!generatedToken.modes.light}, dark: ${!!generatedToken.modes.dark})`);
+        if (DEBUG) console.log(`✅ [MERGE] ${key}: preserved modes structure (light: ${!!generatedToken.modes.light}, dark: ${!!generatedToken.modes.dark})`);
       } else {
         // Token sans modes (ne devrait pas arriver avec la nouvelle structure)
         merged[key] = generatedToken;
@@ -11398,7 +11241,7 @@ function mergeSemanticWithExistingAliases(generated, existing) {
   }
 
   // Si ce n'est pas multi-mode (ancienne structure), fallback sur l'ancienne logique (simplifiée)
-  (function () { return function () { } })() && console.log(`⚠️ [MERGE] Using legacy flat merge logic`);
+  if (DEBUG) console.log(`⚠️ [MERGE] Using legacy flat merge logic`);
   var merged = {};
   for (var key in generated) {
     if (!generated.hasOwnProperty(key)) continue;
@@ -11418,7 +11261,7 @@ function mergeSemanticWithExistingAliases(generated, existing) {
   return merged;
 
   // Logique Multi-Mode : convertir vers structure plate pour le mode actuel
-  (function () { return function () { } })() && console.log(`🔄 Converting multi-mode tokens to flat structure for mode: ${currentThemeMode}`);
+  if (DEBUG) console.log(`🔄 Converting multi-mode tokens to flat structure for mode: ${currentThemeMode}`);
 
   var merged = {};
   var generatedMode = generated.modes[currentThemeMode] || {};
@@ -11573,25 +11416,25 @@ function inferCollectionTypeFromContent(collection) {
 
 // Fonction de diagnostic pour la résolution des alias sémantiques
 function debugSemanticAliasResolution(semanticKey, naming) {
-  (function () { return function () { } })() && console.log(`🔍 [DEBUG] Resolution attempt for ${semanticKey} with naming=${naming}`);
+  if (DEBUG) console.log(`🔍 [DEBUG] Resolution attempt for ${semanticKey} with naming=${naming}`);
 
   try {
     // Use centralized mapping (source-of-truth: getPrimitiveMappingForSemantic)
     var lib = normalizeLibType(naming);
     var mapping = getPrimitiveMappingForSemantic(semanticKey, lib);
     if (!mapping) {
-      (function () { return function () { } })() && console.log(`❌ [DEBUG] No mapping found for ${semanticKey}`);
+      if (DEBUG) console.log(`❌ [DEBUG] No mapping found for ${semanticKey}`);
       return;
     }
 
-    (function () { return function () { } })() && console.log(`📋 [DEBUG] Looking for category: ${mapping.category}, keys: [${mapping.keys.join(', ')}]`);
+    if (DEBUG) console.log(`📋 [DEBUG] Looking for category: ${mapping.category}, keys: [${mapping.keys.join(', ')}]`);
 
     // Lister les collections disponibles
     var collections = figma.variables.getLocalVariableCollections();
-    (function () { return function () { } })() && console.log(`🏗️ [DEBUG] Available collections:`);
+    if (DEBUG) console.log(`🏗️ [DEBUG] Available collections:`);
     collections.forEach(function (collection) {
       var category = getCategoryFromVariableCollection(collection.name);
-      (function () { return function () { } })() && console.log('  ' + collection.name + ' → ' + category + ' (' + collection.variableIds.length + ' vars)');
+      if (DEBUG) console.log('  ' + collection.name + ' → ' + category + ' (' + collection.variableIds.length + ' vars)');
     });
 
     // Chercher la collection cible
@@ -11605,21 +11448,21 @@ function debugSemanticAliasResolution(semanticKey, naming) {
     }
 
     if (!targetCollection) {
-      (function () { return function () { } })() && console.log(`❌ [DEBUG] No collection found for category ${mapping.category}`);
+      if (DEBUG) console.log(`❌ [DEBUG] No collection found for category ${mapping.category}`);
       return;
     }
 
-    (function () { return function () { } })() && console.log(`✅ [DEBUG] Found collection: ${targetCollection.name} (${targetCollection.variableIds.length} variables)`);
+    if (DEBUG) console.log(`✅ [DEBUG] Found collection: ${targetCollection.name} (${targetCollection.variableIds.length} variables)`);
 
     // Lister les clés disponibles dans cette collection
-    (function () { return function () { } })() && console.log(`🔑 [DEBUG] Available keys in ${targetCollection.name}:`);
+    if (DEBUG) console.log(`🔑 [DEBUG] Available keys in ${targetCollection.name}:`);
     var availableKeys = [];
     targetCollection.variableIds.forEach(function (varId) {
       var variable = figma.variables.getVariableById(varId);
       if (variable) {
         var key = extractVariableKey(variable, targetCollection.name);
         availableKeys.push(key);
-        (function () { return function () { } })() && console.log('  ' + key + ' (' + variable.name + ')');
+        if (DEBUG) console.log('  ' + key + ' (' + variable.name + ')');
       }
     });
 
@@ -11628,16 +11471,16 @@ function debugSemanticAliasResolution(semanticKey, naming) {
     mapping.keys.forEach(function (searchKey) {
       if (availableKeys.indexOf(searchKey) !== -1) {
         foundKeys.push(searchKey);
-        (function () { return function () { } })() && console.log("✅ [DEBUG] Key '" + searchKey + "' FOUND");
+        if (DEBUG) console.log("✅ [DEBUG] Key '" + searchKey + "' FOUND");
       } else {
-        (function () { return function () { } })() && console.log("❌ [DEBUG] Key '" + searchKey + "' NOT FOUND");
+        if (DEBUG) console.log("❌ [DEBUG] Key '" + searchKey + "' NOT FOUND");
       }
     });
 
     if (foundKeys.length > 0) {
-      (function () { return function () { } })() && console.log(`🎉 [DEBUG] SUCCESS: Will use ${foundKeys[0]} from ${foundKeys.join(' or ')}`);
+      if (DEBUG) console.log(`🎉 [DEBUG] SUCCESS: Will use ${foundKeys[0]} from ${foundKeys.join(' or ')}`);
     } else {
-      (function () { return function () { } })() && console.log(`💥 [DEBUG] FAILURE: No matching keys found - will use fallback`);
+      if (DEBUG) console.log(`💥 [DEBUG] FAILURE: No matching keys found - will use fallback`);
     }
 
   } catch (error) {
@@ -11664,7 +11507,7 @@ function isObviousFallback(value) {
 // Fonction de diagnostic pour les tokens sémantiques
 function diagnoseSemanticTokens(tokens, context) {
   if (!tokens || !tokens.semantic) {
-    (function () { return function () { } })() && console.log(`🔍 [DIAGNOSE ${context || 'UNK'}] No semantic tokens to diagnose`);
+    if (DEBUG) console.log(`🔍 [DIAGNOSE ${context || 'UNK'}] No semantic tokens to diagnose`);
     return;
   }
 
@@ -11737,14 +11580,14 @@ function diagnoseSemanticTokens(tokens, context) {
     }
   }
 
-  (function () { return function () { } })() && console.log(`🔍 [DIAGNOSE ${context || 'UNK'}] Semantic tokens analysis:`);
-  (function () { return function () { } })() && console.log(`   Total: ${stats.total}`);
-  (function () { return function () { } })() && console.log(`   With resolvedValue: ${stats.withResolvedValue}`);
-  (function () { return function () { } })() && console.log(`   Scalar values: ${stats.scalarValues}`);
-  (function () { return function () { } })() && console.log(`   Object values: ${stats.objectValues} ❌`);
-  (function () { return function () { } })() && console.log(`   Null/undefined: ${stats.nullUndefined} ❌`);
-  (function () { return function () { } })() && console.log(`   With alias: ${stats.withAlias}`);
-  (function () { return function () { } })() && console.log(`   Color tokens: ${stats.colorTokens}`);
+  if (DEBUG) console.log(`🔍 [DIAGNOSE ${context || 'UNK'}] Semantic tokens analysis:`);
+  if (DEBUG) console.log(`   Total: ${stats.total}`);
+  if (DEBUG) console.log(`   With resolvedValue: ${stats.withResolvedValue}`);
+  if (DEBUG) console.log(`   Scalar values: ${stats.scalarValues}`);
+  if (DEBUG) console.log(`   Object values: ${stats.objectValues} ❌`);
+  if (DEBUG) console.log(`   Null/undefined: ${stats.nullUndefined} ❌`);
+  if (DEBUG) console.log(`   With alias: ${stats.withAlias}`);
+  if (DEBUG) console.log(`   Color tokens: ${stats.colorTokens}`);
 
   if (issues.length > 0) {
     console.warn(`⚠️ [DIAGNOSE ${context || 'UNK'}] Found ${issues.length} issues:`);
@@ -11752,7 +11595,7 @@ function diagnoseSemanticTokens(tokens, context) {
       console.warn(`   ${issue.key}: ${issue.message}`, issue.value);
     });
   } else {
-    (function () { return function () { } })() && console.log(`✅ [DIAGNOSE ${context || 'UNK'}] No issues found`);
+    if (DEBUG) console.log(`✅ [DIAGNOSE ${context || 'UNK'}] No issues found`);
   }
 
   return issues;
@@ -11763,15 +11606,15 @@ function diagnoseSemanticTokens(tokens, context) {
 async function flattenSemanticTokensFromFigma(callsite) {
   var savedSemanticTokens = getSemanticTokensFromFile('FLATTEN_LOAD');
   if (!savedSemanticTokens) {
-    (function () { return function () { } })() && console.log(`🔄 [FLATTEN] ${callsite}: no saved tokens to flatten`);
+    if (DEBUG) console.log(`🔄 [FLATTEN] ${callsite}: no saved tokens to flatten`);
     return null;
   }
 
   // FIX: Utiliser le vrai naming récupéré de clientStorage
   const naming = await getNamingFromFile();
-  (function () { return function () { } })() && console.log(`[FLATTEN] using naming=${naming}`);
+  if (DEBUG) console.log(`[FLATTEN] using naming=${naming}`);
 
-  (function () { return function () { } })() && console.log(`🔄 [FLATTEN] ${callsite}: starting flatten for ${Object.keys(savedSemanticTokens).length} tokens`);
+  if (DEBUG) console.log(`🔄 [FLATTEN] ${callsite}: starting flatten for ${Object.keys(savedSemanticTokens).length} tokens`);
 
   // Trouver la collection Semantic
   var semanticCollection = null;
@@ -11784,11 +11627,11 @@ async function flattenSemanticTokensFromFigma(callsite) {
   }
 
   if (!semanticCollection) {
-    (function () { return function () { } })() && console.log(`⚠️ [FLATTEN] ${callsite}: no Semantic collection found`);
+    if (DEBUG) console.log(`⚠️ [FLATTEN] ${callsite}: no Semantic collection found`);
     return savedSemanticTokens; // Retourner les tokens tels quels
   }
 
-  (function () { return function () { } })() && console.log(`🔄 [FLATTEN] ${callsite}: using Semantic collection "${semanticCollection.name}" with ${semanticCollection.variableIds.length} variables`);
+  if (DEBUG) console.log(`🔄 [FLATTEN] ${callsite}: using Semantic collection "${semanticCollection.name}" with ${semanticCollection.variableIds.length} variables`);
 
   // Créer un mapping nom -> variable pour la recherche rapide
   var nameToVariable = {};
@@ -11827,7 +11670,7 @@ async function flattenSemanticTokensFromFigma(callsite) {
     semanticVar = nameToVariable[variableName];
 
     if (!semanticVar) {
-      (function () { return function () { } })() && console.log(`[REHYDRATE][NOT_FOUND] semanticKey=${semanticKey} variableName=${variableName} → keep stored value`);
+      if (DEBUG) console.log(`[REHYDRATE][NOT_FOUND] semanticKey=${semanticKey} variableName=${variableName} → keep stored value`);
       flattenedTokens[semanticKey] = flattenedToken;
       unresolvedCount++;
       continue;
@@ -11836,7 +11679,7 @@ async function flattenSemanticTokensFromFigma(callsite) {
     // MODEID SAFE - NE JAMAIS FAIRE collection.modes[0] SANS VÉRIFIER
     modeId = safeGetModeId(semanticVar);
     if (modeId === null) {
-      (function () { return function () { } })() && console.log(`[REHYDRATE][NO_MODE] semanticKey=${semanticKey} var=${semanticVar.name} id=${semanticVar.id} → keep stored value`);
+      if (DEBUG) console.log(`[REHYDRATE][NO_MODE] semanticKey=${semanticKey} var=${semanticVar.name} id=${semanticVar.id} → keep stored value`);
       flattenedTokens[semanticKey] = flattenedToken;
       unresolvedCount++;
       continue;
@@ -11861,7 +11704,7 @@ async function flattenSemanticTokensFromFigma(callsite) {
               collection: getCategoryFromVariableCollection(targetCollection.name), // Normaliser à catégorie canonique
               key: targetKey
             };
-            (function () { return function () { } })() && console.log(`🔗 [REHYDRATE] ${semanticKey} is alias to ${targetCollection.name}/${targetKey}`);
+            if (DEBUG) console.log(`🔗 [REHYDRATE] ${semanticKey} is alias to ${targetCollection.name}/${targetKey}`);
           }
         }
       }
@@ -11870,7 +11713,7 @@ async function flattenSemanticTokensFromFigma(callsite) {
 
       // IMPORTANT : si resolved == null || resolved === undefined
       if (resolved == null || resolved === undefined) {
-        (function () { return function () { } })() && console.log(`[REHYDRATE][SKIP_UNRESOLVED] key=${semanticKey} keepStored=${savedToken.resolvedValue}`);
+        if (DEBUG) console.log(`[REHYDRATE][SKIP_UNRESOLVED] key=${semanticKey} keepStored=${savedToken.resolvedValue}`);
         // ne PAS appliquer de fallback, ne PAS écraser resolvedValue
         flattenedTokens[semanticKey] = flattenedToken;
         unresolvedCount++;
@@ -11885,7 +11728,7 @@ async function flattenSemanticTokensFromFigma(callsite) {
 
     // Si le résultat est un objet ou null : log et conserver la valeur stockée
     if (displayValue === null || typeof displayValue === 'object') {
-      (function () { return function () { } })() && console.log(`[REHYDRATE][SKIP_CONVERT] key=${semanticKey} resolvedType=${typeof resolved} displayType=${typeof displayValue} → keep stored value`);
+      if (DEBUG) console.log(`[REHYDRATE][SKIP_CONVERT] key=${semanticKey} resolvedType=${typeof resolved} displayType=${typeof displayValue} → keep stored value`);
       flattenedTokens[semanticKey] = flattenedToken;
       unresolvedCount++;
       continue;
@@ -11894,16 +11737,15 @@ async function flattenSemanticTokensFromFigma(callsite) {
     // MISE À JOUR RÉUSSIE
     flattenedToken.resolvedValue = displayValue;
     flattenedCount++;
-    (function () { return function () { } })() && console.log(`✅ [REHYDRATE] ${semanticKey}: "${savedToken.resolvedValue}" → "${displayValue}"`);
+    if (DEBUG) console.log(`✅ [REHYDRATE] ${semanticKey}: "${savedToken.resolvedValue}" → "${displayValue}"`);
 
     flattenedTokens[semanticKey] = flattenedToken;
   }
 
-  (function () { return function () { } })() && console.log(`🔄 [FLATTEN] ${callsite}: complete - ${flattenedCount} flattened, ${unresolvedCount} kept as-is`);
+  if (DEBUG) console.log(`🔄 [FLATTEN] ${callsite}: complete - ${flattenedCount} flattened, ${unresolvedCount} kept as-is`);
 
   return flattenedTokens;
 }
-
 
 /**
  * debugParityReport: Diagnostics pour vérifier la parité Legacy/Core
@@ -12021,11 +11863,10 @@ function projectCoreToLegacyShape(coreTokens, lib) {
       }
     }
 
-    // 3. Flatten System objects to scalars (fix [object Object] in UI)
-    // Source fix applied in generateCorePrimitives (hue normalization) - only flattening needed here
-    systemKeys.forEach(function (k) {
-      legacy.system[k] = flattenSystemColorValue(legacy.system[k], 'system.' + k);
-    });
+    // 3. NE PAS aplatir les system colors - préserver l'échelle complète
+    // Les tokens sémantiques ont besoin de toutes les teintes (50-950 + main/light/dark)
+    // L'ancienne logique de flattening a été RETIRÉE
+    console.log('📦 [SYSTEM_COLORS] Preserving full scale for system colors (no flattening)');
 
     // Also check brand for any objects
     for (var bk in legacy.brand) {
@@ -12033,13 +11874,9 @@ function projectCoreToLegacyShape(coreTokens, lib) {
     }
   }
 
-  // Generic flattening for ALL libs (system colors are objects in most frameworks)
-  var systemCategories = ['success', 'warning', 'error', 'info'];
-  systemCategories.forEach(function (k) {
-    if (legacy.system && legacy.system[k] && typeof legacy.system[k] === 'object') {
-      legacy.system[k] = flattenSystemColorValue(legacy.system[k], 'system.' + k);
-    }
-  });
+  // ✅ NE PAS aplatir les system colors pour AUCUNE lib
+  // Toutes les sémantiques doivent pouvoir pointer vers des primitives existantes
+  // L'ancienne logique de flattening générique a été RETIRÉE
 
   // ✅ BORDER COMPATIBILITY CHEAT
   // L'UI attend primitives.border (legacy: 1, 2, 4)
@@ -12055,7 +11892,6 @@ function projectCoreToLegacyShape(coreTokens, lib) {
   } else if (primitives.border) {
     legacy.border = primitives.border;
   }
-
 
   // Convertir les semantics multi-mode vers le format legacy
   // Le format legacy est déjà { key: { type, modes: {...} } } donc on préserve tel quel
@@ -12704,10 +12540,12 @@ var CORE_PRESET_V1 = {
   ],
 
   // Règles de mapping sémantique (light/dark modes) - 80 tokens
+  // P2 NOTE: This is a DUPLICATE of getStandardMapping() (L1479) in different format.
+  // When updating, BOTH must be synchronized. Future refactor should unify.
   mappingRules: {
-    // Background (7)
-    'bg.canvas': { light: { category: 'gray', ref: '50' }, dark: { category: 'gray', ref: '950' } },
-    'bg.surface': { light: { category: 'gray', ref: '100' }, dark: { category: 'gray', ref: '900' } },
+    // Background (7) - NOTE: bg.canvas is DARKER than bg.surface
+    'bg.canvas': { light: { category: 'gray', ref: '100' }, dark: { category: 'gray', ref: '900' } },
+    'bg.surface': { light: { category: 'gray', ref: '50' }, dark: { category: 'gray', ref: '950' } },
     'bg.elevated': { light: { category: 'gray', ref: '200' }, dark: { category: 'gray', ref: '800' } },
     'bg.subtle': { light: { category: 'gray', ref: '100' }, dark: { category: 'gray', ref: '800' } },
     'bg.muted': { light: { category: 'gray', ref: '300' }, dark: { category: 'gray', ref: '700' } },
@@ -12724,24 +12562,24 @@ var CORE_PRESET_V1 = {
     'text.link': { light: { category: 'brand', ref: '500' }, dark: { category: 'brand', ref: '300' } },
     'text.accent': { light: { category: 'brand', ref: '600' }, dark: { category: 'brand', ref: '400' } },
     'text.inverse': { light: { category: 'gray', ref: '50' }, dark: { category: 'gray', ref: '950' } },
-    'text.success': { light: { category: 'success', ref: '700' }, dark: { category: 'success', ref: '400' } },
-    'text.warning': { light: { category: 'warning', ref: '700' }, dark: { category: 'warning', ref: '400' } },
-    'text.error': { light: { category: 'error', ref: '700' }, dark: { category: 'error', ref: '400' } },
+    'text.success': { light: { category: 'system.success', ref: '700' }, dark: { category: 'system.success', ref: '400' } },
+    'text.warning': { light: { category: 'system.warning', ref: '700' }, dark: { category: 'system.warning', ref: '400' } },
+    'text.error': { light: { category: 'system.error', ref: '700' }, dark: { category: 'system.error', ref: '400' } },
 
     // Border (6)
     'border.default': { light: { category: 'gray', ref: '200' }, dark: { category: 'gray', ref: '800' } },
     'border.muted': { light: { category: 'gray', ref: '100' }, dark: { category: 'gray', ref: '900' } },
-    'border.subtle': { light: { category: 'gray', ref: '100' }, dark: { category: 'gray', ref: '850' } },
+    'border.subtle': { light: { category: 'gray', ref: '100' }, dark: { category: 'gray', ref: '900' } },
     'border.accent': { light: { category: 'brand', ref: '200' }, dark: { category: 'brand', ref: '500' } },
     'border.focus': { light: { category: 'brand', ref: '500' }, dark: { category: 'brand', ref: '400' } },
-    'border.error': { light: { category: 'error', ref: '500' }, dark: { category: 'error', ref: '500' } },
+    'border.error': { light: { category: 'system.error', ref: '500' }, dark: { category: 'system.error', ref: '500' } },
 
     // Divider (1)
     'divider.default': { light: { category: 'gray', ref: '200' }, dark: { category: 'gray', ref: '700' } },
 
     // Ring (2)
     'ring.focus': { light: { category: 'brand', ref: '500' }, dark: { category: 'brand', ref: '400' } },
-    'ring.error': { light: { category: 'error', ref: '500' }, dark: { category: 'error', ref: '500' } },
+    'ring.error': { light: { category: 'system.error', ref: '500' }, dark: { category: 'system.error', ref: '500' } },
 
     // On - contrast text (2)
     'on.primary': { light: { category: 'gray', ref: '50' }, dark: { category: 'gray', ref: '50' } },
@@ -12765,35 +12603,35 @@ var CORE_PRESET_V1 = {
     'action.tertiary.default': { light: { category: 'gray', ref: '50' }, dark: { category: 'gray', ref: '900' } },
     'action.tertiary.hover': { light: { category: 'gray', ref: '100' }, dark: { category: 'gray', ref: '800' } },
     'action.tertiary.active': { light: { category: 'gray', ref: '200' }, dark: { category: 'gray', ref: '700' } },
-    'action.tertiary.disabled': { light: { category: 'gray', ref: '100' }, dark: { category: 'gray', ref: '850' } },
+    'action.tertiary.disabled': { light: { category: 'gray', ref: '100' }, dark: { category: 'gray', ref: '900' } },
     'action.tertiary.text': { light: { category: 'brand', ref: '600' }, dark: { category: 'brand', ref: '400' } },
 
     // Action Destructive (5)
-    'action.destructive.default': { light: { category: 'error', ref: '600' }, dark: { category: 'error', ref: '600' } },
-    'action.destructive.hover': { light: { category: 'error', ref: '700' }, dark: { category: 'error', ref: '500' } },
-    'action.destructive.active': { light: { category: 'error', ref: '800' }, dark: { category: 'error', ref: '400' } },
+    'action.destructive.default': { light: { category: 'system.error', ref: '600' }, dark: { category: 'system.error', ref: '600' } },
+    'action.destructive.hover': { light: { category: 'system.error', ref: '700' }, dark: { category: 'system.error', ref: '500' } },
+    'action.destructive.active': { light: { category: 'system.error', ref: '800' }, dark: { category: 'system.error', ref: '400' } },
     'action.destructive.disabled': { light: { category: 'gray', ref: '300' }, dark: { category: 'gray', ref: '800' } },
     'action.destructive.text': { light: { category: 'gray', ref: '50' }, dark: { category: 'gray', ref: '50' } },
 
     // Status Success (3)
-    'status.success.bg': { light: { category: 'success', ref: '100' }, dark: { category: 'success', ref: '900' } },
-    'status.success.fg': { light: { category: 'success', ref: '700' }, dark: { category: 'success', ref: '300' } },
-    'status.success.border': { light: { category: 'success', ref: '500' }, dark: { category: 'success', ref: '500' } },
+    'status.success.bg': { light: { category: 'system.success', ref: '100' }, dark: { category: 'system.success', ref: '900' } },
+    'status.success.fg': { light: { category: 'system.success', ref: '700' }, dark: { category: 'system.success', ref: '300' } },
+    'status.success.border': { light: { category: 'system.success', ref: '500' }, dark: { category: 'system.success', ref: '500' } },
 
     // Status Warning (3)
-    'status.warning.bg': { light: { category: 'warning', ref: '100' }, dark: { category: 'warning', ref: '900' } },
-    'status.warning.fg': { light: { category: 'warning', ref: '700' }, dark: { category: 'warning', ref: '300' } },
-    'status.warning.border': { light: { category: 'warning', ref: '500' }, dark: { category: 'warning', ref: '500' } },
+    'status.warning.bg': { light: { category: 'system.warning', ref: '100' }, dark: { category: 'system.warning', ref: '900' } },
+    'status.warning.fg': { light: { category: 'system.warning', ref: '700' }, dark: { category: 'system.warning', ref: '300' } },
+    'status.warning.border': { light: { category: 'system.warning', ref: '500' }, dark: { category: 'system.warning', ref: '500' } },
 
     // Status Error (3)
-    'status.error.bg': { light: { category: 'error', ref: '100' }, dark: { category: 'error', ref: '900' } },
-    'status.error.fg': { light: { category: 'error', ref: '700' }, dark: { category: 'error', ref: '300' } },
-    'status.error.border': { light: { category: 'error', ref: '500' }, dark: { category: 'error', ref: '500' } },
+    'status.error.bg': { light: { category: 'system.error', ref: '100' }, dark: { category: 'system.error', ref: '900' } },
+    'status.error.fg': { light: { category: 'system.error', ref: '700' }, dark: { category: 'system.error', ref: '300' } },
+    'status.error.border': { light: { category: 'system.error', ref: '500' }, dark: { category: 'system.error', ref: '500' } },
 
     // Status Info (3)
-    'status.info.bg': { light: { category: 'info', ref: '100' }, dark: { category: 'info', ref: '900' } },
-    'status.info.fg': { light: { category: 'info', ref: '700' }, dark: { category: 'info', ref: '300' } },
-    'status.info.border': { light: { category: 'info', ref: '500' }, dark: { category: 'info', ref: '500' } },
+    'status.info.bg': { light: { category: 'system.info', ref: '100' }, dark: { category: 'system.info', ref: '900' } },
+    'status.info.fg': { light: { category: 'system.info', ref: '700' }, dark: { category: 'system.info', ref: '300' } },
+    'status.info.border': { light: { category: 'system.info', ref: '500' }, dark: { category: 'system.info', ref: '500' } },
 
     // Overlay (2)
     'overlay.dim': { light: { category: 'gray', ref: '800' }, dark: { category: 'gray', ref: '900' } },
@@ -12920,6 +12758,17 @@ function generateCorePrimitives(primaryColor, options, corePreset) {
             l: sysLight
           });
         }
+
+        // ✅ Ajouter des alias sémantiques pour compatibilité multi-lib (MUI, Bootstrap, etc.)
+        // Ces alias pointent vers les stops numériques correspondants
+        primitives.system[colorName].main = primitives.system[colorName]['500'];
+        primitives.system[colorName].light = primitives.system[colorName]['300'];
+        primitives.system[colorName].dark = primitives.system[colorName]['700'];
+        primitives.system[colorName].contrastText = '#FFFFFF'; // Texte blanc sur couleur vive
+
+        // Alias supplémentaires pour Bootstrap
+        primitives.system[colorName].subtle = primitives.system[colorName]['100'];
+        primitives.system[colorName].emphasis = primitives.system[colorName]['700'];
       }
     }
   }
@@ -13022,7 +12871,7 @@ function generateCoreSemantics(primitives, corePreset, options) {
 
       modes.light = {
         resolvedValue: lightValue,
-        aliasTo: { collection: lightCategory, key: lightRef }
+        aliasRef: { category: lightCategory, key: lightRef }
       };
     }
 
@@ -13041,7 +12890,7 @@ function generateCoreSemantics(primitives, corePreset, options) {
 
       modes.dark = {
         resolvedValue: darkValue,
-        aliasTo: { collection: darkCategory, key: darkRef }
+        aliasRef: { category: darkCategory, key: darkRef }
       };
     }
 
@@ -13163,11 +13012,12 @@ function validateAndAdjustForRgaa(coreTokens, corePreset) {
         report.issues.push(issueLog);
 
         // Stratégie d'ajustement strict
-        if (rules.strategy === 'adjust-stops' && fgRef && bgRef) {
+        // Note: fgRef et bgRef sont maintenant des objets { category, key }
+        if (rules.strategy === 'adjust-stops' && fgRef && bgRef && typeof fgRef === 'object') {
           // Essayer d'ajuster le foreground (texte) pour améliorer le contraste
           var adjusted = false;
-          var fgParts = fgRef.split('.');
-          var fgStop = fgParts[fgParts.length - 1];
+          var fgStop = fgRef.key; // Maintenant c'est fgRef.key au lieu de split
+          var fgCategory = fgRef.category;
 
           // Déterminer la direction (assombrir ou éclaircir le texte)
           var direction = mode === 'light' ? 1 : -1; // light: plus foncé, dark: plus clair
@@ -13176,24 +13026,23 @@ function validateAndAdjustForRgaa(coreTokens, corePreset) {
             var newStop = adjustStop(fgStop, direction, move);
             if (!newStop) continue;
 
-            // Simuler la nouvelle valeur (approximation)
-            var newFgParts = fgParts.slice();
-            newFgParts[newFgParts.length - 1] = newStop;
-            var newFgRef = newFgParts.join('.');
+            // Construire la nouvelle référence
+            var newFgRef = fgCategory + '.' + newStop;
+            var oldFgRef = fgCategory + '.' + fgStop;
 
             // Log l'ajustement
             var adjustLog = {
               mode: mode,
               key: pair.fg,
               ratioBefore: ratio.toFixed(2),
-              refBefore: fgRef,
+              refBefore: oldFgRef,
               refAfter: newFgRef,
               stopMoves: move,
               action: 'ADJUSTED_FG_STOP'
             };
 
             report.adjusted.push(adjustLog);
-            console.log('🔧 [RGAA_ADJUST]', mode, pair.fg, ':', fgRef, '->', newFgRef, '(ratio:', ratio.toFixed(2), '->', '~' + pair.ratio + '+)');
+            console.log('🔧 [RGAA_ADJUST]', mode, pair.fg, ':', oldFgRef, '->', newFgRef, '(ratio:', ratio.toFixed(2), '->', '~' + pair.ratio + '+)');
             adjusted = true;
           }
 
@@ -13254,3 +13103,208 @@ function runMuiSystemValidation() {
 
 // Auto-run test at startup
 setTimeout(runMuiSystemValidation, 1500);
+
+// ============================================================================
+// SELF-TEST FUNCTIONS (Run from console: runPluginTests())
+// ============================================================================
+
+/**
+ * Run all plugin self-tests
+ * Usage: From Figma console, run: runPluginTests()
+ */
+function runPluginTests() {
+  console.log('🧪 ═══════════════════════════════════════════════');
+  console.log('🧪 EMMA PLUGIN SELF-TEST SUITE');
+  console.log('🧪 ═══════════════════════════════════════════════');
+
+  var results = {
+    passed: 0,
+    failed: 0,
+    tests: []
+  };
+
+  function test(name, fn) {
+    try {
+      var result = fn();
+      if (result === true) {
+        console.log('  ✅ ' + name);
+        results.passed++;
+        results.tests.push({ name: name, status: 'PASS' });
+      } else {
+        console.log('  ❌ ' + name + ' (returned: ' + result + ')');
+        results.failed++;
+        results.tests.push({ name: name, status: 'FAIL', result: result });
+      }
+    } catch (e) {
+      console.log('  ❌ ' + name + ' (error: ' + e.message + ')');
+      results.failed++;
+      results.tests.push({ name: name, status: 'ERROR', error: e.message });
+    }
+  }
+
+  console.log('');
+  console.log('📦 Core Objects:');
+  test('Scanner object exists', function () { return typeof Scanner === 'object'; });
+  test('Scanner.lastScanResults is array or null', function () {
+    return Scanner.lastScanResults === null || Array.isArray(Scanner.lastScanResults);
+  });
+  test('PreviewManager exists', function () { return typeof PreviewManager === 'object'; });
+  test('FigmaService exists', function () { return typeof FigmaService === 'object'; });
+  test('CONFIG exists', function () { return typeof CONFIG === 'object'; });
+
+  console.log('');
+  console.log('🗺️ Mappings:');
+  test('CORE_PRESET_V1 exists', function () { return typeof CORE_PRESET_V1 === 'object'; });
+  test('CORE_PRESET_V1.semanticSchema has 80 tokens', function () {
+    return CORE_PRESET_V1.semanticSchema && CORE_PRESET_V1.semanticSchema.length >= 75;
+  });
+  test('SEMANTIC_TYPE_MAP exists', function () { return typeof SEMANTIC_TYPE_MAP === 'object'; });
+  test('LEGACY_ALIASES exists', function () { return typeof LEGACY_ALIASES === 'object'; });
+  test('CORE_PRESET_V1.mappingRules exists', function () { return typeof CORE_PRESET_V1.mappingRules === 'object'; });
+
+  console.log('');
+  console.log('🔧 Key Functions:');
+  test('generateCorePrimitives exists', function () { return typeof generateCorePrimitives === 'function'; });
+  test('generateCoreSemantics exists', function () { return typeof generateCoreSemantics === 'function'; });
+  test('importTokensToFigma exists', function () { return typeof importTokensToFigma === 'function'; });
+  test('scanNodeRecursive exists', function () { return typeof scanNodeRecursive === 'function'; });
+  test('applyVariableToProperty exists', function () { return typeof applyVariableToProperty === 'function'; });
+  test('findColorSuggestionsV2 exists', function () { return typeof findColorSuggestionsV2 === 'function'; });
+  test('findNumericSuggestionsV2 exists', function () { return typeof findNumericSuggestionsV2 === 'function'; });
+
+  console.log('');
+  console.log('🎨 Sample Mapping Tests (via CORE_PRESET_V1.mappingRules):');
+  test('bg.canvas mapping exists', function () {
+    var m = CORE_PRESET_V1.mappingRules['bg.canvas'];
+    return m && m.light && m.light.category === 'gray';
+  });
+  test('text.primary mapping exists', function () {
+    var m = CORE_PRESET_V1.mappingRules['text.primary'];
+    return m && m.light && m.light.category === 'gray';
+  });
+  test('action.primary.default mapping exists', function () {
+    var m = CORE_PRESET_V1.mappingRules['action.primary.default'];
+    return m && m.light && m.light.category === 'brand';
+  });
+
+  // ✅ Test de couverture complète des mappings sémantiques
+  test('All semantic tokens have mappingRules', function () {
+    var missing = [];
+    for (var i = 0; i < CORE_PRESET_V1.semanticSchema.length; i++) {
+      var key = CORE_PRESET_V1.semanticSchema[i];
+      if (!CORE_PRESET_V1.mappingRules[key]) {
+        missing.push(key);
+      }
+    }
+    if (missing.length > 0) {
+      console.warn('⚠️ Missing mappings for:', missing);
+      return false;
+    }
+    return true;
+  });
+
+  // ✅ Test que les références sont valides
+  test('All mapping refs exist in primitives schema', function () {
+    var invalidRefs = [];
+    var validColorStops = CORE_PRESET_V1.primitivesSchema.colors.gray; // ['50', '100', ..., '950']
+    var validRadiusKeys = CORE_PRESET_V1.primitivesSchema.radius; // ['none', 'sm', 'md', 'lg', 'xl', 'full']
+    var validSpacingKeys = CORE_PRESET_V1.primitivesSchema.spacing;
+    var validStrokeKeys = CORE_PRESET_V1.primitivesSchema.borderWidth;
+
+    for (var key in CORE_PRESET_V1.mappingRules) {
+      var rule = CORE_PRESET_V1.mappingRules[key];
+      var modes = ['light', 'dark'];
+      for (var m = 0; m < modes.length; m++) {
+        var mode = modes[m];
+        if (!rule[mode]) continue;
+        var cat = rule[mode].category;
+        var ref = rule[mode].ref;
+
+        // Déterminer les références valides selon la catégorie
+        var validRefs = validColorStops; // Par défaut pour gray/brand/system
+        if (cat === 'radius') validRefs = validRadiusKeys;
+        else if (cat === 'spacing') validRefs = validSpacingKeys;
+        else if (cat === 'stroke') validRefs = validStrokeKeys;
+
+        if (validRefs.indexOf(ref) === -1) {
+          invalidRefs.push(key + ' (' + mode + '): ' + cat + '.' + ref);
+        }
+      }
+    }
+    if (invalidRefs.length > 0) {
+      console.warn('⚠️ Invalid refs:', invalidRefs);
+      return false;
+    }
+    return true;
+  });
+
+  // ✅ Test status tokens use system.* categories  
+  test('Status tokens use system.* categories', function () {
+    var statusTokens = ['status.success.bg', 'status.warning.fg', 'status.error.border', 'status.info.bg'];
+    for (var i = 0; i < statusTokens.length; i++) {
+      var rule = CORE_PRESET_V1.mappingRules[statusTokens[i]];
+      if (!rule || !rule.light || !rule.light.category.startsWith('system.')) {
+        console.warn('⚠️ ' + statusTokens[i] + ' does not use system.* category');
+        return false;
+      }
+    }
+    return true;
+  });
+
+  console.log('');
+  console.log('📊 Figma API Access:');
+  test('figma.variables available', function () { return typeof figma.variables === 'object'; });
+  test('figma.clientStorage available', function () { return typeof figma.clientStorage === 'object'; });
+  test('figma.currentPage available', function () { return figma.currentPage !== null; });
+
+  console.log('');
+  console.log('🧪 ═══════════════════════════════════════════════');
+  console.log('🧪 RESULTS: ' + results.passed + ' passed, ' + results.failed + ' failed');
+  console.log('🧪 ═══════════════════════════════════════════════');
+
+  if (results.failed > 0) {
+    console.warn('⚠️ Some tests failed! Check the output above.');
+  } else {
+    console.log('🎉 All tests passed!');
+  }
+
+  return results;
+}
+
+/**
+ * Quick health check
+ * Usage: runHealthCheck()
+ */
+function runHealthCheck() {
+  console.log('💚 Quick Health Check...');
+  var issues = [];
+
+  if (typeof Scanner !== 'object') issues.push('Scanner missing');
+  if (typeof CORE_PRESET_V1 !== 'object') issues.push('CORE_PRESET_V1 missing');
+  if (typeof figma.variables !== 'object') issues.push('Figma Variables API missing');
+
+  if (issues.length === 0) {
+    console.log('💚 Plugin is healthy!');
+    return true;
+  } else {
+    console.error('🔴 Issues found:', issues);
+    return false;
+  }
+}
+
+// Expose to global scope for console access
+if (typeof global !== 'undefined') {
+  global.runPluginTests = runPluginTests;
+  global.runHealthCheck = runHealthCheck;
+}
+
+// ============================================================================
+// AUTO-RUN TESTS AT STARTUP (if DEBUG is enabled)
+// ============================================================================
+if (DEBUG) {
+  setTimeout(function () {
+    console.log('');
+    console.log('🚀 AUTO-TEST: Running plugin self-tests...');
+    runPluginTests();
+  }, 3000); // 3 seconds after startup
+}
