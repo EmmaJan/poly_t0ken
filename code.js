@@ -9280,7 +9280,7 @@ async function checkNodeProperties(node, valueToVariableMap, results, ignoreHidd
       }
 
       // Détecter les styles locaux Figma appliqués
-      checkLocalStylesSafely(node, valueToVariableMap, results);
+      await checkLocalStylesSafely(node, valueToVariableMap, results);
 
     } catch (propertyError) {
 
@@ -9406,7 +9406,7 @@ async function checkTypographyPropertiesSafely(node, valueToVariableMap, results
   }
 }
 
-function checkLocalStylesSafely(node, valueToVariableMap, results) {
+async function checkLocalStylesSafely(node, valueToVariableMap, results) {
   try {
     var contextModeId = detectNodeModeId(node);
 
