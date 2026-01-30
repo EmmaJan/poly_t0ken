@@ -1118,9 +1118,11 @@ function getKeyFromSemanticKey(semanticKey) {
 var globalCollectionsCache = null;
 
 async function initializeCollectionCache() {
+  console.log('🔄 [CACHE] Initializing collection cache...');
   tryResolveSemanticAlias.collectionCache = {};
   globalCollectionsCache = await figma.variables.getLocalVariableCollectionsAsync();
   var collections = globalCollectionsCache;
+  console.log(`🔄 [CACHE] Found ${collections.length} collections`);
   for (var i = 0; i < collections.length; i++) {
     var collection = collections[i];
     var collectionName = collection.name;
@@ -1138,8 +1140,10 @@ async function initializeCollectionCache() {
 
     if (category) {
       tryResolveSemanticAlias.collectionCache[category] = collection;
+      console.log(`🔄 [CACHE] Cached collection: ${collectionName} → ${category}`);
     }
   }
+  console.log('✅ [CACHE] Collection cache initialized with categories:', Object.keys(tryResolveSemanticAlias.collectionCache));
 }
 
 var CONFIG = {
@@ -3596,6 +3600,7 @@ var Scanner = {
     Scanner.valueMap = new Map();
     var localCollections = FigmaService.getCollections();
     Scanner.cacheTimestamp = now;
+    console.log(`🔍 [Scanner.initMap] Building map from ${localCollections.length} collections`);
 
     for (var i = 0; i < localCollections.length; i++) {
       var collection = localCollections[i];
@@ -4667,6 +4672,8 @@ figma.ui.onmessage = async function (msg) {
         try {
           await importTokensToFigma(msg.tokens || cachedTokens, msg.naming, msg.overwrite);
           await initializeCollectionCache(); // Refresh cache after import
+          Scanner.valueMap = null; // Force Scanner to rebuild map on next scan
+          await buildVariableIndex(); // Rebuild index with new variables
           postToUI({ type: 'import-completed' });
         } catch (err) {
           console.error('Import error:', err);
@@ -4679,6 +4686,8 @@ figma.ui.onmessage = async function (msg) {
         try {
           await importTokensToFigma(msg.tokens, msg.naming || "custom", false);
           await initializeCollectionCache(); // Refresh cache after import
+          Scanner.valueMap = null; // Force Scanner to rebuild map on next scan
+          await buildVariableIndex(); // Rebuild index with new variables
           figma.notify("✅ Tokens importés depuis le fichier");
           postToUI({ type: 'import-completed' });
         } catch (e) {
