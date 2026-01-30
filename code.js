@@ -4432,8 +4432,12 @@ var savedSemanticTokens = getSemanticTokensFromFile('PLUGIN_STARTUP');
 
 // Lancer la rehydratation asynchrone (Lazy Rebind) pour résoudre librairies/alias unresolved
 (async function() {
-  await initializeCollectionCache();
-  await rehydrateSemanticAliases();
+  try {
+    await initializeCollectionCache();
+    await rehydrateSemanticAliases();
+  } catch (error) {
+    console.error('❌ Error during plugin initialization:', error);
+  }
 })();
 
 // ============================================
@@ -4489,9 +4493,9 @@ figma.clientStorage.getAsync("tokenStarter.naming").then(async function (clientS
     naming: savedNaming,
     savedSemanticTokens: savedSemanticTokens
   });
-}).catch(function () {
-  // Fallback vers la méthode synchrone
-  var savedNaming = getNamingFromFile();
+}).catch(async function () {
+  // Fallback vers la méthode asynchrone
+  var savedNaming = await getNamingFromFile();
 
   postToUI({
     type: "init",
