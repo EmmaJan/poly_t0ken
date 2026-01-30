@@ -4409,7 +4409,14 @@ var Fixer = {
 // ============================================================================
 
 // Build the mode-aware variable index at startup
-(async () => { await buildVariableIndex(); })();
+(async () => {
+  try {
+    await buildVariableIndex();
+    console.log('✅ [STARTUP] Variable index built successfully');
+  } catch (error) {
+    console.error('❌ [STARTUP] Failed to build variable index:', error);
+  }
+})();
 
 figma.showUI(__html__, { width: 800, height: 950, themeColors: true });
 
@@ -4431,7 +4438,7 @@ var savedSemanticTokens = getSemanticTokensFromFile('PLUGIN_STARTUP');
 })();
 
 // Lancer la rehydratation asynchrone (Lazy Rebind) pour résoudre librairies/alias unresolved
-(async function() {
+(async function () {
   try {
     await initializeCollectionCache();
     await rehydrateSemanticAliases();
@@ -6223,18 +6230,18 @@ function createSuggestion(params) {
  */
 async function buildVariableIndex() {
   console.log('🔨 [INDEX] Building mode-aware variable index (Unified)...');
+  console.log('[INDEX] Starting index build...');
 
   // Clear existing index
-  VariableIndex.byId.clear();
-  VariableIndex.byName.clear();
-  VariableIndex.byHex.clear();
-  VariableIndex.byValue.clear();
   VariableIndex.colorExact.clear();
   VariableIndex.colorPreferred.clear();
   VariableIndex.floatExact.clear();
   VariableIndex.floatPreferred.clear();
 
+  console.log('[INDEX] Index cleared, fetching collections...');
+
   var collections = await figma.variables.getLocalVariableCollectionsAsync();
+  console.log('[INDEX] Collections fetched:', collections.length);
   var totalVariables = 0;
   var indexedVariables = 0;
   var countSemantic = 0;
@@ -6246,9 +6253,16 @@ async function buildVariableIndex() {
     var collection = collections[c];
     var collectionName = collection.name;
 
-    for (var v = 0; v < collection.variableIds.length; v++) {
-      var variableId = collection.variableIds[v];
-      var variable = await figma.variables.getVariableByIdAsync(variableId);
+    // ⚡ OPTIMIZATION: Fetch all variables in parallel instead of sequentially
+    var variablePromises = collection.variableIds.map(function (varId) {
+      return figma.variables.getVariableByIdAsync(varId);
+    });
+
+    var variables = await Promise.all(variablePromises);
+    console.log(`[INDEX] Collection "${collectionName}": loaded ${variables.length} variables`);
+
+    for (var v = 0; v < variables.length; v++) {
+      var variable = variables[v];
       if (!variable) continue;
 
       totalVariables++;
@@ -6381,6 +6395,9 @@ async function buildVariableIndex() {
     semantic: countSemantic,
     primitive: countPrimitive,
     noScopes: countNoScopes,
+    colorExactSize: VariableIndex.colorExact.size,
+    colorPreferredSize: VariableIndex.colorPreferred.size,
+    floatExactSize: VariableIndex.floatExact.size,
     floatPreferredSize: VariableIndex.floatPreferred.size
   });
 
@@ -9759,6 +9776,16 @@ async function checkFillsSafely(node, valueToVariableMap, results) {
 
           // If not conform (unbound or invalid binding), find suggestions
           var rawSuggestions = findColorSuggestionsV2(hexValue, contextModeId, requiredScopes, propertyType, node.type);
+
+          if (DEBUG && rawSuggestions.length === 0) {
+            console.warn('[SCAN DEBUG] No color suggestions found for', hexValue, {
+              contextModeId: contextModeId,
+              requiredScopes: requiredScopes,
+              indexBuilt: VariableIndex.isBuilt,
+              colorIndexSize: VariableIndex.colorPreferred.size
+            });
+          }
+
           var suggestions = await enrichSuggestionsWithRealValues(rawSuggestions, contextModeId);
 
           // If bound but invalid -> IssueStatus.HAS_MATCHES (or NO_MATCH)
@@ -10370,6 +10397,39 @@ async function scanNodeRecursive(node, valueToVariableMap, results, depth, ignor
 
 async function scanSelection(ignoreHiddenLayers) {
 
+  // ✅ FIX: Build the V2 index for suggestions BEFORE starting scan
+  try {
+    console.log('[SCAN] Rebuilding variable index...');
+    await buildVariableIndex();
+    console.log('[SCAN] Variable index rebuilt successfully');
+
+    // Verify index has data
+    if (!VariableIndex.isBuilt) {
+      console.error('❌ [SCAN] Index not marked as built after buildVariableIndex');
+      figma.notify("❌ L'index des variables n'a pas pu être construit");
+      postToUI({ type: "scan-results", results: [] });
+      return [];
+    }
+
+    var totalIndexSize = VariableIndex.colorExact.size + VariableIndex.colorPreferred.size +
+                         VariableIndex.floatExact.size + VariableIndex.floatPreferred.size;
+
+    if (totalIndexSize === 0) {
+      console.warn('⚠️ [SCAN] Variable index is empty - no variables in document?');
+      figma.notify("⚠️ Aucune variable trouvée dans le document");
+      postToUI({ type: "scan-results", results: [] });
+      return [];
+    }
+
+    console.log('[SCAN] Index verification passed:', totalIndexSize, 'entries');
+
+  } catch (indexError) {
+    console.error('❌ [SCAN] Failed to rebuild index:', indexError);
+    figma.notify("❌ Erreur lors de la construction de l'index des variables");
+    postToUI({ type: "scan-results", results: [] });
+    return [];
+  }
+
   try {
 
     var selection = figma.currentPage.selection;
@@ -10411,7 +10471,37 @@ async function scanSelection(ignoreHiddenLayers) {
 async function scanPage(ignoreHiddenLayers) {
 
   // ✅ FIX: Build the V2 index for suggestions BEFORE starting scan
-  await buildVariableIndex();
+  try {
+    console.log('[SCAN] Rebuilding variable index...');
+    await buildVariableIndex();
+    console.log('[SCAN] Variable index rebuilt successfully');
+
+    // Verify index has data
+    if (!VariableIndex.isBuilt) {
+      console.error('❌ [SCAN] Index not marked as built after buildVariableIndex');
+      figma.notify("❌ L'index des variables n'a pas pu être construit");
+      postToUI({ type: "scan-results", results: [] });
+      return [];
+    }
+
+    var totalIndexSize = VariableIndex.colorExact.size + VariableIndex.colorPreferred.size +
+                         VariableIndex.floatExact.size + VariableIndex.floatPreferred.size;
+
+    if (totalIndexSize === 0) {
+      console.warn('⚠️ [SCAN] Variable index is empty - no variables in document?');
+      figma.notify("⚠️ Aucune variable trouvée dans le document");
+      postToUI({ type: "scan-results", results: [] });
+      return [];
+    }
+
+    console.log('[SCAN] Index verification passed:', totalIndexSize, 'entries');
+
+  } catch (indexError) {
+    console.error('❌ [SCAN] Failed to rebuild index:', indexError);
+    figma.notify("❌ Erreur lors de la construction de l'index des variables");
+    postToUI({ type: "scan-results", results: [] });
+    return [];
+  }
 
   try {
     var pageChildren = figma.currentPage.children;
@@ -10444,7 +10534,7 @@ async function scanPage(ignoreHiddenLayers) {
 }
 
 function startAsyncScan(nodes, valueToVariableMap, ignoreHiddenLayers) {
-  var CHUNK_SIZE = 50;
+  var CHUNK_SIZE = 100;
   var currentIndex = 0;
   var results = [];
   var totalNodes = nodes.length;
@@ -10460,6 +10550,8 @@ function startAsyncScan(nodes, valueToVariableMap, ignoreHiddenLayers) {
     var chunkEnd = Math.min(currentIndex + CHUNK_SIZE, totalNodes);
     var processedInChunk = 0;
 
+    console.log(`[SCAN] Processing chunk ${currentIndex} to ${chunkEnd} of ${totalNodes} nodes`);
+
     for (var i = currentIndex; i < chunkEnd; i++) {
       try {
         var node = nodes[i];
@@ -10472,8 +10564,11 @@ function startAsyncScan(nodes, valueToVariableMap, ignoreHiddenLayers) {
         processedInChunk++;
 
       } catch (nodeError) {
+        console.warn('[SCAN] Error processing node:', nodeError);
       }
     }
+
+    console.log(`[SCAN] Chunk complete: processed ${processedInChunk} nodes, ${results.length} issues found so far`);
 
     currentIndex = chunkEnd;
 
@@ -10488,19 +10583,27 @@ function startAsyncScan(nodes, valueToVariableMap, ignoreHiddenLayers) {
 
     if (currentIndex < totalNodes) {
 
-      setTimeout(processChunk, 10);
+      setTimeout(processChunk, 0);
     } else {
 
       finishScan(results);
     }
   }
 
-  setTimeout(processChunk, 10);
+  setTimeout(processChunk, 0);
 }
 
 function finishScan(results) {
   // P0-A Phase 3: Scanner.lastScanResults is the single source of truth
   Scanner.lastScanResults = results;
+
+  console.log('[SCAN] Finished with', results.length, 'issues');
+
+  if (DEBUG && results.length > 0) {
+    console.log('[SCAN] Sample issue:', results[0]);
+    var issuesWithSuggestions = results.filter(function(r) { return r.suggestions && r.suggestions.length > 0; }).length;
+    console.log('[SCAN] Issues with suggestions:', issuesWithSuggestions + '/' + results.length);
+  }
 
   if (results.length > 0) {
     FigmaService.notify("✅ Analyse terminée - " + results.length + " problème(s) détecté(s)");

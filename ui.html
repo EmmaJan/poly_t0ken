@@ -8479,17 +8479,17 @@
         }
       }
 
-      // 🛡️ WATCHDOG TIMER : Si pas de réponse dans 8s, on libère
+      // 🛡️ WATCHDOG TIMER : Si pas de réponse dans 30s, on libère
       if (scanWatchdogTimer) clearTimeout(scanWatchdogTimer);
 
       scanWatchdogTimer = setTimeout(function () {
-        console.warn("🐶 Watchdog: Scan timeout (8s). Reset.");
+        console.warn("🐶 Watchdog: Scan timeout (30s). Reset.");
         hideScanLoading();
         isScanning = false;
         if (unifiedList) {
           unifiedList.innerHTML = '<div class="empty-state-enhanced"><div class="empty-icon">⚠️</div><h3>Délai dépassé</h3><p>Le scan a été interrompu. Essayez une sélection plus petite.</p></div>';
         }
-      }, 8000);
+      }, 30000);
     }
 
     function hideScanLoading() {
