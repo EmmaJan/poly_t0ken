@@ -9292,6 +9292,7 @@ async function checkTypographyPropertiesSafely(node, valueToVariableMap, results
   // ✅ FIX: Désactivation du scan typographique demandée par l'utilisateur
   return;
 
+  /* DISABLED CODE - Typography scanning is disabled
   try {
     var contextModeId = detectNodeModeId(node);
 
@@ -9498,6 +9499,7 @@ function checkLocalStylesSafely(node, valueToVariableMap, results) {
       } catch (e) { }
     }
   } catch (localStylesError) { }
+  END OF DISABLED CODE */
 }
 
 // ============================================================================
