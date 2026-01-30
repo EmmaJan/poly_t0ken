@@ -640,12 +640,12 @@ function normalizeAliasTo(aliasTo, collections) {
  * @param {object} collections - Collections de variables Figma
  * @returns {object|null} {variableId, collection, key, cssName} ou null si non trouvé
  */
-function resolveVariableIdToAliasDescriptor(variableId, collections) {
+async function resolveVariableIdToAliasDescriptor(variableId, collections) {
   if (!variableId) return null;
 
   try {
     // 1. Tentative directe via API Figma (plus robuste)
-    var variable = figma.variables.getVariableById(variableId);
+    var variable = await figma.variables.getVariableByIdAsync(variableId);
 
     // 2. Si non trouvé via API (cas rare de suppression), fallback sur collections si format compatible
     if (!variable && collections) {
@@ -672,7 +672,7 @@ function resolveVariableIdToAliasDescriptor(variableId, collections) {
       return null;
     }
 
-    var collection = figma.variables.getVariableCollectionById(variable.variableCollectionId);
+    var collection = await figma.variables.getVariableCollectionByIdAsync(variable.variableCollectionId);
     if (!collection) return null;
 
     var collectionName = collection.name;
@@ -1115,9 +1115,12 @@ function getKeyFromSemanticKey(semanticKey) {
 }
 
 // Alias resolution cache management
-function initializeCollectionCache() {
+var globalCollectionsCache = null;
+
+async function initializeCollectionCache() {
   tryResolveSemanticAlias.collectionCache = {};
-  var collections = figma.variables.getLocalVariableCollections();
+  globalCollectionsCache = await figma.variables.getLocalVariableCollectionsAsync();
+  var collections = globalCollectionsCache;
   for (var i = 0; i < collections.length; i++) {
     var collection = collections[i];
     var collectionName = collection.name;
@@ -2918,15 +2921,15 @@ function sanitizeValueForUI(value, tokenType) {
  * @returns {Object|null} Variable Figma correspondante ou null
  */
 // Nouvelle fonction qui retourne les informations complètes de l'alias
-function resolveSemanticAliasInfo(semanticKey, allTokens, naming) {
-  var variable = tryResolveSemanticAlias(semanticKey, allTokens, naming);
+async function resolveSemanticAliasInfo(semanticKey, allTokens, naming) {
+  var variable = await tryResolveSemanticAlias(semanticKey, allTokens, naming);
   if (!variable) return null;
 
   // Extraire les informations de la variable primitive
   var collectionId = variable.variableCollectionId;
   if (!collectionId) return null;
 
-  var collection = figma.variables.getVariableCollectionById(collectionId);
+  var collection = await figma.variables.getVariableCollectionByIdAsync(collectionId);
   if (!collection) return null;
 
   var variableKey = extractVariableKey(variable, collection.name);
@@ -2939,7 +2942,7 @@ function resolveSemanticAliasInfo(semanticKey, allTokens, naming) {
   };
 }
 
-function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
+async function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
   // Normalize once at entry
   const lib = normalizeLibType(naming);
   if (DEBUG) console.log(`🔍 tryResolveSemanticAlias: ${semanticKey} avec lib = ${lib} `);
@@ -3027,35 +3030,15 @@ function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
 
     // Créer un cache des collections pour optimiser les recherches
     if (!tryResolveSemanticAlias.collectionCache) {
-      tryResolveSemanticAlias.collectionCache = {};
-      var collections = figma.variables.getLocalVariableCollections();
-
-      for (var i = 0; i < collections.length; i++) {
-        var collection = collections[i];
-        var collectionName = collection.name;
-
-        // Déterminer la catégorie de la collection
-        var category = null;
-        const n = collectionName.toLowerCase().trim();
-
-        if (n === "brand colors" || n.includes('brand')) category = "brand";
-        else if (n === "system colors" || n.includes('system')) category = "system";
-        else if (n === "grayscale" || n.includes('gray') || n.includes('grey') || n.includes('grayscale')) category = "gray";
-        else if (n === "spacing" || n.includes('spacing')) category = "spacing";
-        else if (n === "radius" || n.includes('radius')) category = "radius";
-        else if (n === "typography" || n.includes('typo') || n.includes('typography')) category = "typography";
-
-        if (category) {
-          tryResolveSemanticAlias.collectionCache[category] = collection;
-        }
-      }
+      console.warn("⚠️ [RESOLVE] Collection cache not initialized. Call initializeCollectionCache() first.");
+      return null;
     }
 
     var collection = tryResolveSemanticAlias.collectionCache[mapping.category];
     if (!collection) return null;
 
     // Chercher la variable dans cette collection
-    var variables = collection.variableIds.map(function (id) { return figma.variables.getVariableById(id); });
+    var variables = await Promise.all(collection.variableIds.map(function (id) { return figma.variables.getVariableByIdAsync(id); }));
 
     // DIAGNOSTIC LOG ( requested for brand/primary )
     if (semanticKey === 'action.primary.default' && ['ant', 'mui', 'bootstrap'].includes(naming)) {
@@ -3107,7 +3090,7 @@ function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
         // Essayer de trouver la variable de fallback dans une autre catégorie
         var fallbackCollection = tryResolveSemanticAlias.collectionCache[mapping.fallback.category];
         if (fallbackCollection) {
-          var fallbackVariables = fallbackCollection.variableIds.map(function (id) { return figma.variables.getVariableById(id); });
+          var fallbackVariables = await Promise.all(fallbackCollection.variableIds.map(function (id) { return figma.variables.getVariableByIdAsync(id); }));
 
           for (var fk = 0; fk < mapping.fallback.keys.length; fk++) {
             var fallbackKey = mapping.fallback.keys[fk];
@@ -3567,11 +3550,11 @@ var TokenService = {
 var FigmaService = {
 
   getCollections: function () {
-    return figma.variables.getLocalVariableCollections();
+    return (globalCollectionsCache || []);
   },
 
-  getVariableById: function (id) {
-    return figma.variables.getVariableById(id);
+  getVariableById: async function (id) {
+    return await figma.variables.getVariableByIdAsync(id);
   },
 
   notify: function (msg) {
@@ -3603,7 +3586,7 @@ var Scanner = {
   cacheTimestamp: 0,
   CACHE_DURATION: 30000,
 
-  initMap: function () {
+  initMap: async function () {
     var now = Date.now();
 
     if (Scanner.valueMap && Scanner.cacheTimestamp && (now - Scanner.cacheTimestamp < Scanner.CACHE_DURATION)) {
@@ -3621,9 +3604,10 @@ var Scanner = {
       // Déterminer le mode préféré pour cette collection (Light en priorité)
       var preferredModeId = getPreferredModeIdForScan(collection);
 
-      collection.variableIds.forEach(function (variableId) {
-        var variable = FigmaService.getVariableById(variableId);
-        if (!variable) return;
+      for (var j = 0; j < collection.variableIds.length; j++) {
+        var variableId = collection.variableIds[j];
+        var variable = await FigmaService.getVariableById(variableId);
+        if (!variable) continue;
 
         // FILTRE SEMANTIC-ONLY: ne garder que les variables sémantiques
         if (!isSemanticVariable(variable.name, variable)) {
@@ -3640,12 +3624,13 @@ var Scanner = {
           if (DEBUG_SCOPES_SCAN) {
             console.log('🚫 [SCAN_FILTER] Excluded primitive variable:', variable.name);
           }
-          return; // Skip les primitives
+          continue; // Skip les primitives
         }
 
-        collection.modes.forEach(function (mode) {
+        for (var k = 0; k < collection.modes.length; k++) {
+          var mode = collection.modes[k];
           var modeId = mode.modeId;
-          var resolvedValue = resolveVariableValue(variable, modeId);
+          var resolvedValue = await resolveVariableValue(variable, modeId);
 
           if (resolvedValue !== undefined && resolvedValue !== null) {
             var formattedValue = Scanner._formatVariableValue(variable, resolvedValue);
@@ -3696,8 +3681,8 @@ var Scanner = {
               isPreferredMode: modeId === preferredModeId // On garde l'info de priorité
             });
           }
-        });
-      });
+        }
+      }
     }
     if (DEBUG) console.log('🔍 [Scanner.initMap] Finished mapping ' + Scanner.valueMap.size + ' unique values (semantic-only, mode-aware).');
   },
@@ -3717,7 +3702,7 @@ var Scanner = {
     return type + ':' + value;
   },
 
-  scanSelection: function (ignoreHiddenLayers) {
+  scanSelection: async function (ignoreHiddenLayers) {
 
     var selection = figma.currentPage.selection;
     if (!selection || !Array.isArray(selection) || selection.length === 0) {
@@ -3726,11 +3711,11 @@ var Scanner = {
     }
 
     // ✅ FIX: Build the V2 index for suggestions
-    buildVariableIndex();
+    await buildVariableIndex();
 
     // Maintain legacy map for any legacy dependencies (optional)
     if (!Scanner.valueMap) {
-      Scanner.initMap();
+      await Scanner.initMap();
     }
 
     var results = [];
@@ -3738,7 +3723,7 @@ var Scanner = {
 
     for (var i = 0; i < selection.length; i++) {
       var node = selection[i];
-      Scanner._scanNodeRecursive(node, results, 0, ignoreHiddenLayers);
+      await Scanner._scanNodeRecursive(node, results, 0, ignoreHiddenLayers);
       processedCount++;
     }
 
@@ -3761,7 +3746,7 @@ var Scanner = {
     return results;
   },
 
-  _scanNodeRecursive: function (node, results, depth, ignoreHiddenLayers) {
+  _scanNodeRecursive: async function (node, results, depth, ignoreHiddenLayers) {
 
     if (depth > CONFIG.limits.MAX_DEPTH) {
       return;
@@ -3805,7 +3790,7 @@ var Scanner = {
 
       if (hasStyle) {
         try {
-          Scanner._checkProperties(node, results, ignoreHiddenLayers);
+          await Scanner._checkProperties(node, results, ignoreHiddenLayers);
         } catch (propertyAnalysisError) {
         }
       }
@@ -3828,7 +3813,7 @@ var Scanner = {
                   continue;
                 }
 
-                Scanner._scanNodeRecursive(child, results, depth + 1, ignoreHiddenLayers);
+                await Scanner._scanNodeRecursive(child, results, depth + 1, ignoreHiddenLayers);
 
               } catch (childError) {
               }
@@ -3843,7 +3828,7 @@ var Scanner = {
     }
   },
 
-  _checkProperties: function (node, results, ignoreHiddenLayers) {
+  _checkProperties: async function (node, results, ignoreHiddenLayers) {
 
     if (!node) {
       return;
@@ -3889,19 +3874,19 @@ var Scanner = {
       try {
 
         if (Utils.hasProperty(node, 'fills')) {
-          Scanner._checkFillsSafely(node, results);
+          await Scanner._checkFillsSafely(node, results);
         }
 
         if (Utils.hasProperty(node, 'strokes')) {
-          Scanner._checkStrokesSafely(node, results);
+          await Scanner._checkStrokesSafely(node, results);
         }
 
-        Scanner._checkCornerRadiusSafely(node, results);
+        await Scanner._checkCornerRadiusSafely(node, results);
 
-        Scanner._checkNumericPropertiesSafely(node, results);
+        await Scanner._checkNumericPropertiesSafely(node, results);
 
         if (node.type === CONFIG.types.TEXT) {
-          Scanner._checkTypographyPropertiesSafely(node, results);
+          await Scanner._checkTypographyPropertiesSafely(node, results);
         }
 
       } catch (propertyError) {
@@ -3909,37 +3894,37 @@ var Scanner = {
     }
   },
 
-  _checkFillsSafely: function (node, results) {
+  _checkFillsSafely: async function (node, results) {
     if (!Scanner.valueMap) {
-      Scanner.initMap();
+      await Scanner.initMap();
     }
     checkFillsSafely(node, Scanner.valueMap, results);
   },
 
-  _checkStrokesSafely: function (node, results) {
+  _checkStrokesSafely: async function (node, results) {
     if (!Scanner.valueMap) {
-      Scanner.initMap();
+      await Scanner.initMap();
     }
     checkStrokesSafely(node, Scanner.valueMap, results);
   },
 
-  _checkCornerRadiusSafely: function (node, results) {
+  _checkCornerRadiusSafely: async function (node, results) {
     if (!Scanner.valueMap) {
-      Scanner.initMap();
+      await Scanner.initMap();
     }
     checkCornerRadiusSafely(node, Scanner.valueMap, results);
   },
 
-  _checkNumericPropertiesSafely: function (node, results) {
+  _checkNumericPropertiesSafely: async function (node, results) {
     if (!Scanner.valueMap) {
-      Scanner.initMap();
+      await Scanner.initMap();
     }
     checkNumericPropertiesSafely(node, Scanner.valueMap, results);
   },
 
-  _checkTypographyPropertiesSafely: function (node, results) {
+  _checkTypographyPropertiesSafely: async function (node, results) {
     if (!Scanner.valueMap) {
-      Scanner.initMap();
+      await Scanner.initMap();
     }
     checkTypographyPropertiesSafely(node, Scanner.valueMap, results);
   }
@@ -4127,7 +4112,7 @@ function restoreNodeState(node, result, snapshot) {
 
 var Fixer = {
 
-  applyAndVerify: function (result, variableId) {
+  applyAndVerify: async function (result, variableId) {
 
     if (!result) {
       throw new Error('Invalid result or incomplete');
@@ -4143,7 +4128,7 @@ var Fixer = {
       throw new Error('No variable ID provided or suggested');
     }
 
-    var variable = FigmaService.getVariableById(variableId);
+    var variable = await FigmaService.getVariableById(variableId);
     if (!variable) {
       throw new Error('Variable not found: ' + variableId);
     }
@@ -4183,16 +4168,16 @@ var Fixer = {
     }
   },
 
-  applySingle: function (result, variableId) {
+  applySingle: async function (result, variableId) {
     try {
-      var verification = Fixer.applyAndVerify(result, variableId);
+      var verification = await Fixer.applyAndVerify(result, variableId);
       return verification.success ? 1 : 0;
     } catch (error) {
       return 0;
     }
   },
 
-  applyGroup: function (indices, variableId) {
+  applyGroup: async function (indices, variableId) {
     if (!Scanner.lastScanResults || !Array.isArray(indices)) {
       return;
     }
@@ -4205,7 +4190,7 @@ var Fixer = {
       if (index >= 0 && index < Scanner.lastScanResults.length) {
         var result = Scanner.lastScanResults[index];
         try {
-          var success = Fixer.applySingle(result, variableId);
+          var success = await Fixer.applySingle(result, variableId);
           if (success) {
             appliedCount++;
           } else {
@@ -4225,7 +4210,7 @@ var Fixer = {
     FigmaService.notify(message);
   },
 
-  applyAll: function () {
+  applyAll: async function () {
     if (!Scanner.lastScanResults || !Array.isArray(Scanner.lastScanResults)) {
       return;
     }
@@ -4236,7 +4221,7 @@ var Fixer = {
     for (var i = 0; i < Scanner.lastScanResults.length; i++) {
       var result = Scanner.lastScanResults[i];
       try {
-        var success = Fixer.applySingle(result, result.suggestedVariableId);
+        var success = await Fixer.applySingle(result, result.suggestedVariableId);
         if (success) {
           appliedCount++;
         } else {
@@ -4419,7 +4404,7 @@ var Fixer = {
 // ============================================================================
 
 // Build the mode-aware variable index at startup
-buildVariableIndex();
+(async () => { await buildVariableIndex(); })();
 
 figma.showUI(__html__, { width: 800, height: 950, themeColors: true });
 
@@ -4602,17 +4587,17 @@ figma.ui.onmessage = async function (msg) {
         break;
 
       case 'scan-selection':
-        Scanner.scanSelection(msg.ignoreHiddenLayers);
+        await Scanner.scanSelection(msg.ignoreHiddenLayers);
         break;
 
       case 'scan-page':
-        scanPage(msg.ignoreHiddenLayers);
+        await scanPage(msg.ignoreHiddenLayers);
         break;
 
       case 'scan-frame':
         // UI sends scan-frame for both Step 1 and Step 4
         var ignoreHidden = msg.ignoreHiddenLayers !== false;
-        Scanner.scanSelection(ignoreHidden);
+        await Scanner.scanSelection(ignoreHidden);
         break;
 
       case 'check-selection':
@@ -4662,8 +4647,8 @@ figma.ui.onmessage = async function (msg) {
             postToUI({ type: 'scopes-updated', result: result });
 
             // Rebuild index après un délai pour que les scopes soient bien appliqués
-            setTimeout(function () {
-              buildVariableIndex();
+            setTimeout(async function () {
+              await buildVariableIndex();
               console.log('🔄 [UPDATE_SCOPES] Index reconstruit avec les nouveaux scopes');
             }, 100);
           }, 100);
@@ -4802,7 +4787,7 @@ figma.ui.onmessage = async function (msg) {
 
         (async function () {
           var results = Scanner.lastScanResults;
-          var variable = FigmaService.getVariableById(msg.variableId);
+          var variable = await FigmaService.getVariableById(msg.variableId);
 
           if (!variable) {
             console.error('[PREVIEW] Variable NOT FOUND in Figma:', msg.variableId);
@@ -4935,68 +4920,73 @@ figma.ui.onmessage = async function (msg) {
   }
 };
 
-var existingCollections = figma.variables.getLocalVariableCollections();
-if (existingCollections.length > 0) {
-  postToUI({ type: "has-variables", value: true });
-
+// Check for existing variables
+(async () => {
   try {
-    var existingTokens = extractExistingTokens();
+    const existingCollections = await figma.variables.getLocalVariableCollectionsAsync();
 
-    // Sauvegarder les primitives extraites (toutes catégories sauf semantic)
-    var primitivesOnly = {};
-    var hasPrimitives = false;
-    for (var cat in existingTokens.tokens) {
-      if (existingTokens.tokens.hasOwnProperty(cat) && cat !== 'semantic') {
-        var categoryTokens = existingTokens.tokens[cat];
-        if (Object.keys(categoryTokens).length > 0) {
-          primitivesOnly[cat] = categoryTokens;
-          hasPrimitives = true;
+    if (existingCollections && existingCollections.length > 0) {
+      postToUI({ type: "has-variables", value: true });
+
+      try {
+        var existingTokens = extractExistingTokens(existingCollections);
+
+        // Sauvegarder les primitives extraites (toutes catégories sauf semantic)
+        var primitivesOnly = {};
+        var hasPrimitives = false;
+        for (var cat in existingTokens.tokens) {
+          if (existingTokens.tokens.hasOwnProperty(cat) && cat !== 'semantic') {
+            var categoryTokens = existingTokens.tokens[cat];
+            if (Object.keys(categoryTokens).length > 0) {
+              primitivesOnly[cat] = categoryTokens;
+              hasPrimitives = true;
+            }
+          }
         }
-      }
+
+        if (hasPrimitives) {
+          savePrimitivesTokensToFile(primitivesOnly, 'EXTRACT_STARTUP');
+        }
+
+        var hasTokens = false;
+        for (var cat in existingTokens.tokens) {
+          if (existingTokens.tokens.hasOwnProperty(cat) && Object.keys(existingTokens.tokens[cat]).length > 0) {
+            hasTokens = true;
+            break;
+          }
+        }
+
+        if (existingTokens && hasTokens) {
+          // 🔍 DIAGNOSTIC: Log what we're sending to UI
+          console.log('📤 [EXTRACT_TO_UI] Sending tokens to UI:', {
+            hasBrand: !!existingTokens.tokens.brand,
+            brandCount: existingTokens.tokens.brand ? Object.keys(existingTokens.tokens.brand).length : 0,
+            brandKeys: existingTokens.tokens.brand ? Object.keys(existingTokens.tokens.brand).slice(0, 5) : [],
+            allCategories: Object.keys(existingTokens.tokens),
+            library: existingTokens.library
+          });
+
+          postToUI({
+            type: "existing-tokens",
+            tokens: existingTokens.tokens,
+            library: existingTokens.library
+          });
+        } else {
+          console.log('⚠️ [EXTRACT_TO_UI] No tokens found, sending empty object');
+          postToUI({
+            type: "existing-tokens",
+            tokens: {},
+            library: "tailwind"
+          });
+        }
+      } catch (e) { console.warn(e); }
     }
+  } catch (err) { console.warn(err); }
+})();
 
-    if (hasPrimitives) {
-      savePrimitivesTokensToFile(primitivesOnly, 'EXTRACT_STARTUP');
-    }
-
-    var hasTokens = false;
-    for (var cat in existingTokens.tokens) {
-      if (existingTokens.tokens.hasOwnProperty(cat) && Object.keys(existingTokens.tokens[cat]).length > 0) {
-        hasTokens = true;
-        break;
-      }
-    }
-
-    if (existingTokens && hasTokens) {
-      // 🔍 DIAGNOSTIC: Log what we're sending to UI
-      console.log('📤 [EXTRACT_TO_UI] Sending tokens to UI:', {
-        hasBrand: !!existingTokens.tokens.brand,
-        brandCount: existingTokens.tokens.brand ? Object.keys(existingTokens.tokens.brand).length : 0,
-        brandKeys: existingTokens.tokens.brand ? Object.keys(existingTokens.tokens.brand).slice(0, 5) : [],
-        allCategories: Object.keys(existingTokens.tokens),
-        library: existingTokens.library
-      });
-
-      postToUI({
-        type: "existing-tokens",
-        tokens: existingTokens.tokens,
-        library: existingTokens.library
-      });
-    } else {
-      console.log('⚠️ [EXTRACT_TO_UI] No tokens found, sending empty object');
-      postToUI({
-        type: "existing-tokens",
-        tokens: {},
-        library: "tailwind"
-      });
-    }
-  } catch (e) {
-  }
-}
-
-function extractExistingTokens() {
+async function extractExistingTokens(preloadedCollections) {
   if (DEBUG) console.log('🔍 extractExistingTokens: starting extraction');
-  var collections = figma.variables.getLocalVariableCollections();
+  var collections = preloadedCollections || (globalCollectionsCache || []);
   if (DEBUG) console.log('📚 Found collections:', collections.map(function (c) { return c.name; }));
 
   var tokens = {
@@ -5036,9 +5026,9 @@ function extractExistingTokens() {
       continue;
     }
 
-    var variables = collection.variableIds.map(function (id) {
-      return figma.variables.getVariableById(id);
-    });
+    var variables = await Promise.all(collection.variableIds.map(function (id) {
+      return figma.variables.getVariableByIdAsync(id);
+    }));
 
     // Pour les sémantiques, on traite tous les modes
     // Pour les primitives, on prend le premier mode par défaut (souvent suffisant pour les scales)
@@ -5677,7 +5667,7 @@ function getRequiredScopesForScanResult(result) {
 /**
  * isSemanticVariable: Détermine si une variable est sémantique (pas primitive)
  */
-function isSemanticVariable(variableName, variableOrMetadata) {
+async function isSemanticVariable(variableName, variableOrMetadata) {
   if (!variableName) return false;
 
   var normalized = normalizeTokenName(variableName);
@@ -5783,7 +5773,7 @@ function isSemanticVariable(variableName, variableOrMetadata) {
   if (variableOrMetadata) {
     try {
       if (variableOrMetadata.variableCollectionId) {
-        var col = figma.variables.getVariableCollectionById(variableOrMetadata.variableCollectionId);
+        var col = await figma.variables.getVariableCollectionByIdAsync(variableOrMetadata.variableCollectionId);
         if (col) colName = col.name.toLowerCase();
       } else if (variableOrMetadata.collectionName) {
         colName = variableOrMetadata.collectionName.toLowerCase();
@@ -6213,16 +6203,20 @@ function createSuggestion(params) {
  * Builds the mode-aware variable index
  * This should be called once at plugin startup or when variables change
  */
-function buildVariableIndex() {
+async function buildVariableIndex() {
   console.log('🔨 [INDEX] Building mode-aware variable index (Unified)...');
 
   // Clear existing index
+  VariableIndex.byId.clear();
+  VariableIndex.byName.clear();
+  VariableIndex.byHex.clear();
+  VariableIndex.byValue.clear();
   VariableIndex.colorExact.clear();
   VariableIndex.colorPreferred.clear();
   VariableIndex.floatExact.clear();
   VariableIndex.floatPreferred.clear();
 
-  var collections = figma.variables.getLocalVariableCollections();
+  var collections = await figma.variables.getLocalVariableCollectionsAsync();
   var totalVariables = 0;
   var indexedVariables = 0;
   var countSemantic = 0;
@@ -6230,12 +6224,14 @@ function buildVariableIndex() {
   var countNoScopes = 0;
   var spacingRadiusVars = [];
 
-  collections.forEach(function (collection) {
+  for (var c = 0; c < collections.length; c++) {
+    var collection = collections[c];
     var collectionName = collection.name;
 
-    collection.variableIds.forEach(function (variableId) {
-      var variable = figma.variables.getVariableById(variableId);
-      if (!variable) return;
+    for (var v = 0; v < collection.variableIds.length; v++) {
+      var variableId = collection.variableIds[v];
+      var variable = await figma.variables.getVariableByIdAsync(variableId);
+      if (!variable) continue;
 
       totalVariables++;
 
@@ -6264,11 +6260,12 @@ function buildVariableIndex() {
       var tokenKind = isSemantic ? TokenKind.SEMANTIC : TokenKind.PRIMITIVE;
 
       // Index each mode
-      collection.modes.forEach(function (mode) {
+      for (var m = 0; m < collection.modes.length; m++) {
+        var mode = collection.modes[m];
         var modeId = mode.modeId;
         var resolvedValue = resolveVariableValueRecursively(variable, modeId);
 
-        if (!resolvedValue) return;
+        if (!resolvedValue) continue;
 
         // Create VariableMeta
         var meta = {
@@ -6315,12 +6312,12 @@ function buildVariableIndex() {
           // Resolve Alias if needed (shallow resolution)
           if (value && typeof value === 'object' && value.type === 'VARIABLE_ALIAS') {
             try {
-              var aliasedVar = figma.variables.getVariableById(value.id);
+              var aliasedVar = await figma.variables.getVariableByIdAsync(value.id);
               if (aliasedVar) {
                 // Try to resolve using the same mode if possible, otherwise fallback to first mode
                 // Note: Ideally we should map modes, but usually primitives have one mode.
-                var collection = figma.variables.getVariableCollectionById(aliasedVar.variableCollectionId);
-                var targetModeId = (collection.modes[0] || {}).modeId;
+                var collectionForAlias = await figma.variables.getVariableCollectionByIdAsync(aliasedVar.variableCollectionId);
+                var targetModeId = (collectionForAlias.modes[0] || {}).modeId;
 
                 // If the collection has a mode with the same name, use it (heuristic)
                 // This is complex, let's keep it simple: resolve for the primitive's default mode
@@ -6354,9 +6351,9 @@ function buildVariableIndex() {
             indexedVariables++;
           }
         }
-      });
-    });
-  });
+      }
+    }
+  }
 
   VariableIndex.isBuilt = true;
 
@@ -6394,7 +6391,7 @@ function detectNodeModeId(node) {
     var collectionIds = Object.keys(node.explicitVariableModes);
     if (collectionIds.length > 0) {
       // Find the Semantic collection
-      var collections = figma.variables.getLocalVariableCollections();
+      var collections = globalCollectionsCache || [];
       for (var i = 0; i < collections.length; i++) {
         var col = collections[i];
         var colName = col.name.toLowerCase();
@@ -6417,7 +6414,7 @@ function detectNodeModeId(node) {
   }
 
   // Priority 3: Find default Light mode from Semantic collection
-  var collections = figma.variables.getLocalVariableCollections();
+  var collections = globalCollectionsCache || [];
   for (var i = 0; i < collections.length; i++) {
     var col = collections[i];
     var colName = col.name.toLowerCase();
@@ -6447,7 +6444,7 @@ function detectNodeModeId(node) {
  * @param {FrameNode} node - Frame à analyser
  * @returns {string} 'light' ou 'dark'
  */
-function detectFrameMode(node) {
+async function detectFrameMode(node) {
   if (!node) return 'light'; // Défaut
 
   // ============================================================================
@@ -6467,7 +6464,7 @@ function detectFrameMode(node) {
 
       // Récupérer le nom du mode depuis la collection
       try {
-        var collection = figma.variables.getVariableCollectionById(firstCollectionId);
+        var collection = await figma.variables.getVariableCollectionByIdAsync(firstCollectionId);
         if (collection && collection.modes) {
           var mode = collection.modes.find(function (m) { return m.modeId === modeId; });
           if (mode) {
@@ -6813,14 +6810,15 @@ function applyVariableScopes(figmaVar, context) {
  * updateAllVariableScopes: Met à jour les scopes de toutes les variables existantes
  * Utile après une modification du primitiveScopesMapping ou semanticScopesMapping
  */
-function updateAllVariableScopes() {
+async function updateAllVariableScopes() {
   console.log('🔄 [UPDATE_SCOPES] Updating scopes for all existing variables...');
 
-  var collections = figma.variables.getLocalVariableCollections();
+  var collections = (globalCollectionsCache || []);
   var totalUpdated = 0;
   var totalSkipped = 0;
 
-  collections.forEach(function (collection) {
+  for (var c = 0; c < collections.length; c++) {
+    var collection = collections[c];
     var collectionName = (collection.name || '').toLowerCase();
 
     // Déterminer la catégorie basée sur le nom de la collection
@@ -6829,9 +6827,10 @@ function updateAllVariableScopes() {
       return collectionName.indexOf(pc) !== -1;
     });
 
-    collection.variableIds.forEach(function (variableId) {
-      var variable = figma.variables.getVariableById(variableId);
-      if (!variable) return;
+    for (var v = 0; v < collection.variableIds.length; v++) {
+      var variableId = collection.variableIds[v];
+      var variable = await figma.variables.getVariableByIdAsync(variableId);
+      if (!variable) continue;
 
       try {
         // Détecter la catégorie spécifique de la variable dans la collection primitive
@@ -6878,8 +6877,8 @@ function updateAllVariableScopes() {
       } catch (error) {
         console.warn('⚠️ [UPDATE_SCOPES] Error updating scopes for', variable.name, error);
       }
-    });
-  });
+    }
+  }
 
   console.log('✅ [UPDATE_SCOPES] Complete:', {
     updated: totalUpdated,
@@ -6891,21 +6890,29 @@ function updateAllVariableScopes() {
 }
 
 function getOrCreateCollection(name, overwrite) {
-  var collections = figma.variables.getLocalVariableCollections();
+  var collections = (globalCollectionsCache || []);
 
   if (overwrite) {
     for (var i = 0; i < collections.length; i++) {
       if (collections[i].name === name) {
         collections[i].remove();
+        // Remove from cache too
+        collections.splice(i, 1);
+        i--;
       }
     }
-    return figma.variables.createVariableCollection(name);
+    var newCol = figma.variables.createVariableCollection(name);
+    if (globalCollectionsCache) globalCollectionsCache.push(newCol);
+    return newCol;
   }
 
   for (var i = 0; i < collections.length; i++) {
     if (collections[i].name === name) return collections[i];
   }
-  return figma.variables.createVariableCollection(name);
+
+  var newCol = figma.variables.createVariableCollection(name);
+  if (globalCollectionsCache) globalCollectionsCache.push(newCol);
+  return newCol;
 }
 
 // Fonction spécialisée pour appliquer la valeur appropriée à une variable sémantique
@@ -6914,7 +6921,7 @@ function isFigmaAliasValue(value) {
   return value && typeof value === 'object' && value.type === 'VARIABLE_ALIAS' && value.id;
 }
 
-function applySemanticValue(variable, semanticData, semanticKey, explicitModeId) {
+async function applySemanticValue(variable, semanticData, semanticKey, explicitModeId) {
   if (!variable || !semanticData) return;
 
   // Tâche B — ModeId safe (pas de fallback hasardeux)
@@ -6932,7 +6939,7 @@ function applySemanticValue(variable, semanticData, semanticKey, explicitModeId)
 
   // Tâche B — Application défensive : si alias valide → VARIABLE_ALIAS, sinon garde l'existant
   if (norm.isValid) {
-    var aliasVariable = figma.variables.getVariableById(norm.variableId);
+    var aliasVariable = await figma.variables.getVariableByIdAsync(norm.variableId);
     if (aliasVariable) {
       // ✅ VÉRIFICATIONS SUPPLÉMENTAIRES pour éviter les alias cassés
       // 1. Vérifier la compatibilité des types
@@ -6950,7 +6957,7 @@ function applySemanticValue(variable, semanticData, semanticKey, explicitModeId)
         }
       } else {
         // 2. Vérifier que la variable cible a une valeur dans au moins un mode
-        var aliasCollection = figma.variables.getVariableCollectionById(aliasVariable.variableCollectionId);
+        var aliasCollection = await figma.variables.getVariableCollectionByIdAsync(aliasVariable.variableCollectionId);
         var hasValidValue = false;
         if (aliasCollection && aliasCollection.modes && aliasCollection.modes.length > 0) {
           // Vérifier si la variable a une valeur dans le mode actuel ou un mode compatible
@@ -7011,7 +7018,7 @@ function applySemanticValue(variable, semanticData, semanticKey, explicitModeId)
     // ✅ VÉRIFICATION FINALE avant setValueForMode pour éviter les alias cassés
     if (valueType === 'alias' && processedValue && processedValue.type === 'VARIABLE_ALIAS') {
       // Vérifier une dernière fois que la variable existe toujours (race condition protection)
-      var finalCheckVariable = figma.variables.getVariableById(processedValue.id);
+      var finalCheckVariable = await figma.variables.getVariableByIdAsync(processedValue.id);
       if (!finalCheckVariable) {
         console.warn(`⚠️ [APPLY_SKIP] ${semanticKey}: alias variable ${processedValue.id} was deleted before application, skipping (keeping existing value)`);
         // Fallback vers resolvedValue si disponible
@@ -7129,7 +7136,7 @@ function shouldPreserveExistingSemantic(existingToken, incomingToken) {
 async function createOrUpdateVariable(collection, name, type, value, category, overwrite, hintKey) {
   if (DEBUG) console.log('🔧 createOrUpdateVariable:', category, name, type, typeof value);
 
-  var allVariables = figma.variables.getLocalVariables();
+  var allVariables = await figma.variables.getLocalVariablesAsync();
   var variable = null;
 
   for (var i = 0; i < allVariables.length; i++) {
@@ -7176,7 +7183,7 @@ async function createOrUpdateVariable(collection, name, type, value, category, o
 
       // Après création, récupérer à nouveau la variable pour s'assurer que toutes les propriétés sont définies
       if (variable && variable.id) {
-        variable = figma.variables.getVariableById(variable.id);
+        variable = await figma.variables.getVariableByIdAsync(variable.id);
         if (!variable) {
           console.error('❌ Created variable not found by ID');
           return null;
@@ -7243,8 +7250,8 @@ async function importTokensToFigma(tokens, naming, overwrite) {
   if (DEBUG) console.log('🔄 ENGINE SYNC: Starting importTokensToFigma (Refactored) - PATCH 747 ACTIVE');
 
   // Pre-fetch all local data once to avoid 1000s of API calls
-  var allLocalVariables = figma.variables.getLocalVariables();
-  var allLocalCollections = figma.variables.getLocalVariableCollections();
+  var allLocalVariables = await figma.variables.getLocalVariablesAsync();
+  var allLocalCollections = (globalCollectionsCache || []);
 
   // Helper internal to find variable in pre-fetched list
   function findVariableLocally(name, collectionId) {
@@ -7631,15 +7638,15 @@ async function importTokensToFigma(tokens, naming, overwrite) {
 
 // Fonction pour construire une map globale des variables existantes pour la résolution des alias
 // VERSION AMÉLIORÉE avec plus de variantes de clés
-function buildGlobalVariableMap() {
+async function buildGlobalVariableMap() {
   if (DEBUG) console.log('🔍 Building global variable map for semantic alias resolution');
 
-  var vars = figma.variables.getLocalVariables();
+  var vars = await figma.variables.getLocalVariablesAsync();
   var byName = new Map();
 
   for (var i = 0; i < vars.length; i++) {
     var variable = vars[i];
-    var collection = figma.variables.getVariableCollectionById(variable.variableCollectionId);
+    var collection = await figma.variables.getVariableCollectionByIdAsync(variable.variableCollectionId);
     if (!collection) continue;
 
     // Clé principale : collectionName/variableName (comme dans les alias sémantiques)
@@ -8011,7 +8018,7 @@ function resolveSemanticAliasFromMapLegacy(semanticKey, allTokens, naming, globa
 // Cela permet à différents scopes (bg, text, border) de partager la même primitive
 resolveSemanticAliasFromMap.usedVariables = resolveSemanticAliasFromMap.usedVariables || new Set();
 
-function resolveSemanticAliasFromMap(semanticKey, allTokens, naming, globalVariableMap, modeName) {
+async function resolveSemanticAliasFromMap(semanticKey, allTokens, naming, globalVariableMap, modeName) {
   // (function(){return function(){}})()&&console.log(`🔍 [ALIAS_RESOLVE] Starting resolution for ${semanticKey} with ${naming} (Mode: ${modeName})`);
 
   // NOUVELLE LOGIQUE : Utiliser directement la map globale avec mappings centralisés
@@ -8089,10 +8096,10 @@ function resolveSemanticAliasFromMap(semanticKey, allTokens, naming, globalVaria
           */
 
           if (DEBUG) console.log(`✅ [MAP_HIT] ${semanticKey} -> '${searchKey}' found in global map (ID: ${variableId})`);
-          var variable = figma.variables.getVariableById(variableId);
+          var variable = await figma.variables.getVariableByIdAsync(variableId);
           if (variable) {
             // Vérifier que c'est bien la bonne collection
-            var collection = figma.variables.getVariableCollectionById(variable.variableCollectionId);
+            var collection = await figma.variables.getVariableCollectionByIdAsync(variable.variableCollectionId);
             if (collection && isCollectionCategory(collection.name, mapping.category)) {
               if (DEBUG) console.log(`🎯 [ALIAS_FOUND] ${semanticKey} -> ${searchKey} -> ${collection.name}/${variable.name} (ID: ${variableId})`);
               // ✅ VÉRIFICATION SUPPLÉMENTAIRE : s'assurer que la variable a une valeur valide dans au moins un mode
@@ -8140,7 +8147,7 @@ function resolveSemanticAliasFromMap(semanticKey, allTokens, naming, globalVaria
 var cachedTokens = null;
 // P0-A Phase 3: lastScanResults removed, use Scanner.lastScanResults instead
 
-function resolveVariableValue(variable, modeId, visitedVariables) {
+async function resolveVariableValue(variable, modeId, visitedVariables) {
   if (!visitedVariables) visitedVariables = new Set();
   if (visitedVariables.has(variable.id)) return null;
   visitedVariables.add(variable.id);
@@ -8149,15 +8156,15 @@ function resolveVariableValue(variable, modeId, visitedVariables) {
     var value = variable.valuesByMode[modeId];
 
     if (value && typeof value === 'object' && value.type === 'VARIABLE_ALIAS') {
-      var parentVar = figma.variables.getVariableById(value.id);
+      var parentVar = await figma.variables.getVariableByIdAsync(value.id);
       if (!parentVar) return null;
 
       // ✅ MODE MAPPING by name (collection A -> collection B)
       var parentModeId = modeId;
 
       try {
-        var currentCollection = figma.variables.getVariableCollectionById(variable.variableCollectionId);
-        var parentCollection = figma.variables.getVariableCollectionById(parentVar.variableCollectionId);
+        var currentCollection = await figma.variables.getVariableCollectionByIdAsync(variable.variableCollectionId);
+        var parentCollection = await figma.variables.getVariableCollectionByIdAsync(parentVar.variableCollectionId);
 
         if (currentCollection && parentCollection) {
           // Find current mode name
@@ -8180,7 +8187,7 @@ function resolveVariableValue(variable, modeId, visitedVariables) {
         // ignore mapping errors, keep parentModeId fallback
       }
 
-      return resolveVariableValue(parentVar, parentModeId, visitedVariables);
+      return await resolveVariableValue(parentVar, parentModeId, visitedVariables);
     }
 
     return value;
@@ -8222,18 +8229,21 @@ function normalizeAliasToDescriptor(aliasTo) {
   return { variableId: null, raw: aliasTo, isValid: false };
 }
 
-function createValueToVariableMap() {
+async function createValueToVariableMap() {
   var map = new Map();
-  var localCollections = figma.variables.getLocalVariableCollections();
+  var localCollections = (globalCollectionsCache || []);
 
-  localCollections.forEach(function (collection) {
-    collection.variableIds.forEach(function (variableId) {
-      var variable = figma.variables.getVariableById(variableId);
+  for (var c = 0; c < localCollections.length; c++) {
+    var collection = localCollections[c];
+    for (var v = 0; v < collection.variableIds.length; v++) {
+      var variableId = collection.variableIds[v];
+      var variable = await figma.variables.getVariableByIdAsync(variableId);
       if (!variable) {
-        return;
+        continue;
       }
 
-      collection.modes.forEach(function (mode) {
+      for (var m = 0; m < collection.modes.length; m++) {
+        var mode = collection.modes[m];
         var modeId = mode.modeId;
 
         var resolvedValue = resolveVariableValue(variable, modeId);
@@ -8272,9 +8282,9 @@ function createValueToVariableMap() {
             });
           }
         }
-      });
-    });
-  });
+      }
+    }
+  }
 
   return map;
 }
@@ -8335,19 +8345,22 @@ function getScopesForProperty(propertyType) {
   return propertyScopes[propertyType] || [];
 }
 
-function filterVariablesByScopes(variables, requiredScopes) {
+async function filterVariablesByScopes(variables, requiredScopes) {
   if (!requiredScopes || requiredScopes.length === 0) {
     return variables;
   }
 
-  return variables.filter(function (variable) {
-    var figmaVariable = figma.variables.getVariableById(variable.id);
-    if (!figmaVariable) return false;
+  var filtered = [];
+  for (var i = 0; i < variables.length; i++) {
+    var variable = variables[i];
+    var figmaVariable = await figma.variables.getVariableByIdAsync(variable.id);
+    if (!figmaVariable) continue;
 
     // ✅ OPTIMISATION: Si la variable n'a aucun scope défini, on l'autorise (permissif)
     // Cela évite de bloquer des variables valides mais dont les scopes n'ont pas encore été configurés.
     if (!figmaVariable.scopes || figmaVariable.scopes.length === 0) {
-      return true;
+      filtered.push(variable);
+      continue;
     }
 
     // Vérifier si au moins un scope de la variable correspond aux scopes requis
@@ -8363,8 +8376,11 @@ function filterVariablesByScopes(variables, requiredScopes) {
       });
     }
 
-    return hasMatchingScope;
-  });
+    if (hasMatchingScope) {
+      filtered.push(variable);
+    }
+  }
+  return filtered;
 }
 
 /**
@@ -9037,7 +9053,7 @@ function findNumericSuggestionsV2(targetValue, contextModeId, requiredScopes, pr
 /**
  * Résout récursivement la valeur d'une variable en suivant les alias
  */
-function resolveVariableValueRecursively(variable, modeId, visitedIds) {
+async function resolveVariableValueRecursively(variable, modeId, visitedIds) {
   if (!variable) return null;
   if (!visitedIds) visitedIds = new Set();
   if (visitedIds.has(variable.id)) {
@@ -9048,7 +9064,7 @@ function resolveVariableValueRecursively(variable, modeId, visitedIds) {
   try {
     // Si pas de modeId fourni, essayer de prendre le premier mode de la collection de cette variable
     if (!modeId) {
-      var collections = figma.variables.getLocalVariableCollections();
+      var collections = (globalCollectionsCache || []);
       var collection = collections.find(function (c) { return c.variableIds.includes(variable.id); });
       if (collection && collection.modes.length > 0) {
         modeId = collection.modes[0].modeId;
@@ -9066,10 +9082,10 @@ function resolveVariableValueRecursively(variable, modeId, visitedIds) {
 
     // Si c'est un ALIAS
     if (value && typeof value === 'object' && value.type === 'VARIABLE_ALIAS') {
-      var aliasedVar = figma.variables.getVariableById(value.id);
+      var aliasedVar = await figma.variables.getVariableByIdAsync(value.id);
       if (aliasedVar) {
         // Pour simplifier, on passe null pour le modeId pour laisser la fonction redécouvrir le mode par défaut de l'alias
-        return resolveVariableValueRecursively(aliasedVar, null, visitedIds);
+        return await resolveVariableValueRecursively(aliasedVar, null, visitedIds);
       }
     }
 
@@ -9081,7 +9097,7 @@ function resolveVariableValueRecursively(variable, modeId, visitedIds) {
   }
 }
 
-function enrichSuggestionsWithRealValues(suggestions, contextModeId) {
+async function enrichSuggestionsWithRealValues(suggestions, contextModeId) {
   // ============================================================================
   // DIAGNOSTIC: Trace UI enrichment
   // ============================================================================
@@ -9089,26 +9105,29 @@ function enrichSuggestionsWithRealValues(suggestions, contextModeId) {
     traceUIEnrichment(suggestions, contextModeId);
   }
 
-  return suggestions.map(function (suggestion) {
+  var enrichedSuggestions = [];
+  for (var s = 0; s < suggestions.length; s++) {
+    var suggestion = suggestions[s];
     var enriched = Object.assign({}, suggestion);
 
     // Si on a déjà les valeurs résolues (V2 Engine), pas besoin d'enrichir sauf si manquant
     if (enriched.resolvedValue && (enriched.hex || (typeof enriched.resolvedValue === 'string' && enriched.resolvedValue.endsWith('px')))) {
-      return enriched;
+      enrichedSuggestions.push(enriched);
+      continue;
     }
 
     // Ensure name is preserved
     if (!enriched.name && suggestion.id) {
-      var variable = figma.variables.getVariableById(suggestion.id);
+      var variable = await figma.variables.getVariableByIdAsync(suggestion.id);
       if (variable) {
         enriched.name = variable.name;
       }
     }
 
-    var variable = figma.variables.getVariableById(suggestion.id);
+    var variable = await figma.variables.getVariableByIdAsync(suggestion.id);
     if (variable) {
 
-      var collections = figma.variables.getLocalVariableCollections();
+      var collections = (globalCollectionsCache || []);
       var collection = null;
       for (var i = 0; i < collections.length; i++) {
         if (collections[i].variableIds.includes(variable.id)) {
@@ -9137,7 +9156,7 @@ function enrichSuggestionsWithRealValues(suggestions, contextModeId) {
         }
 
         // Utiliser une fonction helper pour résoudre la valeur (gère les alias)
-        var resolvedVal = resolveVariableValueRecursively(variable, modeId);
+        var resolvedVal = await resolveVariableValueRecursively(variable, modeId);
 
         if (variable.resolvedType === "COLOR") {
           if (typeof resolvedVal === "object" && resolvedVal.r !== undefined) {
@@ -9170,8 +9189,9 @@ function enrichSuggestionsWithRealValues(suggestions, contextModeId) {
       }
     }
 
-    return enriched;
-  });
+    enrichedSuggestions.push(enriched);
+  }
+  return enrichedSuggestions;
 }
 
 function checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLayers) {
@@ -9248,20 +9268,20 @@ function checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLaye
   }
 }
 
-function checkTypographyPropertiesSafely(node, valueToVariableMap, results) {
+async function checkTypographyPropertiesSafely(node, valueToVariableMap, results) {
   // ✅ FIX: Désactivation du scan typographique demandée par l'utilisateur
   return;
 
   try {
     var contextModeId = detectNodeModeId(node);
 
-    function checkBinConformity(boundVars, propKey, requiredScopes) {
+    async function checkBinConformity(boundVars, propKey, requiredScopes) {
       if (!boundVars || !boundVars[propKey]) return { isConform: false, boundId: null };
       var binding = boundVars[propKey];
       if (Array.isArray(binding)) binding = binding[0];
 
       if (binding && binding.type === 'VARIABLE_ALIAS' && binding.id) {
-        var boundVar = figma.variables.getVariableById(binding.id);
+        var boundVar = await figma.variables.getVariableByIdAsync(binding.id);
         if (boundVar) {
           var isSemantic = isSemanticVariable(boundVar.name, boundVar);
           var hasScopes = filterVariableByScopes({ scopes: boundVar.scopes }, requiredScopes);
@@ -10212,7 +10232,7 @@ function checkNumericPropertiesSafely(node, valueToVariableMap, results) {
   }
 }
 
-function isPropertyBoundToVariable(boundVariables, propertyPath, index) {
+async function isPropertyBoundToVariable(boundVariables, propertyPath, index) {
   try {
     if (!boundVariables || typeof boundVariables !== 'object') return false;
 
@@ -10241,7 +10261,7 @@ function isPropertyBoundToVariable(boundVariables, propertyPath, index) {
       return false;
     }
 
-    var variable = figma.variables.getVariableById(binding.id);
+    var variable = await figma.variables.getVariableByIdAsync(binding.id);
     return variable !== null && variable !== undefined;
 
   } catch (bindingError) {
@@ -10366,10 +10386,10 @@ function scanSelection(ignoreHiddenLayers) {
   }
 }
 
-function scanPage(ignoreHiddenLayers) {
+async function scanPage(ignoreHiddenLayers) {
 
   // ✅ FIX: Build the V2 index for suggestions BEFORE starting scan
-  buildVariableIndex();
+  await buildVariableIndex();
 
   try {
     var pageChildren = figma.currentPage.children;
@@ -10486,7 +10506,7 @@ function finishScan(results) {
   }, 100);
 }
 
-function diagnoseApplicationFailure(result, variableId, error) {
+async function diagnoseApplicationFailure(result, variableId, error) {
 
   var diagnosis = {
     issue: 'unknown',
@@ -10497,7 +10517,7 @@ function diagnoseApplicationFailure(result, variableId, error) {
 
   try {
 
-    var variable = figma.variables.getVariableById(variableId);
+    var variable = await figma.variables.getVariableByIdAsync(variableId);
     if (!variable) {
       diagnosis.issue = 'variable_missing';
       diagnosis.confidence = 'high';
@@ -10669,13 +10689,13 @@ async function applyAndVerifyFix(result, variableId) {
     }
     verificationResult.details.variableId = finalVariableId;
 
-    var variable = figma.variables.getVariableById(finalVariableId);
+    var variable = await figma.variables.getVariableByIdAsync(finalVariableId);
     if (variable) {
     }
 
     if (!variable) {
 
-      var allVars = figma.variables.getLocalVariables().slice(0, 5);
+      var allVars = (await figma.variables.getLocalVariablesAsync()).slice(0, 5);
       throw new Error('Variable introuvable: ' + finalVariableId);
     }
 
@@ -11615,14 +11635,14 @@ checkAndNotifySelection();
 // End of code file
 
 // Fonction utilitaire pour obtenir un modeId de manière sûre (sans crash)
-function safeGetModeId(variable) {
+async function safeGetModeId(variable) {
   // Si variable est falsy
   if (!variable) return null;
 
   // Essayer d'abord via la collection
   if (variable.variableCollectionId) {
     try {
-      var collection = figma.variables.getVariableCollectionById(variable.variableCollectionId);
+      var collection = await figma.variables.getVariableCollectionByIdAsync(variable.variableCollectionId);
       if (collection && collection.modes && collection.modes.length > 0) {
         return collection.modes[0].modeId;
       }
@@ -11819,15 +11839,15 @@ function isSpacingPattern(variableName) {
 }
 
 // Fonction d'inférence du type de collection depuis son contenu (améliorée)
-function inferCollectionTypeFromContent(collection) {
+async function inferCollectionTypeFromContent(collection) {
   if (!collection || !collection.variableIds || collection.variableIds.length === 0) {
     return null; // Sécurité : pas de variables = pas d'inférence
   }
 
   // Analyser seulement les 5 premières variables (plus représentatif)
-  var sampleVars = collection.variableIds.slice(0, 5).map(function (id) {
-    return figma.variables.getVariableById(id);
-  }).filter(function (v) { return v; });
+  var sampleVars = (await Promise.all(collection.variableIds.slice(0, 5).map(function (id) {
+    return figma.variables.getVariableByIdAsync(id);
+  }))).filter(function (v) { return v; });
 
   if (sampleVars.length === 0) return null;
 
@@ -11874,7 +11894,7 @@ function inferCollectionTypeFromContent(collection) {
 }
 
 // Fonction de diagnostic pour la résolution des alias sémantiques
-function debugSemanticAliasResolution(semanticKey, naming) {
+async function debugSemanticAliasResolution(semanticKey, naming) {
   if (DEBUG) console.log(`🔍 [DEBUG] Resolution attempt for ${semanticKey} with naming=${naming}`);
 
   try {
@@ -11889,7 +11909,7 @@ function debugSemanticAliasResolution(semanticKey, naming) {
     if (DEBUG) console.log(`📋 [DEBUG] Looking for category: ${mapping.category}, keys: [${mapping.keys.join(', ')}]`);
 
     // Lister les collections disponibles
-    var collections = figma.variables.getLocalVariableCollections();
+    var collections = (globalCollectionsCache || []);
     if (DEBUG) console.log(`🏗️ [DEBUG] Available collections:`);
     collections.forEach(function (collection) {
       var category = getCategoryFromVariableCollection(collection.name);
@@ -11916,14 +11936,15 @@ function debugSemanticAliasResolution(semanticKey, naming) {
     // Lister les clés disponibles dans cette collection
     if (DEBUG) console.log(`🔑 [DEBUG] Available keys in ${targetCollection.name}:`);
     var availableKeys = [];
-    targetCollection.variableIds.forEach(function (varId) {
-      var variable = figma.variables.getVariableById(varId);
+    for (var v = 0; v < targetCollection.variableIds.length; v++) {
+      var varId = targetCollection.variableIds[v];
+      var variable = await figma.variables.getVariableByIdAsync(varId);
       if (variable) {
         var key = extractVariableKey(variable, targetCollection.name);
         availableKeys.push(key);
         if (DEBUG) console.log('  ' + key + ' (' + variable.name + ')');
       }
-    });
+    }
 
     // Vérifier les clés recherchées
     var foundKeys = [];
@@ -12077,7 +12098,7 @@ async function flattenSemanticTokensFromFigma(callsite) {
 
   // Trouver la collection Semantic
   var semanticCollection = null;
-  var collections = figma.variables.getLocalVariableCollections();
+  var collections = (globalCollectionsCache || []);
   for (var i = 0; i < collections.length; i++) {
     if (collections[i].name === "Semantic") {
       semanticCollection = collections[i];
@@ -12095,7 +12116,7 @@ async function flattenSemanticTokensFromFigma(callsite) {
   // Créer un mapping nom -> variable pour la recherche rapide
   var nameToVariable = {};
   for (var v = 0; v < semanticCollection.variableIds.length; v++) {
-    var variable = figma.variables.getVariableById(semanticCollection.variableIds[v]);
+    var variable = await figma.variables.getVariableByIdAsync(semanticCollection.variableIds[v]);
     if (variable) {
       nameToVariable[variable.name] = variable;
     }
@@ -12150,12 +12171,12 @@ async function flattenSemanticTokensFromFigma(callsite) {
     // DÉTECTER SI C'EST UN ALIAS ET EXTRAIRE LES INFOS
     if (raw && typeof raw === 'object' && raw.type === 'VARIABLE_ALIAS') {
       // Cette variable sémantique pointe vers une autre variable
-      var targetVariable = figma.variables.getVariableById(raw.id);
+      var targetVariable = await figma.variables.getVariableByIdAsync(raw.id);
       if (targetVariable) {
         // Extraire les informations de la variable cible
         var targetCollectionId = targetVariable.variableCollectionId;
         if (targetCollectionId) {
-          var targetCollection = figma.variables.getVariableCollectionById(targetCollectionId);
+          var targetCollection = await figma.variables.getVariableCollectionByIdAsync(targetCollectionId);
           if (targetCollection) {
             var targetKey = extractVariableKey(targetVariable, targetCollection.name);
             flattenedToken.aliasTo = {

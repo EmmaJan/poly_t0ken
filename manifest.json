@@ -12,5 +12,5 @@
       "none"
     ]
   },
-  "documentAccess": "figma.variables.getLocalVariableCollectionsAsync"
+  "documentAccess": "dynamic-page"
 }
