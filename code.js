@@ -4946,7 +4946,7 @@ figma.ui.onmessage = async function (msg) {
       postToUI({ type: "has-variables", value: true });
 
       try {
-        var existingTokens = extractExistingTokens(existingCollections);
+        var existingTokens = await extractExistingTokens(existingCollections);
 
         // Sauvegarder les primitives extraites (toutes catégories sauf semantic)
         var primitivesOnly = {};
