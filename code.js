@@ -9727,7 +9727,7 @@ async function checkFillsSafely(node, valueToVariableMap, results) {
     var requiredScopes = getScopesForPropertyKind(propertyKind);
 
     // Helper pour densifier une liste de fills
-    function processFills(fillsList, boundVars, sourceNode, segmentIndex) {
+    async function processFills(fillsList, boundVars, sourceNode, segmentIndex) {
       if (!fillsList || !Array.isArray(fillsList)) return;
 
       for (var i = 0; i < fillsList.length; i++) {
@@ -9816,12 +9816,12 @@ async function checkFillsSafely(node, valueToVariableMap, results) {
       var segments = node.getStyledTextSegments(['fills', 'boundVariables']);
       for (var s = 0; s < segments.length; s++) {
         var seg = segments[s];
-        processFills(seg.fills, seg.boundVariables, node, s);
+        await processFills(seg.fills, seg.boundVariables, node, s);
       }
     }
     // CAS 2: Array standard
     else if (Array.isArray(fills)) {
-      processFills(fills, node.boundVariables, node);
+      await processFills(fills, node.boundVariables, node);
     }
 
   } catch (err) {
@@ -9841,7 +9841,7 @@ async function checkStrokesSafely(node, valueToVariableMap, results) {
     var propertyKind = PropertyKind.STROKE;
     var requiredScopes = getScopesForPropertyKind(propertyKind);
 
-    function processStrokes(strokesList, boundVars, sourceNode, segmentIndex) {
+    async function processStrokes(strokesList, boundVars, sourceNode, segmentIndex) {
       if (!strokesList || !Array.isArray(strokesList)) return;
 
       for (var j = 0; j < strokesList.length; j++) {
@@ -9913,10 +9913,10 @@ async function checkStrokesSafely(node, valueToVariableMap, results) {
       var segments = node.getStyledTextSegments(['strokes', 'boundVariables']);
       for (var s = 0; s < segments.length; s++) {
         var seg = segments[s];
-        processStrokes(seg.strokes, seg.boundVariables, node, s);
+        await processStrokes(seg.strokes, seg.boundVariables, node, s);
       }
     } else if (Array.isArray(strokes)) {
-      processStrokes(strokes, node.boundVariables, node);
+      await processStrokes(strokes, node.boundVariables, node);
     }
 
   } catch (strokesError) {
