@@ -3615,7 +3615,7 @@ var Scanner = {
         if (!variable) continue;
 
         // FILTRE SEMANTIC-ONLY: ne garder que les variables sémantiques
-        if (!isSemanticVariable(variable.name, variable)) {
+        if (!(await isSemanticVariable(variable.name, variable))) {
           // ============================================================================
           // DIAGNOSTIC: Check if bg/inverse is excluded here
           // ============================================================================
@@ -5105,12 +5105,13 @@ async function extractExistingTokens(preloadedCollections) {
       // Traitement spécifique selon la catégorie
       if (category === "semantic") {
         // Extraction MULTI-MODE pour les sémantiques
-        collection.modes.forEach(function (mode) {
+        for (var m = 0; m < collection.modes.length; m++) {
+          var mode = collection.modes[m];
           var modeId = mode.modeId;
           var modeName = mode.name.toLowerCase();
 
           var raw = variable.valuesByMode[modeId];
-          var value = resolveVariableValue(variable, modeId);
+          var value = await resolveVariableValue(variable, modeId);
 
           // Logique d'alias (similaire à avant, mais par mode)
           var aliasTo = null;
@@ -5143,13 +5144,13 @@ async function extractExistingTokens(preloadedCollections) {
               }
             };
           }
-        });
+        }
 
       } else {
         // Extraction SIMPLE-MODE (Legacy) pour les primitives
         // On prend le premier mode
         var modeId = collection.modes[0].modeId;
-        var value = resolveVariableValue(variable, modeId);
+        var value = await resolveVariableValue(variable, modeId);
 
         var formattedValue;
         if (variable.resolvedType === "COLOR") {
@@ -6253,7 +6254,7 @@ async function buildVariableIndex() {
       totalVariables++;
 
       // Stats
-      var isSemantic = isSemanticVariable(variable.name, variable);
+      var isSemantic = await isSemanticVariable(variable.name, variable);
       if (isSemantic) countSemantic++; else countPrimitive++;
 
       var scopes = variable.scopes || [];
@@ -6610,7 +6611,7 @@ function getModeIdByName(collection, modeName) {
  * validateScopesAndFiltering: Self-test pour vérifier scopes + semantic-only
  * Appelé en mode DEBUG uniquement
  */
-function validateScopesAndFiltering() {
+async function validateScopesAndFiltering() {
   if (!DEBUG_SCOPES_SCAN) return;
 
   console.log('🧪 [SELF_TEST] Running scopes and filtering validation...');
@@ -6631,8 +6632,9 @@ function validateScopesAndFiltering() {
     'border-1'
   ];
 
-  primitiveTests.forEach(function (name) {
-    var result = isSemanticVariable(name);
+  for (var p = 0; p < primitiveTests.length; p++) {
+    var name = primitiveTests[p];
+    var result = await isSemanticVariable(name);
     if (!result) {
       tests.passed++;
       tests.results.push({ test: 'Primitive rejection: ' + name, status: 'PASS' });
@@ -6640,7 +6642,7 @@ function validateScopesAndFiltering() {
       tests.failed++;
       tests.results.push({ test: 'Primitive rejection: ' + name, status: 'FAIL', reason: 'Should be false' });
     }
-  });
+  }
 
   // TEST 2: isSemanticVariable doit accepter les sémantiques
   var semanticTests = [
@@ -6651,8 +6653,9 @@ function validateScopesAndFiltering() {
     'status-success'
   ];
 
-  semanticTests.forEach(function (name) {
-    var result = isSemanticVariable(name);
+  for (var s = 0; s < semanticTests.length; s++) {
+    var name = semanticTests[s];
+    var result = await isSemanticVariable(name);
     if (result) {
       tests.passed++;
       tests.results.push({ test: 'Semantic acceptance: ' + name, status: 'PASS' });
@@ -6660,7 +6663,7 @@ function validateScopesAndFiltering() {
       tests.failed++;
       tests.results.push({ test: 'Semantic acceptance: ' + name, status: 'FAIL', reason: 'Should be true' });
     }
-  });
+  }
 
   // TEST 3: getRequiredScopesForScanResult doit retourner les bons scopes
   var scopeTests = [
@@ -7235,10 +7238,10 @@ async function createOrUpdateVariable(collection, name, type, value, category, o
       if (DEBUG) console.log(`🔍 [AUTO_ALIAS] Trying to create automatic alias for semantic variable: ${hintKey}`);
 
       // Construire une map globale des variables existantes pour la résolution d'alias
-      var globalVariableMap = buildGlobalVariableMap();
+      var globalVariableMap = await buildGlobalVariableMap();
 
       // Essayer de résoudre un alias pour cette clé sémantique
-      var finalAliasTo = resolveSemanticAliasFromMap(hintKey, {}, await getNamingFromFile(), globalVariableMap);
+      var finalAliasTo = await resolveSemanticAliasFromMap(hintKey, {}, await getNamingFromFile(), globalVariableMap);
 
       if (finalAliasTo) {
         // Appliquer l'alias automatiquement
@@ -7248,7 +7251,7 @@ async function createOrUpdateVariable(collection, name, type, value, category, o
           aliasTo: finalAliasTo
         };
 
-        applySemanticValue(variable, semanticValueData, hintKey);
+        await applySemanticValue(variable, semanticValueData, hintKey);
         if (DEBUG) console.log(`✅ [AUTO_ALIAS] Successfully created alias for ${hintKey}: ${finalAliasTo.collection}/${finalAliasTo.key}`);
       } else {
         if (DEBUG) console.log(`⚠️ [AUTO_ALIAS] No alias found for semantic variable: ${hintKey}`);
@@ -7634,7 +7637,7 @@ async function importTokensToFigma(tokens, naming, overwrite) {
 
         // Appliquer via function dédiée (support aliases)
         try {
-          applySemanticValue(variable, semanticValueData, key, modeInfo.modeId);
+          await applySemanticValue(variable, semanticValueData, key, modeInfo.modeId);
         } catch (tokenErr) {
           errorCount++;
           console.error("❌ [SYNC_ERROR] Error applying value for " + key + " (" + modeInfo.name + "):", tokenErr);
@@ -8263,7 +8266,7 @@ async function createValueToVariableMap() {
         var mode = collection.modes[m];
         var modeId = mode.modeId;
 
-        var resolvedValue = resolveVariableValue(variable, modeId);
+        var resolvedValue = await resolveVariableValue(variable, modeId);
 
         if (resolvedValue !== undefined && resolvedValue !== null) {
 
@@ -9261,11 +9264,11 @@ async function checkNodeProperties(node, valueToVariableMap, results, ignoreHidd
     try {
 
       if (node.fills !== undefined && node.fills !== figma.mixed) {
-        checkFillsSafely(node, valueToVariableMap, results);
+        await checkFillsSafely(node, valueToVariableMap, results);
       }
 
       if (node.strokes !== undefined && node.strokes !== figma.mixed) {
-        checkStrokesSafely(node, valueToVariableMap, results);
+        await checkStrokesSafely(node, valueToVariableMap, results);
       }
 
       checkCornerRadiusSafely(node, valueToVariableMap, results);
@@ -9300,7 +9303,7 @@ async function checkTypographyPropertiesSafely(node, valueToVariableMap, results
       if (binding && binding.type === 'VARIABLE_ALIAS' && binding.id) {
         var boundVar = await figma.variables.getVariableByIdAsync(binding.id);
         if (boundVar) {
-          var isSemantic = isSemanticVariable(boundVar.name, boundVar);
+          var isSemantic = await isSemanticVariable(boundVar.name, boundVar);
           var hasScopes = filterVariableByScopes({ scopes: boundVar.scopes }, requiredScopes);
 
           if (SCAN_ALLOW_PRIMITIVES) {
@@ -9314,7 +9317,7 @@ async function checkTypographyPropertiesSafely(node, valueToVariableMap, results
       return { isConform: false, boundId: null };
     }
 
-    function processTypography(fontSize, lineHeight, boundVars, sourceNode, segmentIndex) {
+    async function processTypography(fontSize, lineHeight, boundVars, sourceNode, segmentIndex) {
       // 1. Font Size
       if (typeof fontSize === 'number' && fontSize > 0) {
         var requiredScopes = getScopesForPropertyKind(PropertyKind.FONT_SIZE);
@@ -9391,10 +9394,10 @@ async function checkTypographyPropertiesSafely(node, valueToVariableMap, results
       var segments = node.getStyledTextSegments(['fontSize', 'lineHeight', 'boundVariables']);
       for (var s = 0; s < segments.length; s++) {
         var seg = segments[s];
-        processTypography(seg.fontSize, seg.lineHeight, seg.boundVariables, node, s);
+        await processTypography(seg.fontSize, seg.lineHeight, seg.boundVariables, node, s);
       }
     } else {
-      processTypography(node.fontSize, node.lineHeight, node.boundVariables, node);
+      await processTypography(node.fontSize, node.lineHeight, node.boundVariables, node);
     }
 
   } catch (typographyError) {
@@ -9420,7 +9423,7 @@ function checkLocalStylesSafely(node, valueToVariableMap, results) {
               var requiredScopes = getScopesForPropertyKind(propertyKind);
 
               var rawSuggestions = findColorSuggestionsV2(hexValue, contextModeId, requiredScopes, propertyType, node.type);
-              var suggestions = enrichSuggestionsWithRealValues(rawSuggestions, contextModeId);
+              var suggestions = await enrichSuggestionsWithRealValues(rawSuggestions, contextModeId);
 
               if (suggestions.length > 0) {
                 var issue = createScanIssue({
@@ -9463,7 +9466,7 @@ function checkLocalStylesSafely(node, valueToVariableMap, results) {
             if (strokeHexValue) {
               var strokeRequiredScopes = getScopesForPropertyKind(PropertyKind.STROKE);
               var rawStrokeSuggestions = findColorSuggestionsV2(strokeHexValue, contextModeId, strokeRequiredScopes, "Local Stroke Style", node.type);
-              var strokeSuggestions = enrichSuggestionsWithRealValues(rawStrokeSuggestions, contextModeId);
+              var strokeSuggestions = await enrichSuggestionsWithRealValues(rawStrokeSuggestions, contextModeId);
 
               if (strokeSuggestions.length > 0) {
                 var strokeIssue = createScanIssue({
@@ -9704,7 +9707,7 @@ function tracePipelineOverview() {
   console.log('┗━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┛');
 }
 
-function checkFillsSafely(node, valueToVariableMap, results) {
+async function checkFillsSafely(node, valueToVariableMap, results) {
   try {
     var fills = node.fills;
     if (!fills || (fills !== figma.mixed && Array.isArray(fills) && fills.length === 0)) {
@@ -9754,7 +9757,7 @@ function checkFillsSafely(node, valueToVariableMap, results) {
 
           // If not conform (unbound or invalid binding), find suggestions
           var rawSuggestions = findColorSuggestionsV2(hexValue, contextModeId, requiredScopes, propertyType, node.type);
-          var suggestions = enrichSuggestionsWithRealValues(rawSuggestions, contextModeId);
+          var suggestions = await enrichSuggestionsWithRealValues(rawSuggestions, contextModeId);
 
           // If bound but invalid -> IssueStatus.HAS_MATCHES (or NO_MATCH)
           // Effectively we treat it as an issue.
@@ -9824,7 +9827,7 @@ function checkFillsSafely(node, valueToVariableMap, results) {
   }
 }
 
-function checkStrokesSafely(node, valueToVariableMap, results) {
+async function checkStrokesSafely(node, valueToVariableMap, results) {
   try {
     var strokes = node.strokes;
     if (!strokes || (strokes !== figma.mixed && Array.isArray(strokes) && strokes.length === 0)) return;
@@ -9865,7 +9868,7 @@ function checkStrokesSafely(node, valueToVariableMap, results) {
           if (boundVariableId) continue;
 
           var rawSuggestions = findColorSuggestionsV2(hexValue, contextModeId, requiredScopes, "Stroke", node.type);
-          var suggestions = enrichSuggestionsWithRealValues(rawSuggestions, contextModeId);
+          var suggestions = await enrichSuggestionsWithRealValues(rawSuggestions, contextModeId);
 
           var status = suggestions.length > 0 ? IssueStatus.HAS_MATCHES : IssueStatus.NO_MATCH;
 
@@ -12206,7 +12209,7 @@ async function flattenSemanticTokensFromFigma(callsite) {
         }
       }
 
-      resolved = resolveVariableValue(semanticVar, modeId);
+      resolved = await resolveVariableValue(semanticVar, modeId);
 
       // IMPORTANT : si resolved == null || resolved === undefined
       if (resolved == null || resolved === undefined) {
