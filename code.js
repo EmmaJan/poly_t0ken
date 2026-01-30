@@ -4426,8 +4426,10 @@ var savedSemanticTokens = getSemanticTokensFromFile('PLUGIN_STARTUP');
 })();
 
 // Lancer la rehydratation asynchrone (Lazy Rebind) pour résoudre librairies/alias unresolved
-initializeCollectionCache();
-rehydrateSemanticAliases();
+(async function() {
+  await initializeCollectionCache();
+  await rehydrateSemanticAliases();
+})();
 
 // ============================================
 // SEMANTIC STANDARDIZATION DIAGNOSTIC REPORT
@@ -4578,7 +4580,7 @@ function emitTokensGenerated(tokens, naming) {
 figma.ui.onmessage = async function (msg) {
   console.log("[PLUGIN] onmessage", msg);
   // Initialize collection cache for alias resolution
-  initializeCollectionCache();
+  await initializeCollectionCache();
 
   try {
     switch (msg.type) {
@@ -4664,6 +4666,7 @@ figma.ui.onmessage = async function (msg) {
         if (DEBUG) console.log('🔄 Pipeline d\'import : ' + msg.type + ' → Figma Service');
         try {
           await importTokensToFigma(msg.tokens || cachedTokens, msg.naming, msg.overwrite);
+          await initializeCollectionCache(); // Refresh cache after import
           postToUI({ type: 'import-completed' });
         } catch (err) {
           console.error('Import error:', err);
@@ -4675,6 +4678,7 @@ figma.ui.onmessage = async function (msg) {
       case 'import-from-file':
         try {
           await importTokensToFigma(msg.tokens, msg.naming || "custom", false);
+          await initializeCollectionCache(); // Refresh cache after import
           figma.notify("✅ Tokens importés depuis le fichier");
           postToUI({ type: 'import-completed' });
         } catch (e) {
