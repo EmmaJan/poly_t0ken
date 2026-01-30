@@ -340,7 +340,7 @@ var ValueType = {
 };
 
 // GLOBAL SCAN SETTINGS
-const SCAN_ALLOW_PRIMITIVES = false;
+const SCAN_ALLOW_PRIMITIVES = true; // Allow primitive variables in scan suggestions
 
 // ============================================================================
 // SCOPE MAPPING HELPER
