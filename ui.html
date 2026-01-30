@@ -378,7 +378,8 @@
         padding-bottom 0.3s ease;
 
       /* État de base */
-      overflow: hidden;
+      overflow: visible;
+      /* Permettre le scroll horizontal des suggestions */
       opacity: 1;
       transform: translateX(0) scale(1);
     }
@@ -3493,16 +3494,56 @@
        SMART CONTEXTUAL PILLS
        ============================================ */
 
-    /* Conteneur horizontal - ajusté pour hug content */
+    /* Conteneur horizontal - avec scroll horizontal */
     .smart-suggestions-row {
       display: flex;
       gap: 6px;
       /* Gap réduit pour optimiser l'espace */
       align-items: center;
-      flex-wrap: wrap;
-      /* Permettre le wrap si nécessaire */
-      width: fit-content;
-      /* Hug content au lieu de 100% width */
+      flex-wrap: nowrap;
+      /* Pas de wrap - scroll horizontal à la place */
+      overflow-x: auto;
+      /* Activer le scroll horizontal */
+      overflow-y: visible;
+      /* Permettre aux pills de dépasser en hauteur au hover */
+      width: 100%;
+      /* Prendre toute la largeur disponible */
+      padding-bottom: 8px;
+      /* Espace pour la scrollbar */
+      padding-top: 4px;
+      /* Espace pour le translateY au hover */
+      scrollbar-width: thin;
+      /* Firefox */
+      scrollbar-color: var(--poly-accent) var(--poly-surface);
+      /* Firefox */
+
+      /* Smooth scrolling */
+      scroll-behavior: smooth;
+      -webkit-overflow-scrolling: touch;
+      /* iOS smooth scroll */
+
+      /* Position relative pour le fade gradient */
+      position: relative;
+    }
+
+    /* Scrollbar personnalisée pour Webkit (Chrome, Safari, Edge) */
+    .smart-suggestions-row::-webkit-scrollbar {
+      height: 6px;
+    }
+
+    .smart-suggestions-row::-webkit-scrollbar-track {
+      background: var(--poly-surface);
+      border-radius: 3px;
+    }
+
+    .smart-suggestions-row::-webkit-scrollbar-thumb {
+      background: var(--poly-accent);
+      border-radius: 3px;
+      transition: background 0.2s ease;
+    }
+
+    .smart-suggestions-row::-webkit-scrollbar-thumb:hover {
+      background: var(--poly-accent-hover);
     }
 
     /* Style de base de la pilule */
@@ -3530,8 +3571,12 @@
     .smart-pill:hover {
       background: var(--poly-surface-soft);
       border-color: var(--poly-accent);
-      transform: translateY(-1px);
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+      transform: translateY(-2px);
+      /* Légère élévation au hover */
+      box-shadow: 0 4px 12px rgba(138, 213, 63, 0.2);
+      /* Shadow plus visible avec la couleur accent */
+      z-index: 10;
+      /* Passer au-dessus des autres pills */
     }
 
     .smart-pill.selected {
@@ -4500,6 +4545,7 @@
             <button class="btn-secondary" id="step4Back">← Retour</button>
             <button class="btn-secondary" id="scanBtn" disabled style="margin-left: 12px;">Analyser la
               sélection</button>
+            <button class="btn-outline" id="updateScopesBtn" style="margin-left: 12px; background: #FF6B35; color: white; border: none; font-weight: 600;">🔧 Réparer les scopes</button>
             <button class="btn-primary" id="step4ApplyAll" style="display: none; margin-left: auto;">✅ Valider</button>
           </div>
           <div class="footer-signature" style="display: flex; justify-content: space-between; width: 100%; margin: 0;">
@@ -6623,8 +6669,10 @@
             '</button>';
 
           // Bouton Appliquer
-          var applyDisabled = (isOrphan || hasConflicts) ? 'disabled' : '';
-          var applyClass = isOrphan ? 'btn-outline' : 'btn-primary';
+          // ✅ FIX: Le bouton est désactivé uniquement si orphelin OU si ce n'est pas auto-fixable
+          // Cela permet aux cartes auto-fixables d'avoir le bouton actif même avec plusieurs suggestions
+          var applyDisabled = (isOrphan || !isAutoFixable) ? 'disabled' : '';
+          var applyClass = (isOrphan || !isAutoFixable) ? 'btn-outline' : 'btn-primary';
           cardHtml += '<button class="' + applyClass + ' btn-apply-action" data-action="apply" data-indices="' + indicesJson + '" ' + applyDisabled + ' title="Appliquer" style="width: 28px; height: 28px; padding: 0; display: flex; align-items: center; justify-content: center;">' +
             '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20,6 9,17 4,12"/></svg>' +
             '</button>';
@@ -6670,13 +6718,13 @@
           cardHtml += '</div>'; // Fin Valeur Actuelle Container
 
           // 2. Flèche + Nouvelle Valeur (côté droite, regroupés)
-          cardHtml += '<div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">';
+          cardHtml += '<div style="display: flex; align-items: center; gap: 8px; min-width: 0;">';
 
           // Flèche
           cardHtml += '<div style="color: var(--poly-text-muted); flex-shrink: 0;">⟶</div>';
 
           // Nouvelle Valeur (Fix) - maintenant dans le même container que la flèche
-          cardHtml += '<div style="display: flex; align-items: center;">';
+          cardHtml += '<div style="display: flex; align-items: center; min-width: 0; overflow: hidden;">';
 
           if (isOrphan) {
             cardHtml += '<span style="color: var(--poly-warning); font-size: 11px; font-style: italic;">Aucune variable compatible</span>';
@@ -6694,14 +6742,30 @@
             }
           } else {
             // Manual Fallback (Conflicts OR Single Approximate)
-            // Utiliser le nouveau système de boutons intelligents
-            cardHtml += renderSmartSuggestions(group.suggestions, group.property, group.originalIndices);
 
-            // Garder le dropdown en "backup" caché si besoin pour le bouton "+X"
-            if (group.suggestions.length > 3) {
-              cardHtml += '<div style="display: none;">';
-              cardHtml += generateCustomVariableSelector(group.suggestions, group.originalIndices);
-              cardHtml += '</div>';
+            // Si UNE seule suggestion: afficher comme dans Auto (format simple)
+            if (group.suggestions.length === 1) {
+              var singleSuggestion = group.suggestions[0];
+              var singleResolvedValue = singleSuggestion.resolvedValue || singleSuggestion.value;
+
+              if (typeof singleSuggestion.resolvedValue === 'string' && singleSuggestion.resolvedValue.startsWith('#')) {
+                cardHtml += '<div style="display: flex; align-items: center; gap: 4px;">';
+                cardHtml += '<div style="width: 20px; height: 20px; border-radius: 4px; background-color: ' + singleSuggestion.resolvedValue + '; border: 1px solid var(--poly-border-subtle);"></div>';
+                cardHtml += '<div style="display: flex; align-items: baseline; gap: 4px;"><span style="font-size: 12px; color: var(--poly-text); font-weight: 600;">' + singleSuggestion.name + '</span><span style="font-size: 10px; color: var(--poly-text-muted); font-family: monospace;">' + singleResolvedValue + '</span></div>';
+                cardHtml += '</div>';
+              } else {
+                cardHtml += '<div style="display: flex; align-items: baseline; gap: 4px;"><span style="font-size: 12px; color: var(--poly-text); font-weight: 600;">' + singleSuggestion.name + '</span><span style="font-size: 10px; color: var(--poly-text-muted); font-family: monospace;">' + singleResolvedValue + '</span></div>';
+              }
+            } else {
+              // Plusieurs suggestions: utiliser le système de pills
+              cardHtml += renderSmartSuggestions(group.suggestions, group.property, group.originalIndices);
+
+              // Garder le dropdown en "backup" caché si besoin pour le bouton "+X"
+              if (group.suggestions.length > 3) {
+                cardHtml += '<div style="display: none;">';
+                cardHtml += generateCustomVariableSelector(group.suggestions, group.originalIndices);
+                cardHtml += '</div>';
+              }
             }
           }
           cardHtml += '</div>'; // Fin Nouvelle Valeur
@@ -6844,14 +6908,22 @@
       // 1. Chercher la variable sélectionnée manuellement
       var variableId = card.getAttribute('data-selected-variable');
 
-      // 2. Sinon, chercher si c'est une auto-fix (suggestion unique)
+      // 2. Sinon, utiliser la suggestion par défaut (calculée lors de la génération pour Auto-fix)
+      // Cela permet de faire fonctionner le bouton "Appliquer" même si suggestions.length > 1 (cas Auto-Fix)
+      if (!variableId) {
+        variableId = card.getAttribute('data-suggested-variable');
+      }
+
+      // 3. Fallback Legacy (au cas où)
       if (!variableId) {
         var cardDataStr = card.getAttribute('data-card-data');
         if (cardDataStr) {
-          var cardData = JSON.parse(cardDataStr);
-          if (cardData.suggestions && cardData.suggestions.length === 1) {
-            variableId = cardData.suggestions[0].id;
-          }
+          try {
+            var cardData = JSON.parse(cardDataStr);
+            if (cardData.suggestions && cardData.suggestions.length === 1) {
+              variableId = cardData.suggestions[0].id;
+            }
+          } catch (e) { }
         }
       }
 
@@ -8508,11 +8580,11 @@
       }
 
       var html = '<div class="smart-suggestions-row">';
-      var displayLimit = 6; // Augmenté pour voir plus d'options directes
-      var visibleSuggestions = suggestions.slice(0, displayLimit);
 
-      for (var i = 0; i < visibleSuggestions.length; i++) {
-        var s = visibleSuggestions[i];
+      // ✅ Afficher TOUTES les suggestions avec scroll horizontal
+      // Plus besoin de limite maintenant qu'on a le scroll
+      for (var i = 0; i < suggestions.length; i++) {
+        var s = suggestions[i];
         var visualContent = '';
         var pillClass = 'smart-pill';
 
@@ -8554,12 +8626,6 @@
           '<span class="pill-name">' + s.name + distanceBadge + '</span>' +
           '<span class="pill-value">' + (s.resolvedValue || s.value) + '</span>' +
           '</div>' +
-          '</button>';
-      }
-
-      if (suggestions.length > displayLimit) {
-        html += '<button class="smart-pill pill-more" onclick="toggleCustomDropdown(this.closest(\'.cleaning-result-card\').querySelector(\'.custom-select-container\'))">' +
-          '+' + (suggestions.length - displayLimit) +
           '</button>';
       }
 
@@ -9151,9 +9217,22 @@
             }
           }
         } else if (action === 'ignore') {
-          // Action "Ignorer" - masquer la carte avec animation
+          // Action "Ignorer" - annuler la preview et masquer la carte avec animation
           var card = button.closest('.cleaning-result-card');
           if (card) {
+            // ✅ ANNULER LA PREVIEW : Restaurer l'état original avant de masquer
+            try {
+              var indicesAttr = button.getAttribute('data-indices');
+              if (indicesAttr) {
+                var indices = JSON.parse(indicesAttr);
+                // Envoyer un message pour clear la preview
+                sendClearPreview(indices);
+              }
+            } catch (err) {
+              console.error("Erreur parsing indices pour ignore:", err);
+            }
+
+            // Masquer la carte avec animation
             card.style.transition = 'all 0.3s ease';
             card.style.opacity = '0';
             setTimeout(function () {
@@ -9253,6 +9332,27 @@
     });
 
     // ============================================
+    // BOUTON MISE À JOUR DES SCOPES (DEBUG/FIX)
+    // ============================================
+    var updateScopesBtn = document.getElementById("updateScopesBtn");
+    if (updateScopesBtn) {
+      updateScopesBtn.addEventListener("click", function () {
+        updateScopesBtn.disabled = true;
+        updateScopesBtn.textContent = '⏳ Mise à jour...';
+        parent.postMessage({ pluginMessage: { type: 'update-scopes' } }, '*');
+
+        // Re-enable after 3 seconds
+        setTimeout(function() {
+          updateScopesBtn.disabled = false;
+          updateScopesBtn.textContent = '✅ Scopes réparés !';
+          setTimeout(function() {
+            updateScopesBtn.textContent = '🔧 Réparer les scopes';
+          }, 2000);
+        }, 3000);
+      });
+    }
+
+    // ============================================
     // GESTIONNAIRES D'ÉVÉNEMENTS PROPRES
     // ============================================
 
@@ -9319,6 +9419,30 @@
       console.log('📤 [UI] posting preview-fix message:', message.pluginMessage);
       parent.postMessage(message, '*');
     }
+
+    // ============================================
+    // CLEAR PREVIEW FUNCTION (RESTORE ORIGINAL STATE)
+    // ============================================
+    function sendClearPreview(indices) {
+      console.log('[UI CLEAR PREVIEW] sendClearPreview request', {
+        indices: indices
+      });
+
+      // 🛡️ ACTIVER LE VERROU : Empêcher l'Auto-Scan de déclencher pendant le clear
+      window.ignoreSelectionChangeUntil = Date.now() + 2000;
+
+      // 📤 ENVOYER LE MESSAGE DE CLEAR PREVIEW
+      var message = {
+        pluginMessage: {
+          type: 'clear-preview',
+          indices: indices
+        }
+      };
+
+      console.log('📤 [UI] posting clear-preview message:', message.pluginMessage);
+      parent.postMessage(message, '*');
+    }
+
 
     // ============================================
     // CONFIGURATION & UTILITIES
@@ -9689,6 +9813,23 @@
       }
     }
 
+    // ✅ Handler pour la mise à jour des scopes
+    function handleMsg_scopesUpdated(msg) {
+      var result = msg.result || {};
+      console.log('✅ [UI] Scopes updated:', result);
+
+      if (typeof showNotification === 'function') {
+        showNotification('Scopes mis à jour: ' + result.updated + ' variables modifiées', 'success');
+      }
+
+      // Log détaillé dans la console
+      console.log('📊 [SCOPES_UPDATE] Résumé:', {
+        updated: result.updated,
+        skipped: result.skipped,
+        total: result.updated + result.skipped
+      });
+    }
+
     var UI_HANDLERS = {
       "scan-results": handleMsg_scanResults,
       "init": handleMsg_init,
@@ -9702,7 +9843,8 @@
       "all-fixes-applied": handleMsg_allFixesApplied,
       "semantic-tokens-rehydrated": handleMsg_semanticTokensRehydrated,
       "tokens-generated": handleMsg_tokensGenerated,
-      "rollback-complete": handleMsg_rollbackComplete,  // ✅ Nouveau handler
+      "rollback-complete": handleMsg_rollbackComplete,
+      "scopes-updated": handleMsg_scopesUpdated,  // ✅ Nouveau handler
       "preview-result": handleMsg_logOnly,
       "preview-error": handleMsg_logOnly,
       "sync-confirmation": handleMsg_logOnly
@@ -9941,9 +10083,14 @@
 
         var value = previewData[key];
 
-        // ✅ RECURSIVE RENDER FOR NESTED PRIMITIVES (Specific to Typography)
+        // 🛡️ UI GUARD: Prevent system colors from showing in Brand tab
+        if (activeCategory === 'brand' && ['success', 'warning', 'error', 'info'].indexOf(key) !== -1) {
+          continue;
+        }
+
+        // ✅ RECURSIVE RENDER FOR NESTED PRIMITIVES (Specific to Typography & System)
         // Detects objects that are NOT semantic tokens (no 'modes', 'type', 'resolvedValue')
-        if (activeCategory === 'typography' && typeof value === 'object' && value !== null && !value.modes && !value.type && !value.resolvedValue) {
+        if ((activeCategory === 'typography' || activeCategory === 'system') && typeof value === 'object' && value !== null && !value.modes && !value.type && !value.resolvedValue) {
           // Flatten nested object (e.g. fontSize: { sm: '12px' })
           for (var subKey in value) {
             if (!value.hasOwnProperty(subKey)) continue;

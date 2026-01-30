@@ -9,7 +9,8 @@ global.figma = {
     },
     variables: {
         getLocalVariableCollections: jest.fn(() => []),
-        getVariableById: jest.fn()
+        getVariableById: jest.fn(),
+        getVariableCollectionById: jest.fn()
     },
     currentPage: {
         selection: []

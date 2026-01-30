@@ -20,7 +20,7 @@ console.log("✅ Using V2 scan functions (mode-aware, ValueType.FLOAT, strict sc
 //
 // Voir LEGACY_ENGINE_DECISION.md pour détails
 const USE_CORE_ENGINE = true;
-const DEBUG = false; // Master debug flag - set to true for development/testing
+const DEBUG = true; // Master debug flag - set to true for development/testing
 
 // Legacy flag (kept for compatibility, DEBUG_SCOPES_SCAN still used in 10 places)
 const DEBUG_SCOPES_SCAN = DEBUG;
@@ -1466,100 +1466,121 @@ function mapSemanticTokens(palettes, preset, options) {
 
     // Returns { category, light, dark, type }
 
-    // --- BACKGROUND (7) ---
-    // NOTE: bg.canvas is DARKER than bg.surface (canvas=100, surface=50)
-    if (key === 'bg.canvas') return { category: 'gray', light: '100', dark: '900', type: 'COLOR' };
-    if (key === 'bg.surface') return { category: 'gray', light: '50', dark: '950', type: 'COLOR' };
-    if (key === 'bg.elevated') return { category: 'gray', light: '200', dark: '800', type: 'COLOR' };
-    if (key === 'bg.subtle') return { category: 'gray', light: '100', dark: '800', type: 'COLOR' };
-    if (key === 'bg.muted') return { category: 'gray', light: '300', dark: '700', type: 'COLOR' };
-    if (key === 'bg.accent') return { category: 'brand', light: '500', dark: '500', type: 'COLOR' };
-    if (key === 'bg.inverse') return { category: 'gray', light: '950', dark: '50', type: 'COLOR' };
+    // ========================================
+    // 🎨 BACKGROUNDS - Hiérarchie d'élévation
+    // ========================================
+    // ✅ DARK MODE: Inversion intelligente (plus clair = plus élevé en dark)
+    if (key === 'bg.canvas') return { category: 'gray', light: '100', dark: '950', type: 'COLOR' };    // Fond principal (le plus sombre en dark)
+    if (key === 'bg.surface') return { category: 'gray', light: '50', dark: '900', type: 'COLOR' };    // Cartes, panels (plus clair que canvas)
+    if (key === 'bg.elevated') return { category: 'gray', light: '200', dark: '800', type: 'COLOR' };  // Dropdowns, tooltips (encore plus clair)
+    if (key === 'bg.subtle') return { category: 'gray', light: '100', dark: '850', type: 'COLOR' };    // Hover states subtils
+    if (key === 'bg.muted') return { category: 'gray', light: '200', dark: '800', type: 'COLOR' };     // Disabled, inactive
+    if (key === 'bg.accent') return { category: 'brand', light: '500', dark: '500', type: 'COLOR' };   // Accent brand (identique)
+    if (key === 'bg.inverse') return { category: 'gray', light: '950', dark: '50', type: 'COLOR' };    // Badges, chips (inverse total)
 
-    // --- TEXT (12) ---
-    if (key === 'text.primary') return { category: 'gray', light: '950', dark: '50', type: 'COLOR' };
-    if (key === 'text.secondary') return { category: 'gray', light: '600', dark: '400', type: 'COLOR' };
-    if (key === 'text.muted') return { category: 'gray', light: '500', dark: '400', type: 'COLOR' };
-    if (key === 'text.caption') return { category: 'gray', light: '500', dark: '400', type: 'COLOR' };
-    if (key === 'text.disabled') return { category: 'gray', light: '300', dark: '700', type: 'COLOR' };
-    if (key === 'text.placeholder') return { category: 'gray', light: '400', dark: '600', type: 'COLOR' };
-    if (key === 'text.link') return { category: 'brand', light: '500', dark: '300', type: 'COLOR' };
-    if (key === 'text.accent') return { category: 'brand', light: '600', dark: '400', type: 'COLOR' };
-    if (key === 'text.inverse') return { category: 'gray', light: '50', dark: '950', type: 'COLOR' };
+    // ========================================
+    // ✍️ TEXT - Hiérarchie de lisibilité
+    // ========================================
+    if (key === 'text.primary') return { category: 'gray', light: '950', dark: '50', type: 'COLOR' };        // Texte principal (max contraste)
+    if (key === 'text.secondary') return { category: 'gray', light: '700', dark: '300', type: 'COLOR' };     // Texte secondaire
+    if (key === 'text.muted') return { category: 'gray', light: '600', dark: '400', type: 'COLOR' };         // Texte atténué
+    if (key === 'text.caption') return { category: 'gray', light: '500', dark: '500', type: 'COLOR' };       // Légendes, labels
+    if (key === 'text.disabled') return { category: 'gray', light: '400', dark: '600', type: 'COLOR' };      // Texte désactivé
+    if (key === 'text.placeholder') return { category: 'gray', light: '400', dark: '600', type: 'COLOR' };   // Placeholders
+    if (key === 'text.link') return { category: 'brand', light: '600', dark: '400', type: 'COLOR' };         // Liens (brand visible)
+    if (key === 'text.accent') return { category: 'brand', light: '700', dark: '300', type: 'COLOR' };       // Texte accentué
+    if (key === 'text.inverse') return { category: 'gray', light: '50', dark: '950', type: 'COLOR' };        // Texte sur fond sombre
     if (key === 'text.success') return { category: 'system.success', light: '700', dark: '400', type: 'COLOR' };
     if (key === 'text.warning') return { category: 'system.warning', light: '700', dark: '400', type: 'COLOR' };
     if (key === 'text.error') return { category: 'system.error', light: '700', dark: '400', type: 'COLOR' };
 
-    // --- BORDER (6) ---
-    if (key === 'border.default') return { category: 'gray', light: '200', dark: '800', type: 'COLOR' };
-    if (key === 'border.muted') return { category: 'gray', light: '100', dark: '900', type: 'COLOR' };
-    if (key === 'border.subtle') return { category: 'gray', light: '100', dark: '900', type: 'COLOR' };
-    if (key === 'border.accent') return { category: 'brand', light: '200', dark: '500', type: 'COLOR' };
-    if (key === 'border.focus') return { category: 'brand', light: '500', dark: '400', type: 'COLOR' };
+    // ========================================
+    // 🔲 BORDERS - Niveaux de subtilité
+    // ========================================
+    if (key === 'border.default') return { category: 'gray', light: '300', dark: '700', type: 'COLOR' };   // Bordure standard
+    if (key === 'border.muted') return { category: 'gray', light: '200', dark: '800', type: 'COLOR' };     // Bordure atténuée
+    if (key === 'border.subtle') return { category: 'gray', light: '100', dark: '900', type: 'COLOR' };    // Bordure très subtile
+    if (key === 'border.accent') return { category: 'brand', light: '300', dark: '600', type: 'COLOR' };   // Bordure brand
+    if (key === 'border.focus') return { category: 'brand', light: '500', dark: '500', type: 'COLOR' };    // Focus ring
     if (key === 'border.error') return { category: 'system.error', light: '500', dark: '500', type: 'COLOR' };
 
-    // --- DIVIDER (1) ---
-    if (key === 'divider.default') return { category: 'gray', light: '200', dark: '700', type: 'COLOR' };
+    // ========================================
+    // ➗ DIVIDER - Séparateurs
+    // ========================================
+    if (key === 'divider.default') return { category: 'gray', light: '200', dark: '800', type: 'COLOR' };  // Ligne de séparation
 
-    // --- RING (2) ---
-    if (key === 'ring.focus') return { category: 'brand', light: '500', dark: '400', type: 'COLOR' };
+    // ========================================
+    // ⭕ RING - Focus indicators
+    // ========================================
+    if (key === 'ring.focus') return { category: 'brand', light: '500', dark: '500', type: 'COLOR' };
     if (key === 'ring.error') return { category: 'system.error', light: '500', dark: '500', type: 'COLOR' };
 
-    // --- ON - contrast text (2) ---
-    if (key === 'on.primary') return { category: 'gray', light: '50', dark: '50', type: 'COLOR' };
-    if (key === 'on.brand') return { category: 'gray', light: '50', dark: '50', type: 'COLOR' };
+    // ========================================
+    // 🔘 ON - Texte de contraste
+    // ========================================
+    if (key === 'on.primary') return { category: 'gray', light: '50', dark: '50', type: 'COLOR' };  // Texte sur bouton primary
+    if (key === 'on.brand') return { category: 'gray', light: '50', dark: '50', type: 'COLOR' };    // Texte sur fond brand
 
-    // --- ACTION PRIMARY (5) ---
+    // ========================================
+    // 🎯 ACTIONS - Boutons et interactions
+    // ========================================
+
+    // PRIMARY - Bouton principal (brand fort)
     if (key === 'action.primary.default') return { category: 'brand', light: '500', dark: '500', type: 'COLOR' };
     if (key === 'action.primary.hover') return { category: 'brand', light: '600', dark: '600', type: 'COLOR' };
-    if (key === 'action.primary.active') return { category: 'brand', light: '700', dark: '400', type: 'COLOR' };
-    if (key === 'action.primary.disabled') return { category: 'gray', light: '300', dark: '800', type: 'COLOR' };
+    if (key === 'action.primary.active') return { category: 'brand', light: '700', dark: '700', type: 'COLOR' };  // ✅ Cohérent
+    if (key === 'action.primary.disabled') return { category: 'gray', light: '300', dark: '700', type: 'COLOR' };
     if (key === 'action.primary.text') return { category: 'gray', light: '50', dark: '50', type: 'COLOR' };
 
-    // --- ACTION SECONDARY (5) ---
-    if (key === 'action.secondary.default') return { category: 'gray', light: '100', dark: '800', type: 'COLOR' };
-    if (key === 'action.secondary.hover') return { category: 'gray', light: '200', dark: '700', type: 'COLOR' };
-    if (key === 'action.secondary.active') return { category: 'gray', light: '300', dark: '600', type: 'COLOR' };
+    // SECONDARY - Bouton secondaire (brand subtil)
+    if (key === 'action.secondary.default') return { category: 'brand', light: '100', dark: '800', type: 'COLOR' };
+    if (key === 'action.secondary.hover') return { category: 'brand', light: '200', dark: '700', type: 'COLOR' };
+    if (key === 'action.secondary.active') return { category: 'brand', light: '300', dark: '600', type: 'COLOR' };
     if (key === 'action.secondary.disabled') return { category: 'gray', light: '100', dark: '900', type: 'COLOR' };
-    if (key === 'action.secondary.text') return { category: 'gray', light: '900', dark: '50', type: 'COLOR' };
+    if (key === 'action.secondary.text') return { category: 'brand', light: '700', dark: '300', type: 'COLOR' };  // ✅ Texte lisible sur fond clair
 
-    // --- ACTION TERTIARY (5) ---
-    if (key === 'action.tertiary.default') return { category: 'gray', light: '50', dark: '900', type: 'COLOR' };
-    if (key === 'action.tertiary.hover') return { category: 'gray', light: '100', dark: '800', type: 'COLOR' };
-    if (key === 'action.tertiary.active') return { category: 'gray', light: '200', dark: '700', type: 'COLOR' };
-    if (key === 'action.tertiary.disabled') return { category: 'gray', light: '100', dark: '900', type: 'COLOR' };
+    // TERTIARY - Bouton tertiaire (ghost, transparent)
+    if (key === 'action.tertiary.default') return { category: 'gray', light: '0', dark: '0', type: 'COLOR' };      // Transparent
+    if (key === 'action.tertiary.hover') return { category: 'gray', light: '100', dark: '900', type: 'COLOR' };
+    if (key === 'action.tertiary.active') return { category: 'gray', light: '200', dark: '800', type: 'COLOR' };
+    if (key === 'action.tertiary.disabled') return { category: 'gray', light: '0', dark: '0', type: 'COLOR' };
     if (key === 'action.tertiary.text') return { category: 'brand', light: '600', dark: '400', type: 'COLOR' };
 
-    // --- ACTION DESTRUCTIVE (5) ---
+    // DESTRUCTIVE - Actions destructives (rouge)
     if (key === 'action.destructive.default') return { category: 'system.error', light: '600', dark: '600', type: 'COLOR' };
-    if (key === 'action.destructive.hover') return { category: 'system.error', light: '700', dark: '500', type: 'COLOR' };
-    if (key === 'action.destructive.active') return { category: 'system.error', light: '800', dark: '400', type: 'COLOR' };
-    if (key === 'action.destructive.disabled') return { category: 'gray', light: '300', dark: '800', type: 'COLOR' };
+    if (key === 'action.destructive.hover') return { category: 'system.error', light: '700', dark: '700', type: 'COLOR' };
+    if (key === 'action.destructive.active') return { category: 'system.error', light: '800', dark: '800', type: 'COLOR' };
+    if (key === 'action.destructive.disabled') return { category: 'gray', light: '300', dark: '700', type: 'COLOR' };
     if (key === 'action.destructive.text') return { category: 'gray', light: '50', dark: '50', type: 'COLOR' };
 
-    // --- STATUS SUCCESS (3) ---
+    // ========================================
+    // ⚠️ STATUS - Feedback visuel
+    // ========================================
+    // SUCCESS
     if (key === 'status.success.bg') return { category: 'system.success', light: '100', dark: '900', type: 'COLOR' };
     if (key === 'status.success.fg') return { category: 'system.success', light: '700', dark: '300', type: 'COLOR' };
     if (key === 'status.success.border') return { category: 'system.success', light: '500', dark: '500', type: 'COLOR' };
 
-    // --- STATUS WARNING (3) ---
+    // WARNING
     if (key === 'status.warning.bg') return { category: 'system.warning', light: '100', dark: '900', type: 'COLOR' };
     if (key === 'status.warning.fg') return { category: 'system.warning', light: '700', dark: '300', type: 'COLOR' };
     if (key === 'status.warning.border') return { category: 'system.warning', light: '500', dark: '500', type: 'COLOR' };
 
-    // --- STATUS ERROR (3) ---
+    // ERROR
     if (key === 'status.error.bg') return { category: 'system.error', light: '100', dark: '900', type: 'COLOR' };
     if (key === 'status.error.fg') return { category: 'system.error', light: '700', dark: '300', type: 'COLOR' };
     if (key === 'status.error.border') return { category: 'system.error', light: '500', dark: '500', type: 'COLOR' };
 
-    // --- STATUS INFO (3) ---
+    // INFO
     if (key === 'status.info.bg') return { category: 'system.info', light: '100', dark: '900', type: 'COLOR' };
     if (key === 'status.info.fg') return { category: 'system.info', light: '700', dark: '300', type: 'COLOR' };
     if (key === 'status.info.border') return { category: 'system.info', light: '500', dark: '500', type: 'COLOR' };
 
-    // --- OVERLAY (2) ---
-    if (key === 'overlay.dim') return { category: 'gray', light: '800', dark: '900', type: 'COLOR' };
-    if (key === 'overlay.scrim') return { category: 'gray', light: '950', dark: '950', type: 'COLOR' };
+    // ========================================
+    // 🌑 OVERLAY - Fonds semi-transparents
+    // ========================================
+    if (key === 'overlay.dim') return { category: 'gray', light: '900', dark: '950', type: 'COLOR' };    // Fond de modal (très sombre)
+    if (key === 'overlay.scrim') return { category: 'gray', light: '950', dark: '950', type: 'COLOR' };  // Scrim (presque noir)
 
     // --- RADIUS (5) ---
     if (key === 'radius.none') return { category: 'radius', light: 'none', dark: 'none', type: 'FLOAT' };
@@ -2179,8 +2200,9 @@ var SEMANTIC_NAME_MAP = {
     'action.primary.default': 'colors.brand.500', 'action.primary.hover': 'colors.brand.600', 'action.primary.active': 'colors.brand.700',
     'action.primary.disabled': 'colors.gray.300', 'action.primary.text': 'colors.white',
     // Action Secondary (5)
-    'action.secondary.default': 'colors.gray.100', 'action.secondary.hover': 'colors.gray.200', 'action.secondary.active': 'colors.gray.300',
-    'action.secondary.disabled': 'colors.gray.100', 'action.secondary.text': 'colors.gray.800',
+    // Action Secondary (5) - ✅ Utilise brand clair
+    'action.secondary.default': 'colors.brand.100', 'action.secondary.hover': 'colors.brand.200', 'action.secondary.active': 'colors.brand.300',
+    'action.secondary.disabled': 'colors.gray.100', 'action.secondary.text': 'colors.brand.800',
     // Action Tertiary (5)
     'action.tertiary.default': 'colors.transparent', 'action.tertiary.hover': 'colors.gray.100', 'action.tertiary.active': 'colors.gray.200',
     'action.tertiary.disabled': 'colors.gray.50', 'action.tertiary.text': 'colors.brand.500',
@@ -2400,6 +2422,280 @@ function getRelativeLuminance(hex) {
   }
 
   return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+}
+
+// ============================================================================
+// WCAG COMPLIANCE HELPERS
+// ============================================================================
+
+/**
+ * Vérifie si une combinaison de couleurs respecte WCAG AA
+ * @param {string} foreground - Couleur de premier plan (hex)
+ * @param {string} background - Couleur d'arrière-plan (hex)
+ * @param {string} textSize - 'normal', 'large', ou 'ui'
+ * @returns {boolean}
+ */
+function meetsWCAG_AA(foreground, background, textSize) {
+  var ratio = calculateContrastRatio(foreground, background);
+  var requiredRatio = textSize === 'normal' ? 4.5 : 3.0;
+  return ratio >= requiredRatio;
+}
+
+/**
+ * Vérifie si une combinaison de couleurs respecte WCAG AAA
+ * @param {string} foreground - Couleur de premier plan (hex)
+ * @param {string} background - Couleur d'arrière-plan (hex)
+ * @param {string} textSize - 'normal' ou 'large'
+ * @returns {boolean}
+ */
+function meetsWCAG_AAA(foreground, background, textSize) {
+  var ratio = calculateContrastRatio(foreground, background);
+  var requiredRatio = textSize === 'normal' ? 7.0 : 4.5;
+  return ratio >= requiredRatio;
+}
+
+/**
+ * Suggère une correction de couleur pour améliorer le contraste
+ * @param {string} foreground - Couleur de premier plan (hex)
+ * @param {string} background - Couleur d'arrière-plan (hex)
+ * @param {string} textSize - 'normal', 'large', ou 'ui'
+ * @returns {object|null} {type: 'darken'|'lighten', color: string} ou null si déjà conforme
+ */
+function suggestContrastFix(foreground, background, textSize) {
+  if (meetsWCAG_AA(foreground, background, textSize)) {
+    return null; // Déjà conforme
+  }
+
+  var bgLuminance = getRelativeLuminance(background);
+  var requiredRatio = textSize === 'normal' ? 4.5 : 3.0;
+
+  // Déterminer si on doit éclaircir ou assombrir
+  var shouldLighten = bgLuminance < 0.5;
+
+  // Conversion hex → HSL pour manipulation
+  var hsl = hexToHsl(foreground);
+  var step = 5;
+  var maxIterations = 20;
+
+  for (var i = 0; i < maxIterations; i++) {
+    if (shouldLighten) {
+      hsl.l = Math.min(100, hsl.l + step);
+    } else {
+      hsl.l = Math.max(0, hsl.l - step);
+    }
+
+    var newHex = hslToHex(hsl);
+    if (calculateContrastRatio(newHex, background) >= requiredRatio) {
+      return {
+        type: shouldLighten ? 'lighten' : 'darken',
+        color: newHex
+      };
+    }
+  }
+
+  // Fallback: noir ou blanc
+  return {
+    type: shouldLighten ? 'lighten' : 'darken',
+    color: shouldLighten ? '#FFFFFF' : '#000000'
+  };
+}
+
+/**
+ * Valide tous les tokens sémantiques pour la conformité WCAG
+ * @param {object} tokens - Objet de tokens générés
+ * @returns {object} {total, passed, failed, failures: [{tokenKey, foreground, background, ratio, required}]}
+ */
+function validateAllTokensWCAG(tokens) {
+  var results = {
+    total: 0,
+    passed: 0,
+    failed: 0,
+    failures: []
+  };
+
+  if (!tokens || !tokens.semantic) return results;
+
+  var bgCanvas = tokens.semantic['bg.canvas'] ? tokens.semantic['bg.canvas'].resolvedValue : '#FFFFFF';
+
+  // Tokens de texte à valider
+  var textTokens = ['text.primary', 'text.secondary', 'text.tertiary', 'text.inverse'];
+  textTokens.forEach(function (key) {
+    if (tokens.semantic[key]) {
+      results.total++;
+      var color = tokens.semantic[key].resolvedValue;
+      var ratio = calculateContrastRatio(color, bgCanvas);
+
+      if (meetsWCAG_AA(color, bgCanvas, 'normal')) {
+        results.passed++;
+      } else {
+        results.failed++;
+        results.failures.push({
+          tokenKey: key,
+          foreground: color,
+          background: bgCanvas,
+          ratio: ratio,
+          required: 4.5
+        });
+      }
+    }
+  });
+
+  // Tokens d'action/status à valider (UI components = 3:1)
+  var uiTokens = ['action.primary.default', 'status.success', 'status.warning', 'status.error', 'status.info'];
+  uiTokens.forEach(function (key) {
+    if (tokens.semantic[key]) {
+      results.total++;
+      var color = tokens.semantic[key].resolvedValue;
+      var ratio = calculateContrastRatio(color, bgCanvas);
+
+      if (meetsWCAG_AA(color, bgCanvas, 'ui')) {
+        results.passed++;
+      } else {
+        results.failed++;
+        results.failures.push({
+          tokenKey: key,
+          foreground: color,
+          background: bgCanvas,
+          ratio: ratio,
+          required: 3.0
+        });
+      }
+    }
+  });
+
+  return results;
+}
+
+/**
+ * Valide un code hex
+ * @param {string} hex - Code couleur hex
+ * @returns {boolean}
+ */
+function isValidHex(hex) {
+  if (!hex || typeof hex !== 'string') return false;
+  var cleaned = hex.replace('#', '');
+  return /^[0-9A-Fa-f]{3}$|^[0-9A-Fa-f]{6}$/.test(cleaned);
+}
+
+/**
+ * Valide un objet RGB
+ * @param {object} rgb - {r, g, b} avec valeurs 0-255
+ * @returns {boolean}
+ */
+function isValidRgb(rgb) {
+  if (!rgb || typeof rgb !== 'object') return false;
+  if (typeof rgb.r !== 'number' || typeof rgb.g !== 'number' || typeof rgb.b !== 'number') return false;
+  return rgb.r >= 0 && rgb.r <= 255 && rgb.g >= 0 && rgb.g <= 255 && rgb.b >= 0 && rgb.b <= 255;
+}
+
+/**
+ * Valide un objet HSL
+ * @param {object} hsl - {h, s, l} avec h: 0-360, s: 0-100, l: 0-100
+ * @returns {boolean}
+ */
+function isValidHsl(hsl) {
+  if (!hsl || typeof hsl !== 'object') return false;
+  if (typeof hsl.h !== 'number' || typeof hsl.s !== 'number' || typeof hsl.l !== 'number') return false;
+  return hsl.h >= 0 && hsl.h <= 360 && hsl.s >= 0 && hsl.s <= 100 && hsl.l >= 0 && hsl.l <= 100;
+}
+
+/**
+ * Convertit RGB vers HSL
+ * @param {object|array} rgb - {r, g, b} ou [r, g, b] avec valeurs 0-255
+ * @returns {object} {h: 0-360, s: 0-100, l: 0-100}
+ */
+function rgbToHsl(rgb) {
+  var r, g, b;
+
+  if (Array.isArray(rgb)) {
+    r = rgb[0] / 255;
+    g = rgb[1] / 255;
+    b = rgb[2] / 255;
+  } else {
+    r = rgb.r / 255;
+    g = rgb.g / 255;
+    b = rgb.b / 255;
+  }
+
+  var max = Math.max(r, g, b);
+  var min = Math.min(r, g, b);
+  var h, s, l = (max + min) / 2;
+
+  if (max === min) {
+    h = s = 0; // Achromatic
+  } else {
+    var d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+
+    switch (max) {
+      case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+      case g: h = ((b - r) / d + 2) / 6; break;
+      case b: h = ((r - g) / d + 4) / 6; break;
+    }
+  }
+
+  return {
+    h: Math.round(h * 360),
+    s: Math.round(s * 100),
+    l: Math.round(l * 100)
+  };
+}
+
+/**
+ * Convertit HSL vers RGB
+ * @param {object|array} hsl - {h, s, l} ou [h, s, l]
+ * @returns {object} {r: 0-255, g: 0-255, b: 0-255}
+ */
+function hslToRgb(hsl) {
+  var h, s, l;
+
+  if (Array.isArray(hsl)) {
+    h = hsl[0] / 360;
+    s = hsl[1] / 100;
+    l = hsl[2] / 100;
+  } else {
+    h = (hsl.h % 360) / 360;
+    s = hsl.s / 100;
+    l = hsl.l / 100;
+  }
+
+  var r, g, b;
+
+  if (s === 0) {
+    r = g = b = l; // Achromatic
+  } else {
+    function hue2rgb(p, q, t) {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1 / 6) return p + (q - p) * 6 * t;
+      if (t < 1 / 2) return q;
+      if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+      return p;
+    }
+
+    var q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    var p = 2 * l - q;
+
+    r = hue2rgb(p, q, h + 1 / 3);
+    g = hue2rgb(p, q, h);
+    b = hue2rgb(p, q, h - 1 / 3);
+  }
+
+  return {
+    r: Math.round(r * 255),
+    g: Math.round(g * 255),
+    b: Math.round(b * 255)
+  };
+}
+
+/**
+ * Convertit HSL vers Hex
+ * @param {object} hsl - {h, s, l}
+ * @returns {string} Hex color
+ */
+function hslToHex(hsl) {
+  var rgb = hslToRgb(hsl);
+  return rgbToHex({ r: rgb.r / 255, g: rgb.g / 255, b: rgb.b / 255 });
 }
 
 /**
@@ -4356,6 +4652,28 @@ figma.ui.onmessage = async function (msg) {
         }
         break;
 
+      case 'update-scopes':
+        try {
+          var result = updateAllVariableScopes();
+
+          // Force un délai pour s'assurer que Figma a bien appliqué les scopes
+          setTimeout(function () {
+            figma.notify(`✅ Scopes mis à jour: ${result.updated} variables modifiées. Relancez un scan maintenant.`);
+            postToUI({ type: 'scopes-updated', result: result });
+
+            // Rebuild index après un délai pour que les scopes soient bien appliqués
+            setTimeout(function () {
+              buildVariableIndex();
+              console.log('🔄 [UPDATE_SCOPES] Index reconstruit avec les nouveaux scopes');
+            }, 100);
+          }, 100);
+        } catch (e) {
+          console.error('❌ [UPDATE_SCOPES] Error:', e);
+          figma.notify("❌ Erreur lors de la mise à jour des scopes");
+          postToUI({ type: 'scopes-update-error', error: e.message });
+        }
+        break;
+
       case 'import':  // ⚡ CANONICAL: Active name used by UI
       case 'import-tokens':  // LEGACY ALIAS: Kept for compatibility
         if (DEBUG) console.log('🔄 Pipeline d\'import : ' + msg.type + ' → Figma Service');
@@ -5157,10 +5475,10 @@ var primitiveScopesMapping = {
   gray: [],       // ❌ Jamais proposé - Utiliser les sémantiques (text-*, bg-*, etc.)
   system: [],     // ❌ Jamais proposé - Utiliser les sémantiques (status-*, etc.)
   border: [],     // ❌ Jamais proposé - Utiliser les sémantiques (border-*)
-  radius: [],     // ❌ Jamais proposé - Utiliser les sémantiques (radius-*)
-  spacing: [],    // ❌ Jamais proposé - Utiliser les sémantiques (space-*)
-  stroke: [],      // ❌ Jamais proposé - Utiliser les sémantiques (stroke-*)
-  typography: []  // ❌ Jamais proposé - Utiliser les sémantiques (font-size-*)
+  radius: ["CORNER_RADIUS"],     // ✅ FIX: Applique le scope CORNER_RADIUS aux primitives radius
+  spacing: ["GAP", "WIDTH_HEIGHT", "TOP_PADDING", "BOTTOM_PADDING", "LEFT_PADDING", "RIGHT_PADDING", "INDIVIDUAL_PADDING"],    // ✅ FIX: Applique les scopes spacing aux primitives
+  stroke: ["STROKE_FLOAT"],      // ✅ FIX: Applique le scope STROKE_FLOAT aux primitives stroke
+  typography: ["FONT_SIZE"]  // ✅ FIX: Applique le scope FONT_SIZE aux primitives typography
 };
 
 var semanticScopesMapping = {
@@ -5170,66 +5488,83 @@ var semanticScopesMapping = {
   // Exemples: text-primary, text-secondary, text-muted
 
   // ===== COULEURS DE FOND =====
+  bg: ["FRAME_FILL", "SHAPE_FILL"],
   background: ["FRAME_FILL", "SHAPE_FILL"],
   // Intention: Fonds de frames et shapes (PAS de texte)
   // Exemples: bg-canvas, bg-surface, bg-elevated
-  // Note: FRAME_FILL + SHAPE_FILL (PAS ALL_FILLS car ALL_FILLS inclut TEXT_FILL dans Figma)
 
   surface: ["FRAME_FILL", "SHAPE_FILL"],
   // Intention: Surfaces spéciales (overlays, modals, cards)
   // Exemples: surface-overlay, surface-elevated
-  // Note: FRAME_FILL + SHAPE_FILL (pas ALL_FILLS) car les surfaces sont des frames ou shapes
 
   // ===== COULEURS DE BORDURE =====
   border: ["STROKE_COLOR"],
   // Intention: Uniquement pour les strokes (couleur)
   // Exemples: border-default, border-muted, border-focus
-  // Note: border-1, border-2 sont des primitives STROKE_FLOAT
 
   ring: ["STROKE_COLOR"],
   // Intention: Anneaux de focus (strokes uniquement)
   // Exemples: ring-focus, ring-offset
 
+  divider: ["STROKE_COLOR"],
+  // Intention: Lignes de séparation entre sections
+  // Exemples: divider-default
+
   // ===== COULEURS D'ACTION (BOUTONS, COMPOSANTS INTERACTIFS) =====
-  action: ["FRAME_FILL", "SHAPE_FILL"],
-  // Intention: Fonds de boutons uniquement (pas de stroke)
+  action: ["FRAME_FILL", "SHAPE_FILL", "TEXT_FILL"],
+  // Intention: Fonds de boutons ET texte interactif (liens, labels)
   // Exemples: action-primary-default, action-secondary-hover
-  // Note: Les boutons outline utilisent border.* pour le contour
+  // Note: Inclut TEXT_FILL pour les liens et textes d'action
 
   // ===== COULEURS DE STATUT (BADGES, ALERTS, NOTIFICATIONS) =====
   status: ["FRAME_FILL", "SHAPE_FILL", "TEXT_FILL", "STROKE_COLOR"],
   // Intention: Badges (fond/contour) ou alertes (texte)
   // Exemples: status-success, status-warning
-  // Note: Très polyvalent pour couvrir tous les cas de feedback
-
-  // ===== COULEURS DE CONTRASTE (LEGACY - DEPRECATED) =====
-  // Note: Les tokens on.* sont dépréciés, utiliser action.*.text et status.*.text à la place
-  on: ["TEXT_FILL"],
-
-  // ===== ACCENT (LEGACY) =====
-  accent: ["FRAME_FILL", "SHAPE_FILL", "STROKE_COLOR"],
-
-  // ===== DIVIDER (LIGNES DE SÉPARATION) =====
-  divider: ["STROKE_COLOR"],
-  // Intention: Lignes de séparation entre sections
-  // Exemples: divider-default
-  // Note: Toujours utilisé comme couleur de stroke
+  // Note: Polyvalent pour couvrir tous les cas de feedback visuel
 
   // ===== OVERLAY (FONDS SEMI-TRANSPARENTS) =====
   overlay: ["FRAME_FILL", "SHAPE_FILL"],
   // Intention: Fonds pour modals, dim effects, scrim
   // Exemples: overlay-dim, overlay-scrim
-  // Note: Utilisé sur des frames/shapes couvrant l'écran
 
+  // ===== ACCENT (LEGACY - pour compatibilité) =====
+  accent: ["FRAME_FILL", "SHAPE_FILL", "STROKE_COLOR"],
+  // Note: Préférer action.* ou status.* pour plus de clarté
+
+  // ===== COULEURS DE CONTRASTE (LEGACY - DEPRECATED) =====
+  on: ["TEXT_FILL"],
+  // Note: Préférer text.* à la place
 
   // ===== DIMENSIONS (FLOAT) =====
   radius: ["CORNER_RADIUS"],
-  space: ["GAP", "INDIVIDUAL_PADDING", "WIDTH_HEIGHT"],  // Updated to align with PropertyKind
-  stroke: ["STROKE_FLOAT"],  // stroke.thin, stroke.default, etc. for border widths
+  // Intention: Arrondis des coins uniquement
+  // Exemples: radius-sm, radius-md, radius-lg
+
+  space: ["GAP", "TOP_PADDING", "BOTTOM_PADDING", "LEFT_PADDING", "RIGHT_PADDING", "INDIVIDUAL_PADDING"],
+  // Intention: Espacements (gap et padding) - PAS pour dimensionner (width/height)
+  // Exemples: space-xs, space-sm, space-md
+
+  // ===== ÉPAISSEURS DE BORDURE =====
+  stroke: ["STROKE_FLOAT"],
+  // Intention: Épaisseur des bordures uniquement
+  // Exemples: stroke-thin, stroke-default, stroke-thick
+
+  // ===== TYPOGRAPHIE =====
   fontSize: ["FONT_SIZE"],
-  fontWeight: ["FONT_WEIGHT"], // Added support for potential future usage
+  // Intention: Taille de police uniquement
+  // Exemples: fontSize-sm, fontSize-base, fontSize-lg
+
+  fontWeight: ["FONT_WEIGHT"],
+  // Intention: Graisse de police
+  // Exemples: fontWeight-normal, fontWeight-bold
+
   lineHeight: ["LINE_HEIGHT"],
+  // Intention: Hauteur de ligne
+  // Exemples: lineHeight-tight, lineHeight-normal
+
   letterSpacing: ["LETTER_SPACING"]
+  // Intention: Espacement entre lettres
+  // Exemples: letterSpacing-tight, letterSpacing-wide
 };
 
 function inferPrimitiveScopes(context) {
@@ -5893,6 +6228,7 @@ function buildVariableIndex() {
   var countSemantic = 0;
   var countPrimitive = 0;
   var countNoScopes = 0;
+  var spacingRadiusVars = [];
 
   collections.forEach(function (collection) {
     var collectionName = collection.name;
@@ -5910,12 +6246,18 @@ function buildVariableIndex() {
       var scopes = variable.scopes || [];
       if (scopes.length === 0) countNoScopes++;
 
-      // 🔍 DEBUG: Log spacing tokens to diagnose
-      if (DEBUG && (variable.name.toLowerCase().indexOf('space') !== -1 ||
+      // 🔍 DEBUG: Log spacing/radius tokens to diagnose
+      if (variable.name.toLowerCase().indexOf('space') !== -1 ||
+        variable.name.toLowerCase().indexOf('spacing') !== -1 ||
         variable.name.toLowerCase().indexOf('padding') !== -1 ||
-        variable.name.toLowerCase().indexOf('gap') !== -1)) {
-
-        // Log removed for production cleanliness
+        variable.name.toLowerCase().indexOf('gap') !== -1 ||
+        variable.name.toLowerCase().indexOf('radius') !== -1) {
+        spacingRadiusVars.push({
+          name: variable.name,
+          scopes: scopes,
+          type: variable.resolvedType,
+          collection: collectionName
+        });
       }
 
       // Determine token kind
@@ -6018,12 +6360,20 @@ function buildVariableIndex() {
 
   VariableIndex.isBuilt = true;
 
-  if (DEBUG) {
-    console.log('✅ [INDEX] Build Complete:', {
-      total: totalVariables,
-      indexed: indexedVariables,
-      floatPreferredSize: VariableIndex.floatPreferred.size,
-      floatPreferredKeys: Array.from(VariableIndex.floatPreferred.keys())
+  console.log('✅ [INDEX] Build Complete:', {
+    total: totalVariables,
+    indexed: indexedVariables,
+    semantic: countSemantic,
+    primitive: countPrimitive,
+    noScopes: countNoScopes,
+    floatPreferredSize: VariableIndex.floatPreferred.size
+  });
+
+  // 🔍 DEBUG: Log spacing/radius variables
+  if (spacingRadiusVars.length > 0) {
+    console.log('🔍 [DEBUG] Spacing/Radius variables found:', spacingRadiusVars.length);
+    spacingRadiusVars.forEach(function (v) {
+      console.log('  -', v.name, '→ scopes:', v.scopes.length > 0 ? v.scopes.join(', ') : '❌ AUCUN SCOPE');
     });
   }
 }
@@ -6393,14 +6743,13 @@ function applyScopes(figmaVar, scopes, debugLabel) {
   var hasSetScopes = typeof figmaVar.setScopes === 'function';
   var hasScopesProp = 'scopes' in figmaVar;
 
-  // Log AVANT application (si DEBUG_SCOPES_SCAN)
-  if (DEBUG_SCOPES_SCAN && debugLabel) {
+  // Log TOUJOURS pour UPDATE_ALL
+  if (debugLabel === 'UPDATE_ALL') {
     console.log('📋 [SCOPES_DEBUG] Applying scopes:', {
       variable: figmaVar.name,
       variableId: figmaVar.id,
-      debugLabel: debugLabel,
       scopesToApply: scopes,
-      resolvedType: figmaVar.resolvedType,
+      currentScopes: figmaVar.scopes || [],
       hasSetScopes: hasSetScopes,
       hasScopesProp: hasScopesProp
     });
@@ -6411,25 +6760,24 @@ function applyScopes(figmaVar, scopes, debugLabel) {
     if (hasSetScopes) {
       figmaVar.setScopes(scopes);
       // Log pour debug
-      if (DEBUG) console.log(`🔧 Scopes applied to ${figmaVar.name}:`, scopes);
+      if (debugLabel === 'UPDATE_ALL') console.log(`🔧 setScopes() called for ${figmaVar.name}:`, scopes);
     } else if (hasScopesProp) {
       figmaVar.scopes = scopes;
       // Log pour debug
-      if (DEBUG) console.log(`🔧 Scopes set to ${figmaVar.name}:`, scopes);
+      if (debugLabel === 'UPDATE_ALL') console.log(`🔧 scopes property set for ${figmaVar.name}:`, scopes);
     }
 
     // Log APRÈS application (vérification)
-    if (DEBUG_SCOPES_SCAN && debugLabel) {
+    if (debugLabel === 'UPDATE_ALL') {
       var actualScopes = figmaVar.scopes || [];
-      console.log('✅ [SCOPES_DEBUG] Scopes applied successfully:', {
+      console.log('✅ [SCOPES_DEBUG] Verification after apply:', {
         variable: figmaVar.name,
-        scopesApplied: actualScopes,
-        match: JSON.stringify(scopes) === JSON.stringify(actualScopes)
+        scopesAfter: actualScopes,
+        match: JSON.stringify(scopes.sort()) === JSON.stringify(actualScopes.sort())
       });
     }
   } catch (error) {
     console.warn(`⚠️ Failed to apply scopes to ${figmaVar.name}:`, error);
-    // Silent fail - scopes non critiques
   }
 }
 
@@ -6459,6 +6807,87 @@ function applyVariableScopes(figmaVar, context) {
 
   // Appliquer
   applyScopes(figmaVar, scopes, debugLabel);
+}
+
+/**
+ * updateAllVariableScopes: Met à jour les scopes de toutes les variables existantes
+ * Utile après une modification du primitiveScopesMapping ou semanticScopesMapping
+ */
+function updateAllVariableScopes() {
+  console.log('🔄 [UPDATE_SCOPES] Updating scopes for all existing variables...');
+
+  var collections = figma.variables.getLocalVariableCollections();
+  var totalUpdated = 0;
+  var totalSkipped = 0;
+
+  collections.forEach(function (collection) {
+    var collectionName = (collection.name || '').toLowerCase();
+
+    // Déterminer la catégorie basée sur le nom de la collection
+    var primitiveCollections = ['spacing', 'radius', 'sizing', 'border', 'typography', 'grayscale', 'brand', 'system', 'primitive', 'primitives', 'core', 'stroke'];
+    var isPrimitiveCollection = primitiveCollections.some(function (pc) {
+      return collectionName.indexOf(pc) !== -1;
+    });
+
+    collection.variableIds.forEach(function (variableId) {
+      var variable = figma.variables.getVariableById(variableId);
+      if (!variable) return;
+
+      try {
+        // Détecter la catégorie spécifique de la variable dans la collection primitive
+        var category = 'semantic'; // Par défaut
+
+        if (isPrimitiveCollection) {
+          // Détecter quelle catégorie de primitive
+          if (collectionName.indexOf('radius') !== -1) {
+            category = 'radius';
+          } else if (collectionName.indexOf('spacing') !== -1 || collectionName.indexOf('space') !== -1) {
+            category = 'spacing';
+          } else if (collectionName.indexOf('stroke') !== -1 || collectionName.indexOf('border') !== -1) {
+            category = 'stroke';
+          } else if (collectionName.indexOf('typography') !== -1 || collectionName.indexOf('font') !== -1) {
+            category = 'typography';
+          } else if (collectionName.indexOf('brand') !== -1) {
+            category = 'brand';
+          } else if (collectionName.indexOf('gray') !== -1 || collectionName.indexOf('grey') !== -1) {
+            category = 'gray';
+          } else if (collectionName.indexOf('system') !== -1) {
+            category = 'system';
+          } else {
+            category = 'primitive'; // Fallback générique
+          }
+        }
+
+        // Créer le contexte pour inférer les scopes appropriés
+        var context = createScopeContext(variable, variable.name, category);
+
+        // Calculer les nouveaux scopes
+        var newScopes = inferScopes(context);
+
+        // Vérifier si les scopes ont changé
+        var currentScopes = variable.scopes || [];
+        var scopesChanged = JSON.stringify(currentScopes.sort()) !== JSON.stringify(newScopes.sort());
+
+        if (scopesChanged) {
+          applyScopes(variable, newScopes, 'UPDATE_ALL');
+          totalUpdated++;
+          console.log('✅ [UPDATE_SCOPES] Updated:', variable.name, 'category:', category, '→', newScopes);
+        } else {
+          totalSkipped++;
+        }
+      } catch (error) {
+        console.warn('⚠️ [UPDATE_SCOPES] Error updating scopes for', variable.name, error);
+      }
+    });
+  });
+
+  console.log('✅ [UPDATE_SCOPES] Complete:', {
+    updated: totalUpdated,
+    skipped: totalSkipped,
+    total: totalUpdated + totalSkipped
+  });
+
+  return { updated: totalUpdated, skipped: totalSkipped };
 }
 
 function getOrCreateCollection(name, overwrite) {
@@ -6712,12 +7141,38 @@ async function createOrUpdateVariable(collection, name, type, value, category, o
 
   if (!variable) {
     try {
-      variable = figma.variables.createVariable(name, collection, type);
-      if (DEBUG) console.log('✅ Variable created:', name);
+      // ✅ Calculer les scopes AVANT la création
+      var scopesToApply = [];
 
-      // Appliquer les scopes IMMÉDIATEMENT après création (avant valeur)
-      var context = createScopeContext(variable, hintKey || name, category);
-      applyVariableScopes(variable, context);
+      // Déterminer les scopes selon la catégorie (scopes officiels Figma)
+      if (category === 'radius') {
+        scopesToApply = ['CORNER_RADIUS'];
+      } else if (category === 'spacing') {
+        scopesToApply = ['GAP', 'WIDTH_HEIGHT', 'TOP_PADDING', 'BOTTOM_PADDING', 'LEFT_PADDING', 'RIGHT_PADDING', 'INDIVIDUAL_PADDING'];
+      } else if (category === 'stroke') {
+        scopesToApply = ['STROKE_WEIGHT']; // Pas STROKE_FLOAT, mais STROKE_WEIGHT
+      } else if (category === 'typography') {
+        scopesToApply = ['FONT_SIZE', 'LINE_HEIGHT', 'LETTER_SPACING'];
+      } else if (category === 'brand' || category === 'gray' || category === 'system') {
+        // Couleurs : laisser tous les scopes (comportement par défaut)
+        scopesToApply = [];
+      }
+
+      console.log('🔍 [SCOPE_CALC] category:', category, '→ scopes:', scopesToApply);
+      // Pour les couleurs (brand, gray, system), laisser vide pour l'instant
+
+      // Créer la variable
+      variable = figma.variables.createVariable(name, collection, type);
+
+      // Appliquer les scopes IMMÉDIATEMENT (même tick d'exécution)
+      if (scopesToApply.length > 0) {
+        variable.scopes = scopesToApply;
+        console.log('✅ Variable created:', name, 'category:', category, 'scopes:', scopesToApply, 'actual:', variable.scopes);
+      } else {
+        console.log('✅ Variable created:', name, 'category:', category, '(no specific scopes)');
+      }
+
+      if (DEBUG) console.log('✅ Variable created:', name);
 
       // Après création, récupérer à nouveau la variable pour s'assurer que toutes les propriétés sont définies
       if (variable && variable.id) {
@@ -7248,9 +7703,9 @@ function getPrimitiveMappingForSemantic(semanticKey, lib) {
   // Les clés correspondent aux valeurs extraites par extractVariableKey
   const mappings = {
     tailwind: {
-      // Background - NOTE: bg.canvas is DARKER than bg.surface
-      'bg.canvas': { category: 'gray', keys: ['100'], darkKeys: ['900'] },
-      'bg.surface': { category: 'gray', keys: ['50'], darkKeys: ['950'] },
+      // Background - ✅ DARK MODE: Inversion intelligente
+      'bg.canvas': { category: 'gray', keys: ['100'], darkKeys: ['950'] },  // Canvas: fond principal (plus sombre en dark)
+      'bg.surface': { category: 'gray', keys: ['50'], darkKeys: ['900'] },  // Surface: cartes (plus clair que canvas en dark)
       'bg.elevated': { category: 'gray', keys: ['200'], darkKeys: ['800'] },
       'bg.subtle': { category: 'gray', keys: ['300'], darkKeys: ['700'] },
       'bg.muted': { category: 'gray', keys: ['400'], darkKeys: ['600'] },
@@ -7279,12 +7734,12 @@ function getPrimitiveMappingForSemantic(semanticKey, lib) {
       'action.primary.disabled': { category: 'gray', keys: ['300'], darkKeys: ['700'] },
       'action.primary.text': { category: 'gray', keys: ['50'], darkKeys: ['50'] },
 
-      // Action Secondary
-      'action.secondary.default': { category: 'gray', keys: ['100'], darkKeys: ['800'] },
-      'action.secondary.hover': { category: 'gray', keys: ['200'], darkKeys: ['700'] },
-      'action.secondary.active': { category: 'gray', keys: ['300'], darkKeys: ['600'] },
+      // Action Secondary - ✅ Utilise brand clair au lieu de gray
+      'action.secondary.default': { category: 'brand', keys: ['100'], darkKeys: ['800'] },
+      'action.secondary.hover': { category: 'brand', keys: ['200'], darkKeys: ['700'] },
+      'action.secondary.active': { category: 'brand', keys: ['300'], darkKeys: ['600'] },
       'action.secondary.disabled': { category: 'gray', keys: ['100'], darkKeys: ['800'] },
-      'action.secondary.text': { category: 'gray', keys: ['900'], darkKeys: ['50'] },
+      'action.secondary.text': { category: 'brand', keys: ['900'], darkKeys: ['50'] },
 
       // Status
       'status.success': { category: 'system', keys: ['success'] },
@@ -8157,88 +8612,98 @@ function findColorSuggestionsV2(hexValue, contextModeId, requiredScopes, propert
     suggestions.push(suggestion);
   });
 
-  // Step 3: Approximate matching if no exact matches
-  if (suggestions.length === 0) {
-    var threshold = 200; // ✅ AUGMENTÉ de 150 à 200 (plus permissif)
-    var approximateMatches = [];
+  // Step 3: Approximate matching - TOUJOURS chercher pour donner plus de choix
+  var threshold = 200; // ✅ AUGMENTÉ de 150 à 200
+  var approximateMatches = [];
 
-    // Iterate through all color variables
-    VariableIndex.colorPreferred.forEach(function (metas, candidateHex) {
-      var distance = getColorDistance(hexValue, candidateHex);
+  // Iterate through all color variables
+  VariableIndex.colorPreferred.forEach(function (metas, candidateHex) {
+    var distance = getColorDistance(hexValue, candidateHex);
 
-      if (distance <= threshold) {
-        metas.forEach(function (meta) {
-          if (isValidCandidate(meta)) {
+    if (distance <= threshold) {
+      metas.forEach(function (meta) {
+        if (isValidCandidate(meta)) {
+          // Éviter les doublons avec les exact matches déjà ajoutés
+          var alreadyExists = suggestions.some(function (s) { return s.variableId === meta.id; });
+          if (!alreadyExists) {
             approximateMatches.push({
               meta: meta,
               distance: distance
             });
           }
-        });
-      }
-    });
+        }
+      });
+    }
+  });
 
-    // Sort by distance
-    approximateMatches.sort(function (a, b) {
-      return a.distance - b.distance;
-    });
+  // Sort by distance
+  approximateMatches.sort(function (a, b) {
+    return a.distance - b.distance;
+  });
 
-    // ✅ AMÉLIORATION: Garantir au moins 3 suggestions si possible
-    var minSuggestions = 3;
-    var maxSuggestions = 10;
+  // ✅ AMÉLIORATION: Garantir au moins 5 suggestions
+  var minSuggestions = 5; // Augmenté pour Manuel tab
+  var maxSuggestions = 10;
 
-    // Si on a moins de 3 suggestions dans le seuil, chercher les plus proches
-    if (approximateMatches.length < minSuggestions) {
-      var allMatches = [];
-      VariableIndex.colorPreferred.forEach(function (metas, candidateHex) {
-        var distance = getColorDistance(hexValue, candidateHex);
-        metas.forEach(function (meta) {
-          if (isValidCandidate(meta)) {
+  // Si on a moins de suggestions que souhaité dans le seuil, chercher les plus proches
+  if (approximateMatches.length < minSuggestions) {
+    var allMatches = [];
+    VariableIndex.colorPreferred.forEach(function (metas, candidateHex) {
+      var distance = getColorDistance(hexValue, candidateHex);
+      metas.forEach(function (meta) {
+        if (isValidCandidate(meta)) {
+          // Éviter les doublons
+          var alreadyExists = suggestions.some(function (s) { return s.variableId === meta.id; });
+          var alreadyInApprox = approximateMatches.some(function (a) { return a.meta.id === meta.id; });
+          if (!alreadyExists && !alreadyInApprox) {
             allMatches.push({
               meta: meta,
               distance: distance
             });
           }
-        });
-      });
-
-      // Trier par distance et prendre les N plus proches
-      allMatches.sort(function (a, b) {
-        return a.distance - b.distance;
-      });
-
-      approximateMatches = allMatches.slice(0, Math.max(minSuggestions, approximateMatches.length));
-
-      if (DEBUG && approximateMatches.length > 0) {
-        console.log('[findColorSuggestionsV2] Extended search: found', approximateMatches.length, 'suggestions (closest distance:', approximateMatches[0].distance.toFixed(0) + ')');
-      }
-    }
-
-    // Limiter au maximum de suggestions
-    approximateMatches.slice(0, maxSuggestions).forEach(function (match) {
-      var suggestion = createSuggestion({
-        variableId: match.meta.id,
-        variableName: match.meta.name,
-        normalizedName: match.meta.normalizedName,
-        resolvedValue: match.meta.resolvedValue,
-        distance: match.distance,
-        isExact: false,
-        scopeMatch: true,
-        modeMatch: contextModeId ? (match.meta.modeId === contextModeId) : true,
-        debug: {
-          whyRank: 'approximate_match',
-          whyIncluded: 'color_distance_' + match.distance.toFixed(0)
         }
       });
-
-      // Calculate score for ranking
-      suggestion.score = calculateScore(match.meta, propertyType, nodeType);
-      suggestions.push(suggestion);
     });
 
-    if (DEBUG && suggestions.length > 0) {
-      console.log('[findColorSuggestionsV2] Returning', suggestions.length, 'approximate suggestions');
+    // Trier par distance et prendre les N plus proches
+    allMatches.sort(function (a, b) {
+      return a.distance - b.distance;
+    });
+
+    // Ajouter les suggestions manquantes
+    var needed = minSuggestions - approximateMatches.length;
+    var toAdd = allMatches.slice(0, needed);
+    approximateMatches = approximateMatches.concat(toAdd);
+
+    if (DEBUG && toAdd.length > 0) {
+      console.log('[findColorSuggestionsV2] Extended search: added', toAdd.length, 'suggestions');
     }
+  }
+
+  // Limiter au maximum de suggestions et créer les objets suggestion
+  approximateMatches.slice(0, maxSuggestions).forEach(function (match) {
+    var suggestion = createSuggestion({
+      variableId: match.meta.id,
+      variableName: match.meta.name,
+      normalizedName: match.meta.normalizedName,
+      resolvedValue: match.meta.resolvedValue,
+      distance: match.distance,
+      isExact: false,
+      scopeMatch: true,
+      modeMatch: contextModeId ? (match.meta.modeId === contextModeId) : true,
+      debug: {
+        whyRank: 'approximate_match',
+        whyIncluded: 'color_distance_' + match.distance.toFixed(0)
+      }
+    });
+
+    // Calculate score for ranking
+    suggestion.score = calculateScore(match.meta, propertyType, nodeType);
+    suggestions.push(suggestion);
+  });
+
+  if (DEBUG && suggestions.length > 0) {
+    console.log('[findColorSuggestionsV2] Returning', suggestions.length, 'suggestions (exact + approximate)');
   }
 
   // Sort suggestions by score (highest first)
@@ -8251,30 +8716,26 @@ function findColorSuggestionsV2(hexValue, contextModeId, requiredScopes, propert
     return (s.score || 0) > 0;
   });
 
-  // ✅ DÉDOUBLONNAGE HYBRIDE (Par ID pour l'exact, Par Valeur pour l'approx)
+  // ✅ DÉDOUBLONNAGE HYBRIDE (Par ID pour l'exact, garder tout pour l'approx)
   var finalSuggestions = [];
   var seenIds = new Set();
-  var seenApproxHex = new Set();
 
   suggestions.forEach(function (s) {
-    if (seenIds.has(s.id)) return; // Évite les modes d'une même variable
-
-    if (s.isExact) {
-      // Pour un match exact, on garde TOUTES les variables différentes (choix sémantique)
-      seenIds.add(s.id);
-      finalSuggestions.push(s);
-    } else {
-      // Pour l'approx, on ne garde que la meilleure variable par valeur unique
-      var key = (s.hex || "").toUpperCase();
-      if (!seenApproxHex.has(key)) {
-        seenApproxHex.add(key);
-        seenIds.add(s.id);
-        finalSuggestions.push(s);
-      }
-    }
+    if (seenIds.has(s.id)) return; // Évite les doublons exacts par ID
+    seenIds.add(s.id);
+    finalSuggestions.push(s);
   });
 
-  return finalSuggestions.slice(0, 15);
+  // ✅ BUG-001 FIX: Retourner les suggestions de couleurs
+  // Stratégie: Toujours inclure les matches exacts en premier, puis les approximatifs
+  // L'UI décidera quoi afficher dans Auto vs Manuel
+  var hasExactMatch = finalSuggestions.some(function (s) { return s.isExact; });
+
+  // Si match exact: garder tous les exacts + jusqu'à 5 approximatifs pour l'onglet Manuel
+  // Si PAS de match exact: garder jusqu'à 10 approximatifs
+  var maxFinalSuggestions = hasExactMatch ? 15 : 10;
+
+  return finalSuggestions.slice(0, maxFinalSuggestions);
 }
 
 /**
@@ -8491,8 +8952,21 @@ function findNumericSuggestionsV2(targetValue, contextModeId, requiredScopes, pr
     });
     approximateMatches.sort((a, b) => a.distance - b.distance);
 
-    // Limits approximate matches to keep relevance (increased to 20 to avoid pollution by scope-less variables)
-    approximateMatches.slice(0, 20).forEach(function (match) {
+    // ✅ BUG-001 FIX: Toujours proposer des suggestions approximatives pour l'onglet Manuel
+    // Même s'il y a un match exact, on veut montrer d'autres options proches
+    var maxApproxSuggestions = 10; // Toujours proposer jusqu'à 10 suggestions approximatives
+
+    // 🔍 DEBUG: Log pour vérifier
+    if (DEBUG) {
+      console.log('[BUG-001 DEBUG] Exact matches:', exactMatches.length);
+      console.log('[BUG-001 DEBUG] Approximate matches found:', approximateMatches.length);
+      console.log('[BUG-001 DEBUG] Taking top', maxApproxSuggestions, 'suggestions');
+      approximateMatches.slice(0, maxApproxSuggestions).forEach(function (m, idx) {
+        console.log('[BUG-001 DEBUG] Suggestion', idx + 1, ':', m.meta.name, '=', m.meta.resolvedValue, 'distance:', m.distance);
+      });
+    }
+
+    approximateMatches.slice(0, maxApproxSuggestions).forEach(function (match) {
       // Avoid duplication
       var alreadyExists = suggestions.some(function (s) { return s.variableId === match.meta.id; });
       if (alreadyExists) return;
@@ -8519,29 +8993,45 @@ function findNumericSuggestionsV2(targetValue, contextModeId, requiredScopes, pr
     return (s.score || 0) > 0;
   });
 
-  // ✅ DÉDOUBLONNAGE HYBRIDE (Par ID pour l'exact, Par Valeur pour l'approx)
+  // ✅ DÉDOUBLONNAGE HYBRIDE
   var finalSuggestions = [];
   var seenIds = new Set();
-  var seenApproxValues = new Set();
 
   suggestions.forEach(function (s) {
-    if (seenIds.has(s.id)) return; // Évite les modes
+    if (seenIds.has(s.id)) return; // Évite les doublons exacts
 
     if (s.isExact) {
       // Garder tous les types de tokens pour une valeur exacte (ex: radius/md vs space/xs)
       seenIds.add(s.id);
       finalSuggestions.push(s);
     } else {
-      // Pour l'approx, un seul représentant par valeur (le meilleur score)
-      if (!seenApproxValues.has(s.resolvedValue)) {
-        seenApproxValues.add(s.resolvedValue);
-        seenIds.add(s.id);
-        finalSuggestions.push(s);
-      }
+      // ✅ MODIFICATION: Ne plus dédoublonner par valeur pour montrer les deux modes
+      // On veut voir color-bg-canvas (Light) ET color-bg-canvas (Dark) même si même valeur
+      seenIds.add(s.id);
+      finalSuggestions.push(s);
     }
   });
 
-  return finalSuggestions.slice(0, 15);
+  // ✅ BUG-001 FIX: Retourner les suggestions numériques
+  // Stratégie: Toujours inclure les matches exacts en premier, puis les approximatifs
+  // L'UI décidera quoi afficher dans Auto vs Manuel
+  var hasExactMatch = finalSuggestions.some(function (s) { return s.isExact; });
+
+  // Si match exact: garder tous les exacts + jusqu'à 5 approximatifs pour l'onglet Manuel
+  // Si PAS de match exact: garder jusqu'à 10 approximatifs
+  var maxFinalSuggestions = hasExactMatch ? 15 : 10;
+
+  // 🔍 DEBUG: Log final
+  if (DEBUG) {
+    console.log('[BUG-001 DEBUG] Exact matches:', exactMatches.length);
+    console.log('[BUG-001 DEBUG] Final suggestions after dedup:', finalSuggestions.length);
+    console.log('[BUG-001 DEBUG] Max final suggestions:', maxFinalSuggestions);
+    finalSuggestions.slice(0, maxFinalSuggestions).forEach(function (s, idx) {
+      console.log('[BUG-001 DEBUG] Final', idx + 1, ':', s.variableName, '=', s.resolvedValue, 'isExact:', s.isExact, 'distance:', s.distance);
+    });
+  }
+
+  return finalSuggestions.slice(0, maxFinalSuggestions);
 }
 
 /**
@@ -8759,6 +9249,9 @@ function checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLaye
 }
 
 function checkTypographyPropertiesSafely(node, valueToVariableMap, results) {
+  // ✅ FIX: Désactivation du scan typographique demandée par l'utilisateur
+  return;
+
   try {
     var contextModeId = detectNodeModeId(node);
 
@@ -9217,27 +9710,10 @@ function checkFillsSafely(node, valueToVariableMap, results) {
           }
 
           var isBound = !!boundVariableId;
-          var isConform = false;
 
-          if (isBound) {
-            var boundVar = figma.variables.getVariableById(boundVariableId);
-            if (boundVar) {
-              // Check Conformity: Semantic + Scopes
-              var isSemantic = isSemanticVariable(boundVar.name, boundVar);
-              var hasScopes = filterVariableByScopes({ scopes: boundVar.scopes }, requiredScopes);
-
-              if (SCAN_ALLOW_PRIMITIVES) {
-                // If primitives allowed, conformity depends on scopes (if strict)
-                if (hasScopes) isConform = true;
-              } else {
-                // Formatting strict: Semantic AND Scopes
-                if (isSemantic && hasScopes) isConform = true;
-              }
-            }
-          }
-
-          // If bound and conform, skip (No Issue)
-          if (isBound && isConform) continue;
+          // ✅ FIX BUG-003: Si une variable est liée, on considère toujours que c'est conforme
+          // L'utilisateur a fait un choix explicite, on ne doit pas remettre en question
+          if (boundVariableId) continue;
 
           // If not conform (unbound or invalid binding), find suggestions
           var rawSuggestions = findColorSuggestionsV2(hexValue, contextModeId, requiredScopes, propertyType, node.type);
@@ -9316,6 +9792,9 @@ function checkStrokesSafely(node, valueToVariableMap, results) {
     var strokes = node.strokes;
     if (!strokes || (strokes !== figma.mixed && Array.isArray(strokes) && strokes.length === 0)) return;
 
+    // ✅ FIX: Ignorer si l'épaisseur de la bordure est 0 (invisible)
+    if (typeof node.strokeWeight === 'number' && node.strokeWeight === 0) return;
+
     var contextModeId = detectNodeModeId(node);
     var propertyKind = PropertyKind.STROKE;
     var requiredScopes = getScopesForPropertyKind(propertyKind);
@@ -9326,7 +9805,8 @@ function checkStrokesSafely(node, valueToVariableMap, results) {
       for (var j = 0; j < strokesList.length; j++) {
         try {
           var stroke = strokesList[j];
-          if (!stroke || stroke.type !== CONFIG.types.SOLID || !stroke.color) continue;
+          // ✅ FIX: Ignorer les strokes masqués (visible === false)
+          if (!stroke || stroke.visible === false || stroke.type !== CONFIG.types.SOLID || !stroke.color) continue;
 
           var hexValue = rgbToHex(stroke.color);
           if (!hexValue) continue;
@@ -9342,23 +9822,10 @@ function checkStrokesSafely(node, valueToVariableMap, results) {
           }
 
           var isBound = !!boundVariableId;
-          var isConform = false;
 
-          if (isBound) {
-            var boundVar = figma.variables.getVariableById(boundVariableId);
-            if (boundVar) {
-              var isSemantic = isSemanticVariable(boundVar.name, boundVar);
-              var hasScopes = filterVariableByScopes({ scopes: boundVar.scopes }, requiredScopes);
-
-              if (SCAN_ALLOW_PRIMITIVES) {
-                if (hasScopes) isConform = true;
-              } else {
-                if (isSemantic && hasScopes) isConform = true;
-              }
-            }
-          }
-
-          if (isBound && isConform) continue;
+          // ✅ FIX BUG-003: Si une variable est liée, on considère toujours que c'est conforme
+          // L'utilisateur a fait un choix explicite, on ne doit pas remettre en question
+          if (boundVariableId) continue;
 
           var rawSuggestions = findColorSuggestionsV2(hexValue, contextModeId, requiredScopes, "Stroke", node.type);
           var suggestions = enrichSuggestionsWithRealValues(rawSuggestions, contextModeId);
@@ -9430,20 +9897,12 @@ function checkCornerRadiusSafely(node, valueToVariableMap, results) {
       var binding = boundVars[propKey];
       if (Array.isArray(binding)) binding = binding[0];
 
+      // ✅ FIX BUG-003: Si une variable est liée, on considère toujours que c'est conforme
+      // L'utilisateur a fait un choix explicite, on ne doit pas remettre en question
       if (binding && binding.type === 'VARIABLE_ALIAS' && binding.id) {
-        var boundVar = figma.variables.getVariableById(binding.id);
-        if (boundVar) {
-          var isSemantic = isSemanticVariable(boundVar.name, boundVar);
-          var hasScopes = filterVariableByScopes({ scopes: boundVar.scopes }, requiredScopes);
-
-          if (SCAN_ALLOW_PRIMITIVES) {
-            if (hasScopes) return { isConform: true, boundId: binding.id };
-          } else {
-            if (isSemantic && hasScopes) return { isConform: true, boundId: binding.id };
-          }
-        }
-        return { isConform: false, boundId: binding.id };
+        return { isConform: true, boundId: binding.id };
       }
+
       return { isConform: false, boundId: null };
     }
 
@@ -9503,7 +9962,7 @@ function checkCornerRadiusSafely(node, valueToVariableMap, results) {
       var check = checkRadiusConformity('cornerRadius', requiredScopes);
 
       if (!check.isConform) {
-        var suggestions = findNumericSuggestionsV2(node.cornerRadius, contextModeId, requiredScopes, "Corner Radius", 2, node.type);
+        var suggestions = findNumericSuggestionsV2(node.cornerRadius, contextModeId, requiredScopes, "Corner Radius", 8, node.type); // ✅ Tolérance augmentée de 4 à 8px
 
         // ✅ FIX: Si le nœud est déjà lié à une variable qui fait partie des suggestions, on ne crée pas l'issue
         if (check.boundId && suggestions.some(function (s) { return s.id === check.boundId; })) {
@@ -9547,20 +10006,12 @@ function checkNumericPropertiesSafely(node, valueToVariableMap, results) {
       var binding = boundVars[propKey];
       if (Array.isArray(binding)) binding = binding[0];
 
+      // ✅ FIX BUG-003: Si une variable est liée, on considère toujours que c'est conforme
+      // L'utilisateur a fait un choix explicite, on ne doit pas remettre en question
       if (binding && binding.type === 'VARIABLE_ALIAS' && binding.id) {
-        var boundVar = figma.variables.getVariableById(binding.id);
-        if (boundVar) {
-          var isSemantic = isSemanticVariable(boundVar.name, boundVar);
-          var hasScopes = filterVariableByScopes({ scopes: boundVar.scopes }, requiredScopes);
-
-          if (SCAN_ALLOW_PRIMITIVES) {
-            if (hasScopes) return { isConform: true, boundId: binding.id };
-          } else {
-            if (isSemantic && hasScopes) return { isConform: true, boundId: binding.id };
-          }
-        }
-        return { isConform: false, boundId: binding.id };
+        return { isConform: true, boundId: binding.id };
       }
+
       return { isConform: false, boundId: null };
     }
 
@@ -9570,7 +10021,7 @@ function checkNumericPropertiesSafely(node, valueToVariableMap, results) {
       var check = checkBinConformity('itemSpacing', requiredScopes);
 
       if (!check.isConform) {
-        var suggestions = findNumericSuggestionsV2(node.itemSpacing, contextModeId, requiredScopes, "Item Spacing", 5, node.type);
+        var suggestions = findNumericSuggestionsV2(node.itemSpacing, contextModeId, requiredScopes, "Item Spacing", 16, node.type); // ✅ Tolérance augmentée de 10 à 16px
 
         // ✅ FIX: Skip si déjà lié à une suggestion
         if (check.boundId && suggestions.some(function (s) { return s.id === check.boundId; })) {
@@ -9617,7 +10068,7 @@ function checkNumericPropertiesSafely(node, valueToVariableMap, results) {
           var check = checkBinConformity(paddingProp.figmaProp, reqScopes);
 
           if (!check.isConform) {
-            var paddingSugg = findNumericSuggestionsV2(paddingValue, contextModeId, reqScopes, paddingProp.displayName, 5, node.type);
+            var paddingSugg = findNumericSuggestionsV2(paddingValue, contextModeId, reqScopes, paddingProp.displayName, 16, node.type); // ✅ Tolérance augmentée de 10 à 16px
 
             // ✅ FIX: Skip si déjà lié à une suggestion
             if (check.boundId && paddingSugg.some(function (s) { return s.id === check.boundId; })) {
@@ -9655,13 +10106,21 @@ function checkNumericPropertiesSafely(node, valueToVariableMap, results) {
     try {
       // Check if node supports strokeWeight
       if ('strokeWeight' in node) {
+
+        // ✅ FIX: Ignorer l'épaisseur de bordure si aucune bordure n'est visible
+        if (node.strokes && Array.isArray(node.strokes)) {
+          // Si tableau vide OU aucun stroke visible
+          var hasVisible = node.strokes.length > 0 && node.strokes.some(function (s) { return s.visible !== false; });
+          if (!hasVisible) return;
+        }
+
         // CAS 1: Non-mixed strokeWeight
         if (typeof node.strokeWeight === 'number' && node.strokeWeight > 0) {
           var strokeScopes = getScopesForPropertyKind(PropertyKind.STROKE_WEIGHT);
           var strokeCheck = checkBinConformity('strokeWeight', strokeScopes);
 
           if (!strokeCheck.isConform) {
-            var strokeSugg = findNumericSuggestionsV2(node.strokeWeight, contextModeId, strokeScopes, "Border Width", 5, node.type);
+            var strokeSugg = findNumericSuggestionsV2(node.strokeWeight, contextModeId, strokeScopes, "Border Width", 3, node.type); // ✅ Tolérance ajustée de 10 à 3px (bordures sont généralement 1-4px)
 
             // Skip si déjà lié à une suggestion valide
             if (strokeCheck.boundId && strokeSugg.some(function (s) { return s.id === strokeCheck.boundId; })) {
@@ -9709,7 +10168,7 @@ function checkNumericPropertiesSafely(node, valueToVariableMap, results) {
                 var swCheck = checkBinConformity(strokeSideProp.figmaProp, swScopes);
 
                 if (!swCheck.isConform) {
-                  var swSugg = findNumericSuggestionsV2(strokeSideValue, contextModeId, swScopes, strokeSideProp.displayName, 5, node.type);
+                  var swSugg = findNumericSuggestionsV2(strokeSideValue, contextModeId, swScopes, strokeSideProp.displayName, 3, node.type); // ✅ Tolérance ajustée de 10 à 3px
 
                   // Skip si déjà lié à une suggestion valide
                   if (swCheck.boundId && swSugg.some(function (s) { return s.id === swCheck.boundId; })) {
@@ -10739,7 +11198,9 @@ async function applyVariableToProperty(node, variable, result) {
 
       case "Corner Radius":
       case "Font Size": // Added Font Size support
-        success = await applyNumericVariableToProperty(node, variable, result);
+        // ✅ FIX: Appeler la bonne fonction avec les bons paramètres
+        var figmaProp = result.figmaProperty || (result.property === "Corner Radius" ? "cornerRadius" : "fontSize");
+        success = await applyNumericVariable(node, variable, figmaProp, result.property, result);
         break;
       case "Top Left Radius":
       case "Top Right Radius":
@@ -11313,33 +11774,31 @@ function mergeSemanticWithExistingAliases(generated, existing) {
 function getCategoryFromVariableCollection(collectionName) {
   var n = collectionName.toLowerCase().trim();
 
-  // PRIORITÉ : Semantic (doit être détecté avant "colors" ou "system")
+  // PRIORITÉ : Semantic
   if (n === "semantic" || n.indexOf('semantic') !== -1) return "semantic";
 
-  // Reconnaissance étendue pour les couleurs (brand, theme, ui, etc.)
+  // PRIORITÉ 2 : System (pour éviter que "System Colors" ne soit capté par "colors" dans Brand)
+  if (n === "system colors" || n.indexOf('system') !== -1 || n.indexOf('status') !== -1 ||
+    n.indexOf('state') !== -1) return "system";
+
+  // PRIORITÉ 3 : Gray (pour éviter que "Gray Colors" ne soit capté par "colors")
+  if (n === "grayscale" || n.indexOf('gray') !== -1 || n.indexOf('grey') !== -1 ||
+    n.indexOf('grayscale') !== -1 || n.indexOf('neutral') !== -1) return "gray";
+
+  // PRIORITÉ 4 : Dimensions & Typo
+  if (n === "spacing" || n.includes('spacing') || n.includes('gap') ||
+    n.includes('margin') || n.includes('padding') || n.includes('space')) return "spacing";
+
+  if (n === "radius" || n.includes('radius') || n.includes('corner') ||
+    n.includes('border-radius') || n.includes('round')) return "radius";
+
+  if (n === "typography" || n.includes('typo') || n.includes('typography') ||
+    n.includes('font') || n.includes('text') || n.includes('type')) return "typography";
+
+  // PRIORITÉ 5 : Brand (tout ce qui reste qui ressemble à des couleurs)
   if (n === "brand colors" || n.indexOf('brand') !== -1 || n.indexOf('color') !== -1 ||
     n.indexOf('theme') !== -1 || n.indexOf('palette') !== -1 || n.indexOf('ui') !== -1 ||
     n === "colors" || n === "design tokens") return "brand";
-
-  // Reconnaissance étendue pour les couleurs système/status
-  else if (n === "system colors" || n.indexOf('system') !== -1 || n.indexOf('status') !== -1 ||
-    n.indexOf('state') !== -1) return "system";
-
-  // Reconnaissance étendue pour les nuances de gris
-  else if (n === "grayscale" || n.indexOf('gray') !== -1 || n.indexOf('grey') !== -1 ||
-    n.indexOf('grayscale') !== -1 || n.indexOf('neutral') !== -1) return "gray";
-
-  // Reconnaissance étendue pour l'espacement
-  else if (n === "spacing" || n.includes('spacing') || n.includes('gap') ||
-    n.includes('margin') || n.includes('padding') || n.includes('space')) return "spacing";
-
-  // Reconnaissance étendue pour les rayons de bordure
-  else if (n === "radius" || n.includes('radius') || n.includes('corner') ||
-    n.includes('border-radius') || n.includes('round')) return "radius";
-
-  // Reconnaissance étendue pour la typographie
-  else if (n === "typography" || n.includes('typo') || n.includes('typography') ||
-    n.includes('font') || n.includes('text') || n.includes('type')) return "typography";
 
   return "unknown";
 }
@@ -11830,17 +12289,19 @@ function projectCoreToLegacyShape(coreTokens, lib) {
     semantic: {}
   };
 
+  // ✅ GLOBAL FIX: Nettoyer System colors qui auraient pu fuiter dans Brand
+  // (Cela peut arriver avec certains presets Core ou fusions accidentelles)
+  var systemKeys = ['success', 'warning', 'error', 'info'];
+  if (legacy.brand) {
+    systemKeys.forEach(function (k) {
+      if (legacy.brand[k]) delete legacy.brand[k];
+    });
+  }
+
   // [FIX MUI] Nettoyage System -> Brand fusion & Border Injection
   if (lib === 'mui') {
-    console.log('🔧 [MUI_FIX] Projecting legacy shape: Cleaning Brand & checking Border');
-    // 1. Nettoyer System colors qui auraient pu fuiter dans Brand
-    // (warning, success, error, info ne doivent pas être dans brand)
-    var systemKeys = ['success', 'warning', 'error', 'info'];
-    systemKeys.forEach(function (k) {
-      if (legacy.brand && legacy.brand[k]) {
-        delete legacy.brand[k];
-      }
-    });
+    console.log('🔧 [MUI_FIX] Projecting legacy shape: Checking Border');
+    // Note: Le nettoyage Brand est maintenant global (ci-dessus)
 
     // 2. Garantir la présence de Border (souvent manquant en MUI car pas de scale numérique standard)
     // Si border est vide, on injecte un fallback
@@ -12543,74 +13004,87 @@ var CORE_PRESET_V1 = {
   // P2 NOTE: This is a DUPLICATE of getStandardMapping() (L1479) in different format.
   // When updating, BOTH must be synchronized. Future refactor should unify.
   mappingRules: {
-    // Background (7) - NOTE: bg.canvas is DARKER than bg.surface
-    'bg.canvas': { light: { category: 'gray', ref: '100' }, dark: { category: 'gray', ref: '900' } },
-    'bg.surface': { light: { category: 'gray', ref: '50' }, dark: { category: 'gray', ref: '950' } },
+    // Background (7) - ✅ DARK MODE: Inversion intelligente
+    'bg.canvas': { light: { category: 'gray', ref: '100' }, dark: { category: 'gray', ref: '950' } },  // Canvas: fond principal
+    'bg.surface': { light: { category: 'gray', ref: '50' }, dark: { category: 'gray', ref: '900' } },  // Surface: cartes (plus clair)
     'bg.elevated': { light: { category: 'gray', ref: '200' }, dark: { category: 'gray', ref: '800' } },
     'bg.subtle': { light: { category: 'gray', ref: '100' }, dark: { category: 'gray', ref: '800' } },
     'bg.muted': { light: { category: 'gray', ref: '300' }, dark: { category: 'gray', ref: '700' } },
     'bg.accent': { light: { category: 'brand', ref: '500' }, dark: { category: 'brand', ref: '500' } },
     'bg.inverse': { light: { category: 'gray', ref: '950' }, dark: { category: 'gray', ref: '50' } },
 
-    // Text (12)
+    // ========================================
+    // ✍️ TEXT
+    // ========================================
     'text.primary': { light: { category: 'gray', ref: '950' }, dark: { category: 'gray', ref: '50' } },
-    'text.secondary': { light: { category: 'gray', ref: '600' }, dark: { category: 'gray', ref: '400' } },
-    'text.muted': { light: { category: 'gray', ref: '500' }, dark: { category: 'gray', ref: '400' } },
-    'text.caption': { light: { category: 'gray', ref: '500' }, dark: { category: 'gray', ref: '400' } },
-    'text.disabled': { light: { category: 'gray', ref: '300' }, dark: { category: 'gray', ref: '700' } },
+    'text.secondary': { light: { category: 'gray', ref: '700' }, dark: { category: 'gray', ref: '300' } }, // ✅ 700/300
+    'text.muted': { light: { category: 'gray', ref: '600' }, dark: { category: 'gray', ref: '400' } },     // ✅ 600/400
+    'text.caption': { light: { category: 'gray', ref: '500' }, dark: { category: 'gray', ref: '500' } },
+    'text.disabled': { light: { category: 'gray', ref: '400' }, dark: { category: 'gray', ref: '600' } },  // ✅ 400/600
     'text.placeholder': { light: { category: 'gray', ref: '400' }, dark: { category: 'gray', ref: '600' } },
-    'text.link': { light: { category: 'brand', ref: '500' }, dark: { category: 'brand', ref: '300' } },
-    'text.accent': { light: { category: 'brand', ref: '600' }, dark: { category: 'brand', ref: '400' } },
+    'text.link': { light: { category: 'brand', ref: '600' }, dark: { category: 'brand', ref: '400' } },    // ✅ 600/400
+    'text.accent': { light: { category: 'brand', ref: '700' }, dark: { category: 'brand', ref: '300' } },  // ✅ 700/300
     'text.inverse': { light: { category: 'gray', ref: '50' }, dark: { category: 'gray', ref: '950' } },
     'text.success': { light: { category: 'system.success', ref: '700' }, dark: { category: 'system.success', ref: '400' } },
     'text.warning': { light: { category: 'system.warning', ref: '700' }, dark: { category: 'system.warning', ref: '400' } },
     'text.error': { light: { category: 'system.error', ref: '700' }, dark: { category: 'system.error', ref: '400' } },
 
-    // Border (6)
-    'border.default': { light: { category: 'gray', ref: '200' }, dark: { category: 'gray', ref: '800' } },
-    'border.muted': { light: { category: 'gray', ref: '100' }, dark: { category: 'gray', ref: '900' } },
-    'border.subtle': { light: { category: 'gray', ref: '100' }, dark: { category: 'gray', ref: '900' } },
-    'border.accent': { light: { category: 'brand', ref: '200' }, dark: { category: 'brand', ref: '500' } },
-    'border.focus': { light: { category: 'brand', ref: '500' }, dark: { category: 'brand', ref: '400' } },
+    // ========================================
+    // 🔲 BORDERS
+    // ========================================
+    'border.default': { light: { category: 'gray', ref: '300' }, dark: { category: 'gray', ref: '700' } },   // ✅ 300/700
+    'border.muted': { light: { category: 'gray', ref: '200' }, dark: { category: 'gray', ref: '800' } },     // ✅ 200/800
+    'border.subtle': { light: { category: 'gray', ref: '100' }, dark: { category: 'gray', ref: '900' } },    // ✅ 100/900
+    'border.accent': { light: { category: 'brand', ref: '300' }, dark: { category: 'brand', ref: '600' } },  // ✅ 300/600
+    'border.focus': { light: { category: 'brand', ref: '500' }, dark: { category: 'brand', ref: '500' } },
     'border.error': { light: { category: 'system.error', ref: '500' }, dark: { category: 'system.error', ref: '500' } },
 
-    // Divider (1)
-    'divider.default': { light: { category: 'gray', ref: '200' }, dark: { category: 'gray', ref: '700' } },
+    // ========================================
+    // ➗ DIVIDER
+    // ========================================
+    'divider.default': { light: { category: 'gray', ref: '200' }, dark: { category: 'gray', ref: '800' } }, // ✅ 200/800
 
-    // Ring (2)
-    'ring.focus': { light: { category: 'brand', ref: '500' }, dark: { category: 'brand', ref: '400' } },
+    // ========================================
+    // ⭕ RING
+    // ========================================
+    'ring.focus': { light: { category: 'brand', ref: '500' }, dark: { category: 'brand', ref: '500' } },    // ✅ 500/500
     'ring.error': { light: { category: 'system.error', ref: '500' }, dark: { category: 'system.error', ref: '500' } },
 
-    // On - contrast text (2)
+    // ========================================
+    // 🔘 ON
+    // ========================================
     'on.primary': { light: { category: 'gray', ref: '50' }, dark: { category: 'gray', ref: '50' } },
     'on.brand': { light: { category: 'gray', ref: '50' }, dark: { category: 'gray', ref: '50' } },
 
-    // Action Primary (5)
+    // ========================================
+    // 🎯 ACTIONS
+    // ========================================
+    // PRIMARY
     'action.primary.default': { light: { category: 'brand', ref: '500' }, dark: { category: 'brand', ref: '500' } },
     'action.primary.hover': { light: { category: 'brand', ref: '600' }, dark: { category: 'brand', ref: '600' } },
-    'action.primary.active': { light: { category: 'brand', ref: '700' }, dark: { category: 'brand', ref: '400' } },
-    'action.primary.disabled': { light: { category: 'gray', ref: '300' }, dark: { category: 'gray', ref: '800' } },
+    'action.primary.active': { light: { category: 'brand', ref: '700' }, dark: { category: 'brand', ref: '700' } }, // ✅ 700/700
+    'action.primary.disabled': { light: { category: 'gray', ref: '300' }, dark: { category: 'gray', ref: '700' } },
     'action.primary.text': { light: { category: 'gray', ref: '50' }, dark: { category: 'gray', ref: '50' } },
 
-    // Action Secondary (5)
-    'action.secondary.default': { light: { category: 'gray', ref: '100' }, dark: { category: 'gray', ref: '800' } },
-    'action.secondary.hover': { light: { category: 'gray', ref: '200' }, dark: { category: 'gray', ref: '700' } },
-    'action.secondary.active': { light: { category: 'gray', ref: '300' }, dark: { category: 'gray', ref: '600' } },
+    // SECONDARY - ✅ Utilise brand clair
+    'action.secondary.default': { light: { category: 'brand', ref: '100' }, dark: { category: 'brand', ref: '800' } },
+    'action.secondary.hover': { light: { category: 'brand', ref: '200' }, dark: { category: 'brand', ref: '700' } },
+    'action.secondary.active': { light: { category: 'brand', ref: '300' }, dark: { category: 'brand', ref: '600' } },
     'action.secondary.disabled': { light: { category: 'gray', ref: '100' }, dark: { category: 'gray', ref: '900' } },
-    'action.secondary.text': { light: { category: 'gray', ref: '900' }, dark: { category: 'gray', ref: '50' } },
+    'action.secondary.text': { light: { category: 'brand', ref: '700' }, dark: { category: 'brand', ref: '300' } }, // ✅ Lisible
 
-    // Action Tertiary (5)
-    'action.tertiary.default': { light: { category: 'gray', ref: '50' }, dark: { category: 'gray', ref: '900' } },
-    'action.tertiary.hover': { light: { category: 'gray', ref: '100' }, dark: { category: 'gray', ref: '800' } },
-    'action.tertiary.active': { light: { category: 'gray', ref: '200' }, dark: { category: 'gray', ref: '700' } },
-    'action.tertiary.disabled': { light: { category: 'gray', ref: '100' }, dark: { category: 'gray', ref: '900' } },
+    // TERTIARY
+    'action.tertiary.default': { light: { category: 'gray', ref: '0' }, dark: { category: 'gray', ref: '0' } },     // ✅ Transparent
+    'action.tertiary.hover': { light: { category: 'gray', ref: '100' }, dark: { category: 'gray', ref: '900' } },   // ✅ 100/900
+    'action.tertiary.active': { light: { category: 'gray', ref: '200' }, dark: { category: 'gray', ref: '800' } },  // ✅ 200/800
+    'action.tertiary.disabled': { light: { category: 'gray', ref: '0' }, dark: { category: 'gray', ref: '0' } },
     'action.tertiary.text': { light: { category: 'brand', ref: '600' }, dark: { category: 'brand', ref: '400' } },
 
-    // Action Destructive (5)
+    // DESTRUCTIVE
     'action.destructive.default': { light: { category: 'system.error', ref: '600' }, dark: { category: 'system.error', ref: '600' } },
-    'action.destructive.hover': { light: { category: 'system.error', ref: '700' }, dark: { category: 'system.error', ref: '500' } },
-    'action.destructive.active': { light: { category: 'system.error', ref: '800' }, dark: { category: 'system.error', ref: '400' } },
-    'action.destructive.disabled': { light: { category: 'gray', ref: '300' }, dark: { category: 'gray', ref: '800' } },
+    'action.destructive.hover': { light: { category: 'system.error', ref: '700' }, dark: { category: 'system.error', ref: '700' } },
+    'action.destructive.active': { light: { category: 'system.error', ref: '800' }, dark: { category: 'system.error', ref: '800' } },
+    'action.destructive.disabled': { light: { category: 'gray', ref: '300' }, dark: { category: 'gray', ref: '700' } },
     'action.destructive.text': { light: { category: 'gray', ref: '50' }, dark: { category: 'gray', ref: '50' } },
 
     // Status Success (3)
