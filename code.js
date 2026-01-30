@@ -9211,7 +9211,7 @@ async function enrichSuggestionsWithRealValues(suggestions, contextModeId) {
   return enrichedSuggestions;
 }
 
-function checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLayers) {
+async function checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLayers) {
 
   if (!node) {
     return;
@@ -9273,7 +9273,7 @@ function checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLaye
       checkNumericPropertiesSafely(node, valueToVariableMap, results);
 
       if (node.type === CONFIG.types.TEXT) {
-        checkTypographyPropertiesSafely(node, valueToVariableMap, results);
+        await checkTypographyPropertiesSafely(node, valueToVariableMap, results);
       }
 
       // Détecter les styles locaux Figma appliqués
@@ -10286,7 +10286,7 @@ async function isPropertyBoundToVariable(boundVariables, propertyPath, index) {
   }
 }
 
-function scanNodeRecursive(node, valueToVariableMap, results, depth, ignoreHiddenLayers) {
+async function scanNodeRecursive(node, valueToVariableMap, results, depth, ignoreHiddenLayers) {
 
   depth = depth || 0;
   var MAX_DEPTH = CONFIG.limits.MAX_DEPTH;
@@ -10320,7 +10320,7 @@ function scanNodeRecursive(node, valueToVariableMap, results, depth, ignoreHidde
 
     if (hasStyle) {
       try {
-        checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLayers);
+        await checkNodeProperties(node, valueToVariableMap, results, ignoreHiddenLayers);
       } catch (propertyAnalysisError) {
       }
     }
@@ -10343,7 +10343,7 @@ function scanNodeRecursive(node, valueToVariableMap, results, depth, ignoreHidde
                 continue;
               }
 
-              scanNodeRecursive(child, valueToVariableMap, results, depth + 1, ignoreHiddenLayers);
+              await scanNodeRecursive(child, valueToVariableMap, results, depth + 1, ignoreHiddenLayers);
 
             } catch (childError) {
 
@@ -10363,7 +10363,7 @@ function scanNodeRecursive(node, valueToVariableMap, results, depth, ignoreHidde
   }
 }
 
-function scanSelection(ignoreHiddenLayers) {
+async function scanSelection(ignoreHiddenLayers) {
 
   try {
 
@@ -10377,12 +10377,12 @@ function scanSelection(ignoreHiddenLayers) {
     if (selection.length === 0) {
       figma.notify("📄 Aucune sélection : Analyse de la page entière...");
 
-      return scanPage(ignoreHiddenLayers);
+      return await scanPage(ignoreHiddenLayers);
     }
 
     var valueToVariableMap;
     try {
-      valueToVariableMap = createValueToVariableMap();
+      valueToVariableMap = await createValueToVariableMap();
 
       if (!valueToVariableMap || valueToVariableMap.size === 0) {
         figma.notify("⚠️ Aucune variable trouvée dans le document");
@@ -10418,7 +10418,7 @@ async function scanPage(ignoreHiddenLayers) {
 
     var valueToVariableMap;
     try {
-      valueToVariableMap = createValueToVariableMap();
+      valueToVariableMap = await createValueToVariableMap();
       if (!valueToVariableMap || valueToVariableMap.size === 0) {
         figma.notify("⚠️ Aucune variable trouvée dans le document");
         postToUI({ type: "scan-results", results: [] });
@@ -10451,7 +10451,7 @@ function startAsyncScan(nodes, valueToVariableMap, ignoreHiddenLayers) {
     status: "Démarrage de l'analyse..."
   });
 
-  function processChunk() {
+  async function processChunk() {
     var chunkEnd = Math.min(currentIndex + CHUNK_SIZE, totalNodes);
     var processedInChunk = 0;
 
@@ -10463,7 +10463,7 @@ function startAsyncScan(nodes, valueToVariableMap, ignoreHiddenLayers) {
           continue;
         }
 
-        scanNodeRecursive(node, valueToVariableMap, results, 0, ignoreHiddenLayers);
+        await scanNodeRecursive(node, valueToVariableMap, results, 0, ignoreHiddenLayers);
         processedInChunk++;
 
       } catch (nodeError) {
