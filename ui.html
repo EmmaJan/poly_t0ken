@@ -4362,6 +4362,47 @@
               <button class="tab" data-category="semantic">Semantic</button>
             </div>
 
+            <!-- 🆕 Framework-specific naming guide -->
+            <div id="frameworkGuide" style="
+              margin: 12px 0;
+              padding: 12px;
+              background: var(--poly-bg-subtle);
+              border: 1px solid var(--poly-border);
+              border-radius: 6px;
+              font-size: 12px;
+              display: none;
+            ">
+              <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                <span style="font-weight: 600; color: var(--poly-text-primary);"
+                  id="guideFrameworkName">Material-UI</span>
+                <span style="color: var(--poly-text-muted);">•</span>
+                <span style="color: var(--poly-text-muted);" id="guideCategoryName">Brand Colors</span>
+              </div>
+
+              <div style="margin-bottom: 8px;">
+                <div style="color: var(--poly-text-muted); margin-bottom: 4px;">📝 Collection recommandée:</div>
+                <code id="guideCollectionName" style="
+                  display: inline-block;
+                  padding: 2px 6px;
+                  background: var(--poly-bg-elevated);
+                  border-radius: 3px;
+                  color: var(--poly-accent);
+                  font-size: 11px;
+                ">Palette / Primary</code>
+              </div>
+
+              <div>
+                <div style="color: var(--poly-text-muted); margin-bottom: 4px;">✅ Exemples de noms attendus:</div>
+                <div id="guideExamples" style="
+                  display: flex;
+                  flex-wrap: wrap;
+                  gap: 6px;
+                ">
+                  <!-- Rempli dynamiquement -->
+                </div>
+              </div>
+            </div>
+
             <div class="preview-section" id="tokenPreview"></div>
           </div>
 
@@ -4545,7 +4586,6 @@
             <button class="btn-secondary" id="step4Back">← Retour</button>
             <button class="btn-secondary" id="scanBtn" disabled style="margin-left: 12px;">Analyser la
               sélection</button>
-            <button class="btn-outline" id="updateScopesBtn" style="margin-left: 12px; background: #FF6B35; color: white; border: none; font-weight: 600;">🔧 Réparer les scopes</button>
             <button class="btn-primary" id="step4ApplyAll" style="display: none; margin-left: auto;">✅ Valider</button>
           </div>
           <div class="footer-signature" style="display: flex; justify-content: space-between; width: 100%; margin: 0;">
@@ -4807,6 +4847,361 @@
     function getSemanticVariableName(semanticKey, libType) {
       const mapping = SEMANTIC_NAME_MAP[libType] || SEMANTIC_NAME_MAP.tailwind;
       return mapping[semanticKey] || semanticKey.replace(/\./g, '/');
+    }
+
+    /**
+     * 🆕 FRAMEWORK-SPECIFIC VARIABLE NAMING
+     * Convertit les clés internes (numériques) en noms de variables selon le framework
+     * @param {string} category - 'brand', 'gray', 'system', 'spacing', 'radius', etc.
+     * @param {string} internalKey - Clé interne ('500', '900', 'md', 'success-500', etc.)
+     * @param {string} framework - 'mui', 'ant', 'chakra', 'tailwind', 'bootstrap', 'custom'
+     * @returns {string} Nom de variable conforme au framework
+     */
+    function getPrimitiveVariableName(category, internalKey, framework) {
+      if (!framework || framework === 'custom' || framework === 'tailwind') {
+        // Tailwind et Custom utilisent les clés numériques directes
+        return internalKey;
+      }
+
+
+      // ========================================
+      // MATERIAL-UI (MUI)
+      // ========================================
+      if (framework === 'mui') {
+        if (category === 'brand') {
+          // MUI Brand → palette.primary.* (OFFICIAL: only main, light, dark, contrastText)
+          // Référence: https://mui.com/material-ui/customization/palette/
+          var brandMap = {
+            '300': 'primary.light',       // 300 → light (variante claire)
+            '500': 'primary.main',        // 500 → main (couleur principale)
+            '700': 'primary.dark'         // 700 → dark (variante foncée)
+            // Note: contrastText est calculé automatiquement par MUI
+          };
+          // Pour les autres shades (50, 100, 200, 400, 600, 800, 900, 950),
+          // MUI ne les définit pas dans palette.primary, on retourne donc la clé numérique
+          // qui sera ignorée ou utilisée comme fallback
+          return brandMap[internalKey] || internalKey;
+        }
+
+        if (category === 'gray') {
+          return 'grey.' + internalKey;
+        }
+
+        if (category === 'system') {
+          var parts = internalKey.split('-');
+          if (parts.length === 2) {
+            var color = parts[0];
+            var shade = parts[1];
+            var systemMap = { '300': 'light', '500': 'main', '700': 'dark' };
+            var variant = systemMap[shade] || shade;
+            return color + '.' + variant;
+          }
+          return internalKey;
+        }
+
+        return internalKey;
+      }
+
+      // ========================================
+      // ANT DESIGN
+      // ========================================
+      if (framework === 'ant') {
+        if (category === 'brand') {
+          var antBrandMap = {
+            '1': 'colorPrimaryBg', '2': 'colorPrimaryBgHover', '3': 'colorPrimaryBorder',
+            '4': 'colorPrimaryBorderHover', '5': 'colorPrimaryHover', '6': 'colorPrimary',
+            '7': 'colorPrimaryActive', '8': 'colorPrimaryTextHover', '9': 'colorPrimaryText',
+            '10': 'colorPrimaryTextActive',
+            '50': 'colorPrimaryBg', '100': 'colorPrimaryBgHover', '200': 'colorPrimaryBorder',
+            '300': 'colorPrimaryBorderHover', '400': 'colorPrimaryHover', '500': 'colorPrimary',
+            '600': 'colorPrimaryActive', '700': 'colorPrimaryText', '800': 'colorPrimaryTextHover',
+            '900': 'colorPrimaryTextActive'
+          };
+          return antBrandMap[internalKey] || internalKey;
+        }
+
+        if (category === 'gray') {
+          var antGrayMap = {
+            '50': 'colorBgContainer', '100': 'colorBgLayout', '200': 'colorBgElevated',
+            '300': 'colorFillQuaternary', '400': 'colorFillTertiary', '500': 'colorFillSecondary',
+            '600': 'colorFill', '700': 'colorBorder', '800': 'colorBorderSecondary',
+            '900': 'colorText', '950': 'colorTextSecondary',
+            '1': 'colorBgContainer', '2': 'colorBgLayout', '3': 'colorBgElevated',
+            '10': 'colorText', '11': 'colorTextSecondary', '12': 'colorTextTertiary', '13': 'colorTextQuaternary'
+          };
+          return antGrayMap[internalKey] || internalKey;
+        }
+
+        if (category === 'system') {
+          var parts = internalKey.split('-');
+          if (parts.length === 2) {
+            var color = parts[0];
+            var shade = parts[1];
+            var colorName = color.charAt(0).toUpperCase() + color.slice(1);
+            var antSystemMap = {
+              '50': 'color' + colorName + 'Bg', '100': 'color' + colorName + 'BgHover',
+              '200': 'color' + colorName + 'Border', '300': 'color' + colorName + 'BorderHover',
+              '400': 'color' + colorName + 'Hover', '500': 'color' + colorName,
+              '600': 'color' + colorName + 'Active', '700': 'color' + colorName + 'Text',
+              '800': 'color' + colorName + 'TextHover', '900': 'color' + colorName + 'TextActive'
+            };
+            return antSystemMap[shade] || internalKey;
+          }
+          return internalKey;
+        }
+
+        if (category === 'spacing') {
+          var antSpacingMap = {
+            '1': 'sizeXXS', '2': 'sizeXS', '4': 'sizeSM', '8': 'size',
+            '12': 'sizeLG', '16': 'sizeXL', '24': 'sizeXXL'
+          };
+          return antSpacingMap[internalKey] || internalKey;
+        }
+
+        if (category === 'radius') {
+          var antRadiusMap = {
+            'sm': 'borderRadiusSM', 'md': 'borderRadius', 'lg': 'borderRadiusLG',
+            'xl': 'borderRadiusXL', 'none': '0', 'full': '9999'
+          };
+          return antRadiusMap[internalKey] || internalKey;
+        }
+
+        return internalKey;
+      }
+
+      // ========================================
+      // CHAKRA UI
+      // ========================================
+      if (framework === 'chakra') {
+        if (category === 'brand') {
+          return internalKey; // Chakra utilise l'échelle numérique
+        }
+
+        if (category === 'gray') {
+          return 'gray.' + internalKey;
+        }
+
+        if (category === 'system') {
+          var parts = internalKey.split('-');
+          if (parts.length === 2) {
+            var colorMap = { 'success': 'green', 'error': 'red', 'warning': 'orange', 'info': 'blue' };
+            var chakraColor = colorMap[parts[0]] || parts[0];
+            return chakraColor + '.' + parts[1];
+          }
+          return internalKey;
+        }
+
+        return internalKey;
+      }
+
+      // ========================================
+      // BOOTSTRAP
+      // ========================================
+      if (framework === 'bootstrap') {
+        if (category === 'brand') {
+          if (internalKey === '500') return 'primary';
+          return 'primary-' + internalKey;
+        }
+
+        if (category === 'gray') {
+          return 'gray-' + internalKey;
+        }
+
+        if (category === 'system') {
+          var parts = internalKey.split('-');
+          if (parts.length === 2) {
+            var bsColorMap = { 'success': 'success', 'error': 'danger', 'warning': 'warning', 'info': 'info' };
+            var bsColor = bsColorMap[parts[0]] || parts[0];
+            if (parts[1] === '500') return bsColor;
+            return bsColor + '-' + parts[1];
+          }
+          return internalKey;
+        }
+
+        return internalKey;
+      }
+
+      // Fallback
+      return internalKey;
+    }
+
+    /**
+     * 🔍 FRAMEWORK TOKEN FILTER
+     * Vérifie si un token est valide pour le framework sélectionné
+     * @param {string} category - 'brand', 'gray', 'system', 'spacing', 'radius'
+     * @param {string} key - Clé du token ('50', '500', 'sm', etc.)
+     * @param {string} framework - 'mui', 'ant', 'chakra', 'bootstrap', 'tailwind', 'custom'
+     * @returns {boolean} true si le token est valide pour ce framework
+     */
+    function isTokenValidForFramework(category, key, framework) {
+      if (!framework || framework === 'custom') {
+        return true; // Custom accepte tous les tokens
+      }
+
+      // ========================================
+      // MATERIAL-UI (MUI)
+      // ========================================
+      if (framework === 'mui') {
+        if (category === 'brand') {
+          // MUI accepte:
+          // - Nouvelles clés: 300, 500, 700 (mappées vers light, main, dark)
+          // - Anciennes clés: main, light, dark, contrastText (pour compatibilité)
+          var validKeys = ['300', '500', '700', 'main', 'light', 'dark', 'contrastText'];
+          return validKeys.indexOf(key) !== -1;
+        }
+        if (category === 'gray') {
+          // MUI grey: 50, 100, 200, ..., 900 (pas 950)
+          var validGray = ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900'];
+          return validGray.indexOf(key) !== -1;
+        }
+        if (category === 'system') {
+          // MUI system: main, light, dark, contrastText pour chaque couleur
+          // Les tokens system sont des objets imbriqués: { success: { main: '...', light: '...', dark: '...' } }
+          // Le filtrage des sous-clés se fait dans la boucle d'aplatissement
+
+          // Accepter les clés principales (success, error, warning, info, primary, secondary)
+          var validSystemColors = ['primary', 'secondary', 'success', 'warning', 'error', 'info'];
+
+          // Si la clé est une couleur principale, accepter (le filtrage des sous-clés se fait après)
+          if (validSystemColors.indexOf(key) !== -1) {
+            return true;
+          }
+
+          // Si la clé contient un point (ex: success.main), filtrer la sous-clé
+          if (key.indexOf('.') !== -1 || key.indexOf('-') !== -1) {
+            // Extraire la dernière partie de la clé (après le dernier point ou tiret)
+            var parts = key.split(/[.-]/);
+            var lastPart = parts[parts.length - 1];
+
+            // Vérifier si c'est une clé numérique
+            if (/^\d+$/.test(lastPart)) {
+              // Clé numérique (300, 400, 500, etc.) - rejeter pour MUI
+              return false;
+            }
+
+            // Accepter les clés nommées (main, light, dark, contrastText)
+            var validSystemKeys = ['main', 'light', 'dark', 'contrastText'];
+            return validSystemKeys.indexOf(lastPart) !== -1;
+          }
+
+          // Par défaut, accepter (pour compatibilité)
+          return true;
+        }
+        if (category === 'spacing') {
+          // MUI spacing: 0, 0.5, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 40
+          var validSpacing = ['0', '0.5', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10',
+            '12', '14', '16', '18', '20', '24', '28', '32', '36', '40'];
+          return validSpacing.indexOf(key) !== -1;
+        }
+        if (category === 'radius') {
+          // MUI accepte seulement borderRadius
+          return key === 'borderRadius';
+        }
+        return true;
+      }
+
+      // ========================================
+      // ANT DESIGN
+      // ========================================
+      if (framework === 'ant') {
+        if (category === 'brand') {
+          // Ant utilise une échelle 1-10 OU 50-900 (les deux sont valides)
+          var validBrand = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10',
+            '50', '100', '200', '300', '400', '500', '600', '700', '800', '900'];
+          return validBrand.indexOf(key) !== -1;
+        }
+        if (category === 'gray') {
+          // Ant gray: 1-13 OU 50-950
+          var validGray = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13',
+            '50', '100', '200', '300', '400', '500', '600', '700', '800', '900', '950'];
+          return validGray.indexOf(key) !== -1;
+        }
+        if (category === 'spacing') {
+          // Ant spacing: valeurs en pixels (4, 8, 12, 16, 24, 32, 48, ...)
+          var validSpacing = ['4', '8', '12', '16', '20', '24', '32', '40', '48', '64', '80', '96'];
+          return validSpacing.indexOf(key) !== -1;
+        }
+        if (category === 'radius') {
+          // Ant radius: xs, sm, md, lg, xl, none, full
+          var validRadius = ['none', 'xs', 'sm', 'base', 'md', 'lg', 'xl', '2xl', 'full'];
+          return validRadius.indexOf(key) !== -1;
+        }
+        return true;
+      }
+
+      // ========================================
+      // CHAKRA UI
+      // ========================================
+      if (framework === 'chakra') {
+        if (category === 'brand' || category === 'gray') {
+          // Chakra colors: 50, 100, 200, ..., 900, 950
+          var validColors = ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900', '950'];
+          return validColors.indexOf(key) !== -1;
+        }
+        if (category === 'spacing') {
+          // Chakra spacing: 0, 0.5, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 20, 24, 28, 32, ...
+          var validSpacing = ['0', '0.5', '1', '1.5', '2', '2.5', '3', '3.5', '4', '5', '6', '7', '8',
+            '9', '10', '12', '14', '16', '20', '24', '28', '32', '36', '40', '44',
+            '48', '52', '56', '60', '64', '72', '80', '96'];
+          return validSpacing.indexOf(key) !== -1;
+        }
+        if (category === 'radius') {
+          // Chakra radius: none, 2xs, xs, sm, md/base, lg, xl, 2xl, 3xl, 4xl, full
+          var validRadius = ['none', '2xs', 'xs', 'sm', 'md', 'base', 'lg', 'xl', '2xl', '3xl', '4xl', 'full', 'max'];
+          return validRadius.indexOf(key) !== -1;
+        }
+        return true;
+      }
+
+      // ========================================
+      // BOOTSTRAP
+      // ========================================
+      if (framework === 'bootstrap') {
+        if (category === 'brand' || category === 'gray') {
+          // Bootstrap colors: 50, 100, 200, ..., 900 (pas 950)
+          var validColors = ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900'];
+          return validColors.indexOf(key) !== -1;
+        }
+        if (category === 'spacing') {
+          // Bootstrap spacing: 0, 1, 2, 3, 4, 5 (échelle 0-5)
+          // OU valeurs en pixels: 4, 8, 16, 24, 48
+          var validSpacing = ['0', '1', '2', '3', '4', '5', '4', '8', '12', '16', '20', '24', '32', '48'];
+          return validSpacing.indexOf(key) !== -1;
+        }
+        if (category === 'radius') {
+          // Bootstrap radius: none, sm, base, md, lg, xl, 2xl, pill, full
+          var validRadius = ['none', 'sm', 'base', 'md', 'lg', 'xl', '2xl', '3xl', 'pill', 'full'];
+          return validRadius.indexOf(key) !== -1;
+        }
+        return true;
+      }
+
+      // ========================================
+      // TAILWIND CSS
+      // ========================================
+      if (framework === 'tailwind' || framework === 'shadcn') {
+        if (category === 'brand' || category === 'gray') {
+          // Tailwind colors: 50, 100, 200, ..., 900, 950
+          var validColors = ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900', '950'];
+          return validColors.indexOf(key) !== -1;
+        }
+        if (category === 'spacing') {
+          // Tailwind spacing: 0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 20, 24, ...
+          var validSpacing = ['0', '0.5', '1', '1.5', '2', '2.5', '3', '3.5', '4', '5', '6', '7', '8',
+            '9', '10', '11', '12', '14', '16', '20', '24', '28', '32', '36', '40',
+            '44', '48', '52', '56', '60', '64', '72', '80', '96'];
+          return validSpacing.indexOf(key) !== -1;
+        }
+        if (category === 'radius') {
+          // Tailwind radius: none, sm, DEFAULT, md, lg, xl, 2xl, 3xl, full
+          var validRadius = ['none', 'sm', 'DEFAULT', 'base', 'md', 'lg', 'xl', '2xl', '3xl', 'full'];
+          return validRadius.indexOf(key) !== -1;
+        }
+        return true;
+      }
+
+      // Par défaut, accepter le token
+      return true;
     }
 
     // ============================================
@@ -5680,6 +6075,9 @@
         var selectedNaming = option.getAttribute("data-library");
         currentNaming = selectedNaming;
 
+        // 🆕 Update framework guide when framework changes
+        updateFrameworkGuide();
+
         // Save naming preference immediately
         parent.postMessage({
           pluginMessage: {
@@ -6125,6 +6523,62 @@
 
       return Object.values(groups);
     }
+
+    // ============================================
+    // ✅ HIGHLIGHT & APPLY FUNCTIONS (CRITIQUES)
+    // ============================================
+
+    function highlightLayers(indices) {
+      // Activer le verrou pour seulement 200ms (au lieu de 2 secondes) pour éviter les conflits
+      window.ignoreSelectionChangeUntil = Date.now() + 200;
+
+      parent.postMessage({
+        pluginMessage: {
+          type: 'highlight-nodes',
+          indices: indices
+        }
+      }, '*');
+    }
+
+    function selectLayers(indices) {
+      highlightLayers(indices);
+    }
+
+    function applyGroupFix(indices, variableId) {
+      console.log('📤 [UI] applyGroupFix called with indices:', indices, 'variableId:', variableId);
+      parent.postMessage({
+        pluginMessage: {
+          type: 'apply-group-fix',
+          indices: indices,
+          variableId: variableId
+        }
+      }, '*');
+    }
+
+    function applyManualGroupFix(indices, buttonElement) {
+      // Trouver le sélecteur dans la même carte
+      var card = buttonElement.closest('.cleaning-result-card');
+      var selector = card.querySelector('.manual-select');
+      var variableId = selector.value;
+
+      if (!variableId) {
+        return; // Ne rien faire si aucune variable sélectionnée
+      }
+
+      parent.postMessage({
+        pluginMessage: {
+          type: 'apply-group-fix',
+          indices: indices,
+          variableId: variableId
+        }
+      }, '*');
+    }
+
+    // Expose functions to global scope for inline onclick handlers
+    window.highlightLayers = highlightLayers;
+    window.selectLayers = selectLayers;
+    window.applyGroupFix = applyGroupFix;
+    window.applyManualGroupFix = applyManualGroupFix;
 
     // Fonction pour corriger tous les groupes d'une catégorie
     function applyAllCategoryFixes(categoryKey) {
@@ -9331,26 +9785,7 @@
       }, "*");
     });
 
-    // ============================================
-    // BOUTON MISE À JOUR DES SCOPES (DEBUG/FIX)
-    // ============================================
-    var updateScopesBtn = document.getElementById("updateScopesBtn");
-    if (updateScopesBtn) {
-      updateScopesBtn.addEventListener("click", function () {
-        updateScopesBtn.disabled = true;
-        updateScopesBtn.textContent = '⏳ Mise à jour...';
-        parent.postMessage({ pluginMessage: { type: 'update-scopes' } }, '*');
 
-        // Re-enable after 3 seconds
-        setTimeout(function() {
-          updateScopesBtn.disabled = false;
-          updateScopesBtn.textContent = '✅ Scopes réparés !';
-          setTimeout(function() {
-            updateScopesBtn.textContent = '🔧 Réparer les scopes';
-          }, 2000);
-        }, 3000);
-      });
-    }
 
     // ============================================
     // GESTIONNAIRES D'ÉVÉNEMENTS PROPRES
@@ -9484,6 +9919,16 @@
         try {
           if (typeof hideScanLoading === 'function') hideScanLoading();
           if (currentStep !== 4 && typeof switchStep === 'function') switchStep(4);
+
+          // 🔍 DEBUG: Afficher les résultats reçus
+          console.log('📥 [UI] scan-results received:', {
+            count: msg.results ? msg.results.length : 0,
+            properties: msg.results ? msg.results.map(function (r) { return r.property; }) : []
+          });
+          if (msg.results && msg.results.length > 0) {
+            console.log('📥 [UI] First result sample:', msg.results[0]);
+          }
+
           if (typeof displayScanResults === 'function') displayScanResults(msg.results);
           parent.postMessage({ pluginMessage: { type: 'check-selection' } }, '*');
         } catch (innerError) {
@@ -9504,6 +9949,7 @@
           document.querySelectorAll('.library-option.selected').forEach(function (el) { el.classList.remove('selected'); });
           libraryOption.classList.add('selected');
           currentNaming = msg.naming;
+          updateFrameworkGuide(); // 🆕 Update guide when loading saved framework
           if (step1Next) step1Next.disabled = false;
           console.log('📂 Pre-selected saved library:', msg.naming);
         } else {
@@ -9921,6 +10367,159 @@
       updateExport();
     });
 
+    /**
+     * 🆕 FRAMEWORK-SPECIFIC NAMING GUIDE
+     * Met à jour le panneau d'aide avec des exemples de noms selon le framework
+     */
+    function updateFrameworkGuide() {
+      var guide = document.getElementById('frameworkGuide');
+      if (!guide) return;
+
+      // Ne pas afficher pour semantic tab
+      if (activeCategory === 'semantic') {
+        guide.style.display = 'none';
+        return;
+      }
+
+      var framework = currentNaming || 'custom';
+      var category = activeCategory;
+
+      // Framework display names
+      var frameworkNames = {
+        'mui': 'Material-UI (MUI)',
+        'ant': 'Ant Design v5+',
+        'chakra': 'Chakra UI',
+        'tailwind': 'Tailwind CSS',
+        'bootstrap': 'Bootstrap 5',
+        'custom': 'Custom'
+      };
+
+      // Collection names per framework/category
+      var collectionNames = {
+        mui: {
+          brand: 'Palette / Primary',
+          gray: 'Palette / Grey',
+          system: 'Palette / System',
+          spacing: 'Spacing',
+          radius: 'Shape'
+        },
+        ant: {
+          brand: 'Colors / Primary',
+          gray: 'Colors / Neutral',
+          system: 'Colors / Status',
+          spacing: 'Sizes',
+          radius: 'Border Radius'
+        },
+        chakra: {
+          brand: 'Colors / Primary',
+          gray: 'Colors / Gray',
+          system: 'Colors / Status',
+          spacing: 'Space',
+          radius: 'Radii'
+        },
+        tailwind: {
+          brand: 'Colors / Primary',
+          gray: 'Colors / Gray',
+          system: 'Colors / Status',
+          spacing: 'Spacing',
+          radius: 'Border Radius'
+        },
+        bootstrap: {
+          brand: 'Theme Colors / Primary',
+          gray: 'Grays',
+          system: 'Theme Colors / Status',
+          spacing: 'Spacers',
+          radius: 'Border Radius'
+        },
+        custom: {
+          brand: 'Brand Colors',
+          gray: 'Grayscale',
+          system: 'System Colors',
+          spacing: 'Spacing',
+          radius: 'Radius'
+        }
+      };
+
+      // Variable name examples per framework/category
+      var examples = {
+        mui: {
+          brand: ['primary.main', 'primary.light', 'primary.dark', 'primary.contrastText'],
+          gray: ['grey.50', 'grey.100', 'grey.500', 'grey.900'],
+          system: ['success.main', 'success.light', 'error.dark', 'warning.main'],
+          spacing: ['0.5', '1', '2', '4', '8'],
+          radius: ['borderRadius']
+        },
+        ant: {
+          brand: ['colorPrimary', 'colorPrimaryHover', 'colorPrimaryBg', 'colorPrimaryText'],
+          gray: ['colorText', 'colorBgContainer', 'colorBorder', 'colorFill'],
+          system: ['colorSuccess', 'colorSuccessBg', 'colorError', 'colorWarning'],
+          spacing: ['sizeXXS', 'sizeXS', 'size', 'sizeLG', 'sizeXXL'],
+          radius: ['borderRadius', 'borderRadiusSM', 'borderRadiusLG']
+        },
+        chakra: {
+          brand: ['50', '100', '500', '700', '900'],
+          gray: ['gray.50', 'gray.100', 'gray.500', 'gray.900'],
+          system: ['green.500', 'green.600', 'red.500', 'orange.500'],
+          spacing: ['0.5', '1', '2', '4', '8', '16'],
+          radius: ['sm', 'md', 'lg', 'xl', 'full']
+        },
+        tailwind: {
+          brand: ['50', '100', '500', '700', '900', '950'],
+          gray: ['50', '100', '500', '900', '950'],
+          system: ['50', '500', '700', '900'],
+          spacing: ['0', '1', '2', '4', '8', '12'],
+          radius: ['sm', 'md', 'lg', 'xl', 'full']
+        },
+        bootstrap: {
+          brand: ['primary', 'primary-100', 'primary-700'],
+          gray: ['gray-100', 'gray-500', 'gray-900'],
+          system: ['success', 'danger', 'warning', 'info'],
+          spacing: ['0', '1', '2', '3', '4', '5'],
+          radius: ['sm', 'md', 'lg', 'pill']
+        },
+        custom: {
+          brand: ['50', '100', '500', '700', '900'],
+          gray: ['50', '100', '500', '900'],
+          system: ['50', '500', '900'],
+          spacing: ['0', '4', '8', '16'],
+          radius: ['sm', 'md', 'lg']
+        }
+      };
+
+      // Update guide content
+      document.getElementById('guideFrameworkName').textContent = frameworkNames[framework] || framework;
+      document.getElementById('guideCategoryName').textContent =
+        category.charAt(0).toUpperCase() + category.slice(1);
+
+      var collectionName = (collectionNames[framework] && collectionNames[framework][category])
+        || category;
+      document.getElementById('guideCollectionName').textContent = collectionName;
+
+      // Update examples
+      var examplesContainer = document.getElementById('guideExamples');
+      examplesContainer.innerHTML = '';
+
+      var examplesList = (examples[framework] && examples[framework][category]) || [];
+      examplesList.forEach(function (example) {
+        var badge = document.createElement('code');
+        badge.style.cssText = `
+          display: inline-block;
+          padding: 4px 8px;
+          background: var(--poly-accent-bg, rgba(59, 130, 246, 0.1));
+          border: 1px solid var(--poly-accent, #3b82f6);
+          border-radius: 4px;
+          color: var(--poly-accent, #3b82f6);
+          font-size: 11px;
+          font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
+        `;
+        badge.textContent = example;
+        examplesContainer.appendChild(badge);
+      });
+
+      // Show guide
+      guide.style.display = 'block';
+    }
+
     // Token Category Tabs
     tokenTabs.addEventListener("click", function (e) {
       if (e.target.classList.contains("tab")) {
@@ -9928,6 +10527,7 @@
         tabs.forEach(function (tab) { tab.classList.remove("active"); });
         e.target.classList.add("active");
         activeCategory = e.target.getAttribute("data-category");
+        updateFrameworkGuide(); // 🆕 Update framework-specific guide
         updatePreview();
       }
     });
@@ -10083,8 +10683,19 @@
 
         var value = previewData[key];
 
+        // 🔍 DEBUG: Log pour radius
+        if (activeCategory === 'radius') {
+          console.log('🔍 [RADIUS] Processing key:', key, 'value:', value, 'framework:', currentNaming);
+        }
+
         // 🛡️ UI GUARD: Prevent system colors from showing in Brand tab
         if (activeCategory === 'brand' && ['success', 'warning', 'error', 'info'].indexOf(key) !== -1) {
+          continue;
+        }
+
+        // 🔍 FRAMEWORK FILTER: Skip tokens incompatibles avec le framework
+        if (activeCategory !== 'semantic' && !isTokenValidForFramework(activeCategory, key, currentNaming)) {
+          console.log('🚫 [FILTER] Skipping incompatible token:', activeCategory, key, 'for framework', currentNaming);
           continue;
         }
 
@@ -10096,6 +10707,22 @@
             if (!value.hasOwnProperty(subKey)) continue;
 
             var subValue = value[subKey];
+
+            // 🔍 FRAMEWORK FILTER: Pour system MUI, filtrer les sous-clés incompatibles
+            if (activeCategory === 'system' && currentNaming === 'mui') {
+              // Rejeter les clés numériques (300, 400, 500, 600, 700, etc.)
+              if (/^\d+$/.test(subKey)) {
+                console.log('🚫 [FILTER] Skipping incompatible system subkey:', key + '.' + subKey, 'for framework', currentNaming);
+                continue;
+              }
+
+              // Accepter seulement: main, light, dark, contrastText
+              var validSystemKeys = ['main', 'light', 'dark', 'contrastText'];
+              if (validSystemKeys.indexOf(subKey) === -1) {
+                console.log('🚫 [FILTER] Skipping incompatible system subkey:', key + '.' + subKey, 'for framework', currentNaming);
+                continue;
+              }
+            }
 
             // Convert CamelCase key to kebab-case (fontSize -> font-size)
             var prefix = key.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
@@ -10538,14 +11165,23 @@
       var nameCell = document.createElement('td');
       nameCell.className = 'token-name';
 
-      var displayName = activeCategory + "-" + key;
+      // 🆕 FRAMEWORK-SPECIFIC NAMING: Utiliser getPrimitiveVariableName pour tous les primitives
+      var displayName;
       if (activeCategory === "semantic" || isSemanticToken) {
         var figmaName = getSemanticVariableName(key, currentNaming);
         displayName = key;
         nameCell.title = figmaName; // garde l'info sans polluer l'UI
+      } else {
+        // Pour les primitives (brand, gray, system, spacing, radius, etc.)
+        // Afficher le nom conforme au framework sélectionné
+        displayName = getPrimitiveVariableName(activeCategory, key, currentNaming);
+        // Afficher la clé interne dans le tooltip pour référence
+        if (displayName !== key) {
+          nameCell.title = 'Clé interne: ' + key;
+        }
       }
 
-      // 🔥 HARMONISATION : Affichage standard pour tous les tokens (y compris semantic)
+      // 🔥 HARMONISATION : Affichage standard pour tous les tokens
       nameCell.textContent = displayName;
       row.appendChild(nameCell);
 

@@ -1,7 +1,6 @@
 
-// Plugin startup verification - verified manually: 0 occurrences of variable.scopes = assignments
 // P1-A: Startup logs always shown (important for debugging plugin initialization)
-console.log("✅ Plugin initialized: scopes use setScopes() method only");
+console.log("✅ Plugin initialized: scopes applied only on semantic variables via getScopesForSemanticKey()");
 console.log("✅ Using V2 scan functions (mode-aware, ValueType.FLOAT, strict scoping)");
 
 // ============================================================================
@@ -159,7 +158,11 @@ const LIBS = {
     id: 'mui',
     aliases: ['material-ui'],
     scanPaths: {
-      primitives: ['palette.primary', 'light.palette.primary', 'dark.palette.primary'],
+      primitives: [
+        'palette.primary', 'light.palette.primary', 'dark.palette.primary',
+        'palette.common', 'palette.action',  // MUI-specific primitives
+        'mui.common', 'mui.action'           // Alternative naming
+      ],
       semantics: [
         'palette.text', 'palette.background',
         'light.palette.text', 'light.palette.background',
@@ -340,7 +343,8 @@ var ValueType = {
 };
 
 // GLOBAL SCAN SETTINGS
-const SCAN_ALLOW_PRIMITIVES = true; // Allow primitive variables in scan suggestions
+const SCAN_ALLOW_PRIMITIVES = false; // Primitives bloquées par défaut, autorisées uniquement pour radius
+const SCAN_ALLOW_PRIMITIVES_FOR_RADIUS = true; // Exception : les primitives radius sont proposées car l'échelle sémantique est trop limitée (5 tokens)
 
 // ============================================================================
 // SCOPE MAPPING HELPER
@@ -364,8 +368,8 @@ function getScopesForPropertyKind(propertyKind) {
     case PropertyKind.GAP:
       return ['GAP', 'WIDTH_HEIGHT'];
     case PropertyKind.PADDING:
-      // Accept GAP scope for padding (spacing tokens are often used for both)
-      return ['GAP', 'TOP_PADDING', 'BOTTOM_PADDING', 'LEFT_PADDING', 'RIGHT_PADDING', 'INDIVIDUAL_PADDING', 'WIDTH_HEIGHT'];
+      // Accept GAP and WIDTH_HEIGHT scopes for padding (spacing tokens are used for both)
+      return ['GAP', 'WIDTH_HEIGHT'];
     case PropertyKind.CORNER_RADIUS:
       return ['CORNER_RADIUS', 'ALL_SCOPES'];
     case PropertyKind.STROKE_WEIGHT:
@@ -1228,7 +1232,9 @@ var CONFIG = {
   },
 
   naming: {
+    tailwind: 'tailwind',
     shadcn: 'shadcn',
+    chakra: 'chakra',
     mui: 'mui',
     ant: 'ant',
     bootstrap: 'bootstrap',
@@ -1462,13 +1468,14 @@ function mapSemanticTokens(palettes, preset, options) {
   // Dark: Surface (950) > Canvas (900) > Elevated (800) > Muted (700)
 
   function getStandardMapping(key) {
-    // ⚠️ CRITICAL: This mapping is CANONICAL and WCAG AA validated (75 tokens)
+    // ⚠️ CRITICAL: This mapping is CANONICAL and WCAG AA validated (80 tokens)
     // DO NOT MODIFY without validating contrast ratios (≥4.5:1 text, ≥3:1 UI)
     //
-    // P2 NOTE: This function and CORE_PRESET_V1.mappingRules (L12757) contain the same data
+    // ⚠️ P2 NOTE: This function and CORE_PRESET_V1.mappingRules contain DUPLICATE data
     // in different formats. When updating mappings, BOTH must be synchronized:
     // - getStandardMapping: returns { category, light, dark, type }
     // - CORE_PRESET_V1.mappingRules: returns { light: { category, ref }, dark: { category, ref } }
+    // ✅ LAST SYNC: 2026-01-31 - Fixed bg.canvas, bg.surface, bg.elevated, bg.subtle, bg.muted, overlay.dim, space.2xl
     // TODO: Future refactor should unify to a single source of truth.
 
     // Returns { category, light, dark, type }
@@ -1477,11 +1484,13 @@ function mapSemanticTokens(palettes, preset, options) {
     // 🎨 BACKGROUNDS - Hiérarchie d'élévation
     // ========================================
     // ✅ DARK MODE: Inversion intelligente (plus clair = plus élevé en dark)
-    if (key === 'bg.canvas') return { category: 'gray', light: '100', dark: '950', type: 'COLOR' };    // Fond principal (le plus sombre en dark)
+    // Light: Surface (50) < Canvas (100) < Elevated (200) < Muted (300)
+    // Dark: Surface (900) < Canvas (950) inversé → Elevated (800) < Muted (700)
+    if (key === 'bg.canvas') return { category: 'gray', light: '100', dark: '950', type: 'COLOR' };    // Fond principal
     if (key === 'bg.surface') return { category: 'gray', light: '50', dark: '900', type: 'COLOR' };    // Cartes, panels (plus clair que canvas)
-    if (key === 'bg.elevated') return { category: 'gray', light: '200', dark: '800', type: 'COLOR' };  // Dropdowns, tooltips (encore plus clair)
-    if (key === 'bg.subtle') return { category: 'gray', light: '100', dark: '850', type: 'COLOR' };    // Hover states subtils
-    if (key === 'bg.muted') return { category: 'gray', light: '200', dark: '800', type: 'COLOR' };     // Disabled, inactive
+    if (key === 'bg.elevated') return { category: 'gray', light: '200', dark: '800', type: 'COLOR' };  // Dropdowns, tooltips
+    if (key === 'bg.subtle') return { category: 'gray', light: '100', dark: '800', type: 'COLOR' };    // Hover states subtils
+    if (key === 'bg.muted') return { category: 'gray', light: '300', dark: '700', type: 'COLOR' };     // Disabled, inactive
     if (key === 'bg.accent') return { category: 'brand', light: '500', dark: '500', type: 'COLOR' };   // Accent brand (identique)
     if (key === 'bg.inverse') return { category: 'gray', light: '950', dark: '50', type: 'COLOR' };    // Badges, chips (inverse total)
 
@@ -1547,10 +1556,10 @@ function mapSemanticTokens(palettes, preset, options) {
     if (key === 'action.secondary.text') return { category: 'brand', light: '700', dark: '300', type: 'COLOR' };  // ✅ Texte lisible sur fond clair
 
     // TERTIARY - Bouton tertiaire (ghost, transparent)
-    if (key === 'action.tertiary.default') return { category: 'gray', light: '0', dark: '0', type: 'COLOR' };      // Transparent
+    if (key === 'action.tertiary.default') return { category: 'gray', light: 'transparent', dark: 'transparent', type: 'COLOR' };
     if (key === 'action.tertiary.hover') return { category: 'gray', light: '100', dark: '900', type: 'COLOR' };
     if (key === 'action.tertiary.active') return { category: 'gray', light: '200', dark: '800', type: 'COLOR' };
-    if (key === 'action.tertiary.disabled') return { category: 'gray', light: '0', dark: '0', type: 'COLOR' };
+    if (key === 'action.tertiary.disabled') return { category: 'gray', light: 'transparent', dark: 'transparent', type: 'COLOR' };
     if (key === 'action.tertiary.text') return { category: 'brand', light: '600', dark: '400', type: 'COLOR' };
 
     // DESTRUCTIVE - Actions destructives (rouge)
@@ -1586,7 +1595,7 @@ function mapSemanticTokens(palettes, preset, options) {
     // ========================================
     // 🌑 OVERLAY - Fonds semi-transparents
     // ========================================
-    if (key === 'overlay.dim') return { category: 'gray', light: '900', dark: '950', type: 'COLOR' };    // Fond de modal (très sombre)
+    if (key === 'overlay.dim') return { category: 'gray', light: '800', dark: '900', type: 'COLOR' };    // Fond de modal (sombre mais pas opaque)
     if (key === 'overlay.scrim') return { category: 'gray', light: '950', dark: '950', type: 'COLOR' };  // Scrim (presque noir)
 
     // --- RADIUS (5) ---
@@ -1602,7 +1611,7 @@ function mapSemanticTokens(palettes, preset, options) {
     if (key === 'space.md') return { category: 'spacing', light: '4', dark: '4', type: 'FLOAT' };
     if (key === 'space.lg') return { category: 'spacing', light: '6', dark: '6', type: 'FLOAT' };
     if (key === 'space.xl') return { category: 'spacing', light: '8', dark: '8', type: 'FLOAT' };
-    if (key === 'space.2xl') return { category: 'spacing', light: '11', dark: '11', type: 'FLOAT' };
+    if (key === 'space.2xl') return { category: 'spacing', light: '12', dark: '12', type: 'FLOAT' };
 
     // --- STROKE (5) ---
     if (key === 'stroke.none') return { category: 'stroke', light: '0', dark: '0', type: 'FLOAT' };
@@ -1654,15 +1663,45 @@ function mapSemanticTokens(palettes, preset, options) {
       var familyUsedRefs = [];
 
       keys.forEach(function (semKey) {
-        var mapDef = getStandardMapping(semKey);
-        if (!mapDef) return;
+        // ✅ FIX: Use framework-specific mapping instead of generic getStandardMapping
+        var category, preferredRef, mapDef;
 
-        var category = mapDef.category;
-        var preferredRef = isDark ? mapDef.dark : mapDef.light;
+        // Always get standard mapping first to get the type
+        var standardDef = getStandardMapping(semKey);
+        if (!standardDef) return;
+
+        // Then try to get framework-specific mapping for category/keys
+        var frameworkMapping = getPrimitiveMappingForSemantic(semKey, options.naming || 'tailwind');
+
+        if (!frameworkMapping) {
+          // Fallback to standard mapping
+          mapDef = standardDef;
+          category = mapDef.category;
+          preferredRef = isDark ? mapDef.dark : mapDef.light;
+        } else {
+          // Use framework-specific mapping (new format: {category, keys, darkKeys})
+          category = frameworkMapping.category;
+          var keysArray = isDark ? (frameworkMapping.darkKeys || frameworkMapping.keys) : frameworkMapping.keys;
+          preferredRef = keysArray ? keysArray[0] : null; // Use first key as preferred
+          console.log('✅ [FRAMEWORK_MAPPING] ' + semKey + ' (' + mode + ') using ' + (options.naming || 'tailwind') + ' mapping: ' + category + '.' + preferredRef);
+          // Create a mapDef-like object for compatibility, preserving type from standard
+          mapDef = { category: category, light: preferredRef, dark: preferredRef, type: standardDef.type };
+        }
 
         // Resolution Logic
         var finalRef = preferredRef;
-        var paletteCat = palettes[category];
+
+        // ✅ FIX: Handle nested categories like 'system.success'
+        var paletteCat;
+        if (category.includes('.')) {
+          var parts = category.split('.');
+          paletteCat = palettes[parts[0]];
+          for (var p = 1; p < parts.length; p++) {
+            paletteCat = paletteCat ? paletteCat[parts[p]] : null;
+          }
+        } else {
+          paletteCat = palettes[category];
+        }
 
         // Collision Resolution for COLOR/GRAY only
         if (mapDef.type === 'COLOR' && category === 'gray') {
@@ -1765,26 +1804,50 @@ function mapSemanticTokens(palettes, preset, options) {
     semanticKeys.forEach(function (semKey) {
       if (processedKeys.indexOf(semKey) !== -1) return;
 
-      var mapDef = getStandardMapping(semKey);
-      if (!mapDef) return;
+      var standardDef = getStandardMapping(semKey);
+      if (!standardDef) return;
 
-      var category = mapDef.category;
-      var preferredRef = isDark ? mapDef.dark : mapDef.light;
+      // ✅ FIX: Use framework-specific mapping (same logic as hierarchy groups)
+      var category, preferredRef, mapDef;
+      var frameworkMapping = getPrimitiveMappingForSemantic(semKey, options.naming || 'tailwind');
+
+      if (frameworkMapping) {
+        category = frameworkMapping.category;
+        var keysArray = isDark ? (frameworkMapping.darkKeys || frameworkMapping.keys) : frameworkMapping.keys;
+        preferredRef = keysArray ? keysArray[0] : null;
+        mapDef = { category: category, light: preferredRef, dark: preferredRef, type: standardDef.type };
+      } else {
+        mapDef = standardDef;
+        category = mapDef.category;
+        preferredRef = isDark ? mapDef.dark : mapDef.light;
+      }
 
       // Resolve standard
       var resolvedValue = "#000000";
       var aliasInfo = null;
 
-      if (palettes[category]) {
-        var val = palettes[category][preferredRef];
+      // ✅ FIX: Handle nested categories like 'system.success'
+      var paletteCat;
+      if (category.includes('.')) {
+        var parts = category.split('.');
+        paletteCat = palettes[parts[0]];
+        for (var p = 1; p < parts.length; p++) {
+          paletteCat = paletteCat ? paletteCat[parts[p]] : null;
+        }
+      } else {
+        paletteCat = palettes[category];
+      }
+
+      if (paletteCat) {
+        var val = paletteCat[preferredRef];
         if (val !== undefined && val !== null) {
           resolvedValue = val;
           aliasInfo = { category: category, key: preferredRef };
         } else {
-          // Try finding any key
-          var keys = Object.keys(palettes[category]);
+          // Try finding any key (but skip 'transparent' as fallback)
+          var keys = Object.keys(paletteCat).filter(function(k) { return k !== 'transparent'; });
           if (keys.length > 0) {
-            resolvedValue = palettes[category][keys[0]];
+            resolvedValue = paletteCat[keys[0]];
             aliasInfo = { category: category, key: keys[0] };
           }
         }
@@ -3000,9 +3063,33 @@ async function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
         if (category === 'gray') {
           fallbacks.push('gray-' + key);
           fallbacks.push('grey-' + key);
+          fallbacks.push('gray.' + key); // 🆕 MUI: grey.900
+          fallbacks.push('grey.' + key);
         } else if (category === 'brand') {
           fallbacks.push('primary-' + key);
           fallbacks.push('brand-' + key);
+        }
+      }
+
+      // 🆕 FIX: Pour les clés avec POINT (MUI/Chakra: grey.900, primary.main, etc.)
+      if (key.includes('.')) {
+        var dotParts = key.split('.');
+        if (dotParts.length === 2) {
+          // grey.900 → ["grey", "900"]
+          var suffix = dotParts[1];
+          fallbacks.push(suffix); // "grey.900" → "900"
+          fallbacks.push(key.replace('.', '-')); // "grey.900" → "grey-900"
+
+          // Pour MUI variant keys: primary.main, primary.light, etc.
+          if (category === 'brand' || category.startsWith('system')) {
+            if (suffix === 'main') {
+              fallbacks.push('500', 'primary', 'base');
+            } else if (suffix === 'light') {
+              fallbacks.push('300', '400');
+            } else if (suffix === 'dark') {
+              fallbacks.push('700', '600');
+            }
+          }
         }
       }
 
@@ -3026,6 +3113,14 @@ async function tryResolveSemanticAlias(semanticKey, allTokens, naming) {
           fallbacks.push('primary-dark', '600', '700');
         } else if (key === 'primary-dark') {
           fallbacks.push('dark', '600', '700');
+        }
+        // 🆕 MUI variants
+        else if (key === 'primary.main') {
+          fallbacks.push('primary', 'main', '500');
+        } else if (key === 'primary.light') {
+          fallbacks.push('300', '400', 'light');
+        } else if (key === 'primary.dark') {
+          fallbacks.push('700', '600', 'dark');
         }
       }
 
@@ -3139,10 +3234,13 @@ function extractVariableKey(variable, collectionName) {
   if (!variable || !variable.name) return null;
 
   // 1. Normalisation robuste du nom réel dans Figma
-  var raw = (variable.name || '').toLowerCase();
-  raw = raw.split('/').pop().trim();              // support "Brand/primary-3"
-  raw = raw.replace(/\s+/g, '');                  // "primary - 3" -> "primary-3"
-  raw = raw.replace(/\(.*\)$/g, '').trim();       // "primary-3 (generated)" -> "primary-3"
+  // Préserver le nom original AVANT lowercase pour détecter les patterns camelCase (Ant Design)
+  var originalName = (variable.name || '');
+  originalName = originalName.split('/').pop().trim();
+  originalName = originalName.replace(/\s+/g, '');
+  originalName = originalName.replace(/\(.*\)$/g, '').trim();
+
+  var raw = originalName.toLowerCase();
   var name = raw;
 
   // 2. Déterminer la catégorie selon le nom de collection (normalisé)
@@ -3210,13 +3308,49 @@ function extractVariableKey(variable, collectionName) {
   } else if (isSystem) {
     return name;
   } else if (isGray) {
-    var grayMatch = name.match(/^(gray|grey)[-_](.+)$/);
-    if (grayMatch) {
-      return grayMatch[2];
-    } else if (name.match(/^\d{1,3}$/)) {
+    // 🆕 FIX: Support pour les nomenclatures officielles des frameworks
+
+    // 1. MUI/Chakra: grey.900, gray.900, gray.50, etc. (avec points)
+    if (name.match(/^gr[ae]y\.\d{1,3}$/)) {
+      return name; // Retourne "grey.900" tel quel
+    }
+
+    // 2. Ant Design: camelCase comme colorText, colorBgContainer, colorBorder, etc.
+    // Préserver la casse originale pour ces patterns
+    if (originalName.match(/^color[A-Z]/)) {
+      return originalName; // Retourne "colorText" (pas "colortext")
+    }
+
+    // 3. MUI: white, black (tokens spéciaux)
+    if (name === 'white' || name === 'black') {
       return name;
     }
+
+    // 4. Patterns traditionnels: gray-900, grey_50, etc. (avec tirets/underscores)
+    var grayMatch = name.match(/^(gray|grey)[-_](.+)$/);
+    if (grayMatch) {
+      return grayMatch[2]; // "gray-900" → "900"
+    }
+
+    // 5. Nombres purs: 1, 50, 900, etc. (Tailwind, Ant numeric scale)
+    if (name.match(/^\d{1,3}$/)) {
+      return name;
+    }
+
+    // 6. Ant Design numeric scale: colorTextLightSolid, etc.
+    if (originalName.match(/^color[A-Z][a-zA-Z]+$/)) {
+      return originalName;
+    }
   } else if (isSpacing || forceSpacing) {
+    // 🆕 FIX: Support pour Ant Design camelCase (sizeXS, sizeXXL, etc.)
+    if (originalName.match(/^size[A-Z]/)) {
+      return originalName; // "sizeXS", "sizeXXL", etc.
+    }
+    if (originalName === 'size') {
+      return 'size'; // Ant Design: "size" (base size)
+    }
+
+    // Patterns traditionnels
     if (name.startsWith("spacing-")) {
       return name.replace("spacing-", "").replace(/-/g, ".");
     }
@@ -3225,6 +3359,12 @@ function extractVariableKey(variable, collectionName) {
     }
     return name.replace(/-/g, ".");
   } else if (isRadius || forceRadius) {
+    // 🆕 FIX: Support pour Ant Design camelCase (borderRadius, borderRadiusSM, etc.)
+    if (originalName.match(/^borderRadius/)) {
+      return originalName; // "borderRadius", "borderRadiusSM", "borderRadiusLG"
+    }
+
+    // Patterns traditionnels
     if (name.startsWith("radius-") || name.startsWith("corner-") || name.startsWith("border-radius-")) {
       return name.replace(/^(radius|corner|border-radius)-/, "").replace(/-/g, ".");
     }
@@ -3383,30 +3523,80 @@ var TokenService = {
     if (naming === CONFIG.naming.shadcn) {
       tokens.primary = hex;
     } else if (naming === CONFIG.naming.mui) {
-      tokens.main = hex;
-      tokens.light = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), 0.1));
-      tokens.dark = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), -0.1));
-      tokens.contrastText = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), -0.5));
-    } else if (naming === CONFIG.naming.ant) {
-      tokens.main = hex;
-      tokens.light = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), 0.1));
-      tokens.dark = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), -0.1));
-    } else if (naming === CONFIG.naming.bootstrap) {
-      tokens.main = hex;
-      tokens.light = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), 0.15));
-      tokens.dark = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), -0.15));
-    } else {
+      // MUI: Générer échelle complète 50-900 (comme Bootstrap)
+      // Pour compatibilité avec les sémantiques qui utilisent .100, .600, .700, etc.
+      var hsl = ColorService.hexToHsl(hex);
+      tokens['50'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, 0.4));
+      tokens['100'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, 0.3));
+      tokens['200'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, 0.2));
+      tokens['300'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, 0.1));
+      tokens['400'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, 0.05));
+      tokens['500'] = hex;  // main
+      tokens['600'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, -0.05));
+      tokens['700'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, -0.1));
+      tokens['800'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, -0.2));
+      tokens['900'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, -0.3));
 
-      tokens['50'] = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), 0.4));
-      tokens['100'] = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), 0.3));
-      tokens['200'] = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), 0.2));
-      tokens['300'] = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), 0.1));
-      tokens['400'] = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), 0.05));
+      // Ajouter aussi main/light/dark/contrastText pour export MUI palette
+      tokens.main = tokens['600'];
+      tokens.light = tokens['400'];
+      tokens.dark = tokens['800'];
+      tokens.contrastText = '#ffffff'; // Calculé par MUI normalement, valeur par défaut ici
+    } else if (naming === CONFIG.naming.ant) {
+      // Ant Design: Échelle 1-10 (sera mappée vers colorPrimaryBg, colorPrimary, etc.)
+      var hsl = ColorService.hexToHsl(hex);
+      tokens['1'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, 0.45));
+      tokens['2'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, 0.35));
+      tokens['3'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, 0.25));
+      tokens['4'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, 0.15));
+      tokens['5'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, 0.08));
+      tokens['6'] = hex;  // Couleur principale
+      tokens['7'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, -0.08));
+      tokens['8'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, -0.15));
+      tokens['9'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, -0.25));
+      tokens['10'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, -0.35));
+    } else if (naming === CONFIG.naming.bootstrap) {
+      // Bootstrap: Échelle 50-900 (PAS de 950)
+      var hsl = ColorService.hexToHsl(hex);
+      tokens['50'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, 0.4));
+      tokens['100'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, 0.3));
+      tokens['200'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, 0.2));
+      tokens['300'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, 0.1));
+      tokens['400'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, 0.05));
       tokens['500'] = hex;
-      tokens['600'] = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), -0.05));
-      tokens['700'] = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), -0.1));
-      tokens['800'] = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), -0.2));
-      tokens['900'] = ColorService.hslToHex(ColorService.adjustLightness(ColorService.hexToHsl(hex), -0.3));
+      tokens['600'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, -0.05));
+      tokens['700'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, -0.1));
+      tokens['800'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, -0.2));
+      tokens['900'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, -0.3));
+      // Pas de 950 pour Bootstrap
+    } else if (naming === CONFIG.naming.tailwind || naming === CONFIG.naming.chakra) {
+      // Tailwind & Chakra: Échelle complète 50-950
+      var hsl = ColorService.hexToHsl(hex);
+      tokens['50'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, 0.4));
+      tokens['100'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, 0.3));
+      tokens['200'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, 0.2));
+      tokens['300'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, 0.1));
+      tokens['400'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, 0.05));
+      tokens['500'] = hex;
+      tokens['600'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, -0.05));
+      tokens['700'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, -0.1));
+      tokens['800'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, -0.2));
+      tokens['900'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, -0.3));
+      tokens['950'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, -0.4));
+    } else {
+      // Custom: Échelle complète 50-950
+      var hsl = ColorService.hexToHsl(hex);
+      tokens['50'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, 0.4));
+      tokens['100'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, 0.3));
+      tokens['200'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, 0.2));
+      tokens['300'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, 0.1));
+      tokens['400'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, 0.05));
+      tokens['500'] = hex;
+      tokens['600'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, -0.05));
+      tokens['700'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, -0.1));
+      tokens['800'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, -0.2));
+      tokens['900'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, -0.3));
+      tokens['950'] = ColorService.hslToHex(ColorService.adjustLightness(hsl, -0.4));
     }
 
     return tokens;
@@ -3424,18 +3614,79 @@ var TokenService = {
         dark: ColorService.mixColors(brandHex, '#333333', 0.2),
         contrastText: '#ffffff'
       };
-      tokens.success = { main: '#4caf50', light: '#81c784', dark: '#388e3c', contrastText: '#ffffff' };
-      tokens.warning = { main: '#ff9800', light: '#ffb74d', dark: '#f57c00', contrastText: '#000000' };
-      tokens.error = { main: '#f44336', light: '#e57373', dark: '#d32f2f', contrastText: '#ffffff' };
-      tokens.info = { main: '#2196f3', light: '#64b5f6', dark: '#1976d2', contrastText: '#ffffff' };
-    } else {
 
+      // MUI System Colors: Générer ÉCHELLE COMPLÈTE 50-900 (comme Tailwind/Chakra)
+      // Au lieu de juste {main, light, dark} pour que les sémantiques puissent utiliser .600, .700, etc.
+      var systemHues = {
+        success: 142,  // Green
+        warning: 38,   // Orange
+        error: 0,      // Red
+        info: 217      // Blue
+      };
+
+      var stops = ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900'];
+
+      for (var sysColor in systemHues) {
+        if (systemHues.hasOwnProperty(sysColor)) {
+          var h = systemHues[sysColor];
+          tokens[sysColor] = {};
+
+          for (var i = 0; i < stops.length; i++) {
+            var stop = stops[i];
+            var stopNum = parseInt(stop);
+            var l = 0.95 - ((stopNum - 50) / 1000);
+            var s = 0.85;
+
+            if (stopNum >= 500) s = 0.90;
+
+            tokens[sysColor][stop] = ColorService.hslToHex({ h: h / 360, s: s, l: l });
+          }
+
+          // Ajouter aussi main/light/dark pour compatibilité MUI palette export
+          tokens[sysColor].main = tokens[sysColor]['600'];
+          tokens[sysColor].light = tokens[sysColor]['400'];
+          tokens[sysColor].dark = tokens[sysColor]['800'];
+          tokens[sysColor].contrastText = '#ffffff';
+        }
+      }
+    } else {
+      // Tailwind, Chakra, AntDesign, Bootstrap: Générer des échelles complètes
       tokens.primary = brandHex;
       tokens.secondary = ColorService.mixColors(brandHex, '#666666', 0.3);
-      tokens.success = '#22c55e';
-      tokens.warning = '#f59e0b';
-      tokens.error = '#ef4444';
-      tokens.info = '#3b82f6';
+
+      var systemHues = {
+        success: 142,  // Green
+        warning: 38,   // Orange
+        error: 0,      // Red
+        info: 217      // Blue
+      };
+
+      // Scale standard 50-950
+      var stops = ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900', '950'];
+
+      // Bootstrap s'arrête à 900
+      if (naming === CONFIG.naming.bootstrap) {
+        stops = ['100', '200', '300', '400', '500', '600', '700', '800', '900'];
+      }
+
+      for (var sysColor in systemHues) {
+        if (systemHues.hasOwnProperty(sysColor)) {
+          var h = systemHues[sysColor];
+          tokens[sysColor] = {};
+
+          for (var i = 0; i < stops.length; i++) {
+            var stop = stops[i];
+            var stopNum = parseInt(stop);
+            var l = 0.95 - ((stopNum - 50) / 1000);
+            var s = 0.85; // Saturation standard
+
+            // Ajustement léger
+            if (stopNum >= 500) s = 0.90;
+
+            tokens[sysColor][stop] = ColorService.hslToHex({ h: h / 360, s: s, l: l });
+          }
+        }
+      }
     }
 
     return tokens;
@@ -3444,16 +3695,8 @@ var TokenService = {
   generateGray: function (naming) {
     var tokens = {};
 
-    if (naming === CONFIG.naming.shadcn || naming === CONFIG.naming.ant) {
-
-      var steps = ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900', '950'];
-      steps.forEach(function (step, index) {
-        var lightness = 0.95 - (index * 0.09);
-        lightness = Math.max(0.05, Math.min(0.95, lightness));
-        tokens[step] = ColorService.hslToHex({ h: 0, s: 0, l: lightness });
-      });
-    } else if (naming === CONFIG.naming.mui) {
-
+    if (naming === CONFIG.naming.mui) {
+      // MUI: 50-900 (PAS de 950)
       tokens['50'] = '#fafafa';
       tokens['100'] = '#f5f5f5';
       tokens['200'] = '#eeeeee';
@@ -3464,14 +3707,35 @@ var TokenService = {
       tokens['700'] = '#616161';
       tokens['800'] = '#424242';
       tokens['900'] = '#212121';
+      // Pas de 950 pour MUI
+    } else if (naming === CONFIG.naming.bootstrap) {
+      // Bootstrap: 50-900 (PAS de 950)
+      var steps = ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900'];
+      steps.forEach(function (step, index) {
+        var lightness = 0.95 - (index * 0.095);
+        lightness = Math.max(0.05, Math.min(0.95, lightness));
+        tokens[step] = ColorService.hslToHex({ h: 0, s: 0, l: lightness });
+      });
+    } else if (naming === CONFIG.naming.tailwind || naming === CONFIG.naming.chakra || naming === CONFIG.naming.shadcn || naming === CONFIG.naming.ant) {
+      // Tailwind, Chakra, Shadcn, Ant: 50-950 (échelle complète)
+      var steps = ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900', '950'];
+      steps.forEach(function (step, index) {
+        var lightness = 0.95 - (index * 0.09);
+        lightness = Math.max(0.05, Math.min(0.95, lightness));
+        tokens[step] = ColorService.hslToHex({ h: 0, s: 0, l: lightness });
+      });
     } else {
-
-      tokens.white = '#ffffff';
-      tokens.light = '#f8f9fa';
-      tokens.secondary = '#6c757d';
-      tokens.dark = '#343a40';
-      tokens.black = '#000000';
+      // Custom: Échelle complète 50-950
+      var steps = ['50', '100', '200', '300', '400', '500', '600', '700', '800', '900', '950'];
+      steps.forEach(function (step, index) {
+        var lightness = 0.95 - (index * 0.09);
+        lightness = Math.max(0.05, Math.min(0.95, lightness));
+        tokens[step] = ColorService.hslToHex({ h: 0, s: 0, l: lightness });
+      });
     }
+
+    // Ajouter 'transparent' pour tous les frameworks (utilisé par action.tertiary, etc.)
+    tokens['transparent'] = 'transparent';
 
     return tokens;
   },
@@ -3480,12 +3744,31 @@ var TokenService = {
     var tokens = {};
 
     if (naming === CONFIG.naming.mui) {
-
+      // MUI: Multiples de 0.5 (base 4px)
+      // 0, 0.5, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 40
       [0, 0.5, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 40].forEach(function (multiplier) {
         tokens[multiplier] = multiplier * 4;
       });
+    } else if (naming === CONFIG.naming.ant) {
+      // Ant Design: Valeurs en pixels (4, 8, 12, 16, 24, 32, 48, 64, 80, 96)
+      [4, 8, 12, 16, 20, 24, 32, 40, 48, 64, 80, 96].forEach(function (value) {
+        tokens[value] = value;
+      });
+    } else if (naming === CONFIG.naming.bootstrap) {
+      // Bootstrap: Échelle $spacer 0-5 (multiples de 16px) + valeurs utilitaires en px
+      // $spacer-0=0, $spacer-1=4, $spacer-2=8, $spacer-3=16, $spacer-4=24, $spacer-5=48
+      var bsSpacers = { 0: 0, 1: 4, 2: 8, 3: 16, 4: 24, 5: 48 };
+      for (var bsKey in bsSpacers) {
+        tokens[bsKey] = bsSpacers[bsKey];
+      }
+    } else if (naming === CONFIG.naming.chakra || naming === CONFIG.naming.tailwind || naming === CONFIG.naming.shadcn) {
+      // Chakra & Tailwind: Échelle étendue
+      // 0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64, 72, 80, 96
+      [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 20, 24, 28, 32, 36, 40, 44, 48, 52, 56, 60, 64, 72, 80, 96].forEach(function (value) {
+        tokens[value] = value * 4;  // Convertir en pixels
+      });
     } else {
-
+      // Custom: Échelle générique
       [4, 8, 12, 16, 20, 24, 32, 40, 48, 64, 80, 96, 128, 160, 192, 224, 256].forEach(function (value) {
         tokens[value] = value;
       });
@@ -3498,25 +3781,123 @@ var TokenService = {
     var tokens = {};
 
     if (naming === CONFIG.naming.mui) {
+      // MUI: Utiliser les clés nominales du schéma (none, sm, md, lg, xl, full)
+      // Référence: https://mui.com/material-ui/customization/theme-components/
+      tokens.none = 0;
+      tokens.sm = 4;     // default MUI borderRadius
+      tokens.md = 8;
+      tokens.lg = 12;
+      tokens.xl = 16;
+      tokens.full = 9999;
+      tokens.borderRadius = 4;  // Alias pour shape.borderRadius MUI
+    } else if (naming === CONFIG.naming.ant) {
+      // Ant Design: xs, sm, md (default), lg, xl
       tokens.none = 0;
       tokens.xs = 2;
       tokens.sm = 4;
+      tokens.base = 6;
       tokens.md = 6;
       tokens.lg = 8;
       tokens.xl = 12;
       tokens['2xl'] = 16;
       tokens.full = 9999;
-    } else {
-
+    } else if (naming === CONFIG.naming.bootstrap) {
+      // Bootstrap: sm, default, md, lg, xl, 2xl, 3xl, pill
+      tokens.none = 0;
+      tokens.sm = 4;
+      tokens.base = 6;
+      tokens.md = 6;
+      tokens.lg = 8;
+      tokens.xl = 16;
+      tokens['2xl'] = 16;
+      tokens['3xl'] = 24;
+      tokens.pill = 9999;
+      tokens.full = 9999;
+    } else if (naming === CONFIG.naming.chakra) {
+      // Chakra UI: none, 2xs, xs, sm, md/base, lg, xl, 2xl, 3xl, 4xl, full
+      tokens.none = 0;
+      tokens['2xs'] = 1;
+      tokens.xs = 2;
+      tokens.sm = 4;
+      tokens.base = 6;
+      tokens.md = 6;
+      tokens.lg = 8;
+      tokens.xl = 12;
+      tokens['2xl'] = 16;
+      tokens['3xl'] = 24;
+      tokens['4xl'] = 32;
+      tokens.full = 9999;
+      tokens.max = 9999;
+    } else if (naming === CONFIG.naming.tailwind || naming === CONFIG.naming.shadcn) {
+      // Tailwind: none, sm, DEFAULT, md, lg, xl, 2xl, 3xl, full
       tokens.none = 0;
       tokens.sm = 2;
-      tokens.base = 4;
+      tokens.DEFAULT = 4;  // Tailwind utilise 'DEFAULT', pas 'base'
+      tokens.base = 4;     // Compatibilité
       tokens.md = 6;
       tokens.lg = 8;
       tokens.xl = 12;
       tokens['2xl'] = 16;
       tokens['3xl'] = 24;
       tokens.full = 9999;
+    } else {
+      // Custom: Échelle complète
+      tokens.none = 0;
+      tokens['2xs'] = 1;
+      tokens.xs = 2;
+      tokens.sm = 4;
+      tokens.base = 6;
+      tokens.md = 6;
+      tokens.lg = 8;
+      tokens.xl = 12;
+      tokens['2xl'] = 16;
+      tokens['3xl'] = 24;
+      tokens['4xl'] = 32;
+      tokens.full = 9999;
+    }
+
+    return tokens;
+  },
+
+  generateStroke: function (naming) {
+    var tokens = {};
+
+    if (naming === CONFIG.naming.mui) {
+      // MUI: borderWidth standard
+      tokens['0'] = 0;
+      tokens['1'] = 1;
+      tokens['2'] = 2;
+      tokens['3'] = 3;
+      tokens['4'] = 4;
+    } else if (naming === CONFIG.naming.ant) {
+      // Ant Design: lineWidth tokens
+      tokens['0'] = 0;
+      tokens['1'] = 1;
+      tokens['2'] = 2;
+      tokens['3'] = 3;
+      tokens['4'] = 4;
+    } else if (naming === CONFIG.naming.bootstrap) {
+      // Bootstrap: border-width
+      tokens['0'] = 0;
+      tokens['1'] = 1;
+      tokens['2'] = 2;
+      tokens['3'] = 3;
+      tokens['4'] = 4;
+      tokens['5'] = 5;
+    } else if (naming === CONFIG.naming.tailwind || naming === CONFIG.naming.shadcn || naming === CONFIG.naming.chakra) {
+      // Tailwind / Shadcn / Chakra: borderWidth (0, 1, 2, 4, 8)
+      tokens['0'] = 0;
+      tokens['1'] = 1;
+      tokens['2'] = 2;
+      tokens['4'] = 4;
+      tokens['8'] = 8;
+    } else {
+      // Custom: Échelle par défaut
+      tokens['0'] = 0;
+      tokens['1'] = 1;
+      tokens['2'] = 2;
+      tokens['4'] = 4;
+      tokens['8'] = 8;
     }
 
     return tokens;
@@ -3532,6 +3913,7 @@ var TokenService = {
       gray: TokenService.generateGray(naming),
       spacing: TokenService.generateSpacing(naming),
       radius: TokenService.generateRadius(naming),
+      stroke: TokenService.generateStroke(naming),
       typography: {
         'xs': 12,
         'sm': 14,
@@ -3903,14 +4285,14 @@ var Scanner = {
     if (!Scanner.valueMap) {
       await Scanner.initMap();
     }
-    checkFillsSafely(node, Scanner.valueMap, results);
+    await checkFillsSafely(node, Scanner.valueMap, results);
   },
 
   _checkStrokesSafely: async function (node, results) {
     if (!Scanner.valueMap) {
       await Scanner.initMap();
     }
-    checkStrokesSafely(node, Scanner.valueMap, results);
+    await checkStrokesSafely(node, Scanner.valueMap, results);
   },
 
   _checkCornerRadiusSafely: async function (node, results) {
@@ -4138,7 +4520,7 @@ var Fixer = {
       throw new Error('Variable not found: ' + variableId);
     }
 
-    var node = figma.getNodeById(result.nodeId);
+    var node = await figma.getNodeByIdAsync(result.nodeId);
     if (!node) {
       throw new Error('Node not found: ' + result.nodeId);
     }
@@ -4655,27 +5037,7 @@ figma.ui.onmessage = async function (msg) {
         }
         break;
 
-      case 'update-scopes':
-        try {
-          var result = updateAllVariableScopes();
 
-          // Force un délai pour s'assurer que Figma a bien appliqué les scopes
-          setTimeout(function () {
-            figma.notify(`✅ Scopes mis à jour: ${result.updated} variables modifiées. Relancez un scan maintenant.`);
-            postToUI({ type: 'scopes-updated', result: result });
-
-            // Rebuild index après un délai pour que les scopes soient bien appliqués
-            setTimeout(async function () {
-              await buildVariableIndex();
-              console.log('🔄 [UPDATE_SCOPES] Index reconstruit avec les nouveaux scopes');
-            }, 100);
-          }, 100);
-        } catch (e) {
-          console.error('❌ [UPDATE_SCOPES] Error:', e);
-          figma.notify("❌ Erreur lors de la mise à jour des scopes");
-          postToUI({ type: 'scopes-update-error', error: e.message });
-        }
-        break;
 
       case 'import':  // ⚡ CANONICAL: Active name used by UI
       case 'import-tokens':  // LEGACY ALIAS: Kept for compatibility
@@ -4807,14 +5169,17 @@ figma.ui.onmessage = async function (msg) {
         break;
 
       case 'preview-fix':
-        if (DEBUG) console.log('[PREVIEW] Starting preview-fix sequence', { indices: msg.indices, variableId: msg.variableId });
+        console.log('[PREVIEW] 🎯 Starting preview-fix sequence', { indices: msg.indices, variableId: msg.variableId });
 
         (async function () {
           var results = Scanner.lastScanResults;
+          console.log('[PREVIEW] 📋 Scanner.lastScanResults:', results ? results.length : 'NULL');
+
           var variable = await FigmaService.getVariableById(msg.variableId);
+          console.log('[PREVIEW] 🔍 Variable loaded:', variable ? variable.name : 'NOT FOUND');
 
           if (!variable) {
-            console.error('[PREVIEW] Variable NOT FOUND in Figma:', msg.variableId);
+            console.error('[PREVIEW] ❌ Variable NOT FOUND in Figma:', msg.variableId);
             return;
           }
 
@@ -4833,7 +5198,7 @@ figma.ui.onmessage = async function (msg) {
               continue;
             }
 
-            var node = figma.getNodeById(res.nodeId);
+            var node = await figma.getNodeByIdAsync(res.nodeId);
             if (!node || node.removed) {
               if (DEBUG) console.warn('[PREVIEW] Node not found or removed:', res.nodeId);
               continue;
@@ -4870,7 +5235,7 @@ figma.ui.onmessage = async function (msg) {
             var res = results[index];
             if (!res) continue;
 
-            var node = figma.getNodeById(res.nodeId);
+            var node = await figma.getNodeByIdAsync(res.nodeId);
             if (!node || node.removed) continue;
 
             // Restaurer l'état initial
@@ -4892,14 +5257,21 @@ figma.ui.onmessage = async function (msg) {
         break;
 
       case 'highlight-nodes':
-        var results = Scanner.lastScanResults;
-        var nodes = (msg.indices || []).map(function (idx) {
-          var res = results[idx];
-          return res ? figma.getNodeById(res.nodeId) : null;
-        }).filter(function (n) { return n !== null; });
-        if (nodes.length > 0) {
-          figma.currentPage.selection = nodes;
-        }
+        (async function () {
+          var results = Scanner.lastScanResults;
+          var nodes = [];
+          for (var i = 0; i < (msg.indices || []).length; i++) {
+            var idx = msg.indices[i];
+            var res = results[idx];
+            if (res) {
+              var node = await figma.getNodeByIdAsync(res.nodeId);
+              if (node) nodes.push(node);
+            }
+          }
+          if (nodes.length > 0) {
+            figma.currentPage.selection = nodes;
+          }
+        })();
         break;
 
       case 'undo-fix':
@@ -5234,6 +5606,11 @@ function hexToRgb(hex) {
     return hex;
   }
 
+  // Gérer 'transparent' comme couleur spéciale (RGBA avec alpha 0)
+  if (typeof hex === 'string' && hex.toLowerCase() === 'transparent') {
+    return { r: 1, g: 1, b: 1, a: 0 };
+  }
+
   // Sinon, convertir depuis hex string
   if (typeof hex === 'string') {
     hex = hex.replace("#", "");
@@ -5486,101 +5863,78 @@ function createScopeContext(figmaVar, tokenKey, category) {
 // - PRIMITIVES: Scopes VIDES pour ne JAMAIS être proposées dans le scan
 
 var primitiveScopesMapping = {
-  brand: [],      // ❌ Jamais proposé - Utiliser les sémantiques (bg-*, action-*, etc.)
-  gray: [],       // ❌ Jamais proposé - Utiliser les sémantiques (text-*, bg-*, etc.)
-  system: [],     // ❌ Jamais proposé - Utiliser les sémantiques (status-*, etc.)
-  border: [],     // ❌ Jamais proposé - Utiliser les sémantiques (border-*)
-  radius: ["CORNER_RADIUS"],     // ✅ FIX: Applique le scope CORNER_RADIUS aux primitives radius
-  spacing: ["GAP", "WIDTH_HEIGHT", "TOP_PADDING", "BOTTOM_PADDING", "LEFT_PADDING", "RIGHT_PADDING", "INDIVIDUAL_PADDING"],    // ✅ FIX: Applique les scopes spacing aux primitives
-  stroke: ["STROKE_FLOAT"],      // ✅ FIX: Applique le scope STROKE_FLOAT aux primitives stroke
-  typography: ["FONT_SIZE"]  // ✅ FIX: Applique le scope FONT_SIZE aux primitives typography
+  brand: [],       // Primitives = pas de scope (ALL_SCOPES par défaut)
+  gray: [],        // Primitives = pas de scope
+  system: [],      // Primitives = pas de scope
+  border: [],      // Primitives = pas de scope
+  radius: [],      // Primitives = pas de scope
+  spacing: [],     // Primitives = pas de scope
+  stroke: [],      // Primitives = pas de scope
+  typography: []   // Primitives = pas de scope
 };
 
+// semanticScopesMapping : UNION de tous les scopes possibles par famille
+// Utilisé par le système de scan/suggestions pour proposer les variables
+// Le scoping PRÉCIS par token est géré par getScopesForSemanticKey() à l'import
 var semanticScopesMapping = {
-  // ===== COULEURS DE TEXTE =====
   text: ["TEXT_FILL"],
-  // Intention: Uniquement pour le texte
-  // Exemples: text-primary, text-secondary, text-muted
-
-  // ===== COULEURS DE FOND =====
   bg: ["FRAME_FILL", "SHAPE_FILL"],
   background: ["FRAME_FILL", "SHAPE_FILL"],
-  // Intention: Fonds de frames et shapes (PAS de texte)
-  // Exemples: bg-canvas, bg-surface, bg-elevated
-
   surface: ["FRAME_FILL", "SHAPE_FILL"],
-  // Intention: Surfaces spéciales (overlays, modals, cards)
-  // Exemples: surface-overlay, surface-elevated
-
-  // ===== COULEURS DE BORDURE =====
   border: ["STROKE_COLOR"],
-  // Intention: Uniquement pour les strokes (couleur)
-  // Exemples: border-default, border-muted, border-focus
-
   ring: ["STROKE_COLOR"],
-  // Intention: Anneaux de focus (strokes uniquement)
-  // Exemples: ring-focus, ring-offset
-
   divider: ["STROKE_COLOR"],
-  // Intention: Lignes de séparation entre sections
-  // Exemples: divider-default
-
-  // ===== COULEURS D'ACTION (BOUTONS, COMPOSANTS INTERACTIFS) =====
-  action: ["FRAME_FILL", "SHAPE_FILL", "TEXT_FILL"],
-  // Intention: Fonds de boutons ET texte interactif (liens, labels)
-  // Exemples: action-primary-default, action-secondary-hover
-  // Note: Inclut TEXT_FILL pour les liens et textes d'action
-
-  // ===== COULEURS DE STATUT (BADGES, ALERTS, NOTIFICATIONS) =====
-  status: ["FRAME_FILL", "SHAPE_FILL", "TEXT_FILL", "STROKE_COLOR"],
-  // Intention: Badges (fond/contour) ou alertes (texte)
-  // Exemples: status-success, status-warning
-  // Note: Polyvalent pour couvrir tous les cas de feedback visuel
-
-  // ===== OVERLAY (FONDS SEMI-TRANSPARENTS) =====
+  action: ["FRAME_FILL", "SHAPE_FILL", "TEXT_FILL"],     // Union: fond + texte de bouton
+  status: ["FRAME_FILL", "SHAPE_FILL", "TEXT_FILL", "STROKE_COLOR"], // Union: bg + fg + border
   overlay: ["FRAME_FILL", "SHAPE_FILL"],
-  // Intention: Fonds pour modals, dim effects, scrim
-  // Exemples: overlay-dim, overlay-scrim
-
-  // ===== ACCENT (LEGACY - pour compatibilité) =====
   accent: ["FRAME_FILL", "SHAPE_FILL", "STROKE_COLOR"],
-  // Note: Préférer action.* ou status.* pour plus de clarté
-
-  // ===== COULEURS DE CONTRASTE (LEGACY - DEPRECATED) =====
   on: ["TEXT_FILL"],
-  // Note: Préférer text.* à la place
-
-  // ===== DIMENSIONS (FLOAT) =====
   radius: ["CORNER_RADIUS"],
-  // Intention: Arrondis des coins uniquement
-  // Exemples: radius-sm, radius-md, radius-lg
-
-  space: ["GAP", "TOP_PADDING", "BOTTOM_PADDING", "LEFT_PADDING", "RIGHT_PADDING", "INDIVIDUAL_PADDING"],
-  // Intention: Espacements (gap et padding) - PAS pour dimensionner (width/height)
-  // Exemples: space-xs, space-sm, space-md
-
-  // ===== ÉPAISSEURS DE BORDURE =====
+  space: ["GAP", "WIDTH_HEIGHT"],
   stroke: ["STROKE_FLOAT"],
-  // Intention: Épaisseur des bordures uniquement
-  // Exemples: stroke-thin, stroke-default, stroke-thick
-
-  // ===== TYPOGRAPHIE =====
   fontSize: ["FONT_SIZE"],
-  // Intention: Taille de police uniquement
-  // Exemples: fontSize-sm, fontSize-base, fontSize-lg
-
   fontWeight: ["FONT_WEIGHT"],
-  // Intention: Graisse de police
-  // Exemples: fontWeight-normal, fontWeight-bold
-
   lineHeight: ["LINE_HEIGHT"],
-  // Intention: Hauteur de ligne
-  // Exemples: lineHeight-tight, lineHeight-normal
-
   letterSpacing: ["LETTER_SPACING"]
-  // Intention: Espacement entre lettres
-  // Exemples: letterSpacing-tight, letterSpacing-wide
 };
+
+/**
+ * getScopesForSemanticKey: Détermine les scopes Figma précis pour un token sémantique
+ * Plus granulaire que semanticScopesMapping seul : tient compte des sous-clés
+ * @param {string} semanticKey - ex: 'bg.canvas', 'action.primary.text', 'status.success.border'
+ * @returns {Array<string>} Scopes Figma à appliquer
+ */
+function getScopesForSemanticKey(semanticKey) {
+  var parts = semanticKey.split('.');
+
+  // === ACTION : scope précis selon le sous-type ===
+  // action.*.text → TEXT_FILL (texte du bouton)
+  // action.*.default/hover/active/disabled → FRAME_FILL, SHAPE_FILL (fond du bouton)
+  if (parts[0] === 'action') {
+    var lastPart = parts[parts.length - 1];
+    if (lastPart === 'text') return ['TEXT_FILL'];
+    return ['FRAME_FILL', 'SHAPE_FILL'];
+  }
+
+  // === STATUS : scope précis selon le sous-type ===
+  // status.*.bg → FRAME_FILL, SHAPE_FILL
+  // status.*.fg → TEXT_FILL
+  // status.*.border → STROKE_COLOR
+  if (parts[0] === 'status') {
+    var lastPart = parts[parts.length - 1];
+    if (lastPart === 'bg') return ['FRAME_FILL', 'SHAPE_FILL'];
+    if (lastPart === 'fg') return ['TEXT_FILL'];
+    if (lastPart === 'border') return ['STROKE_COLOR'];
+    return ['FRAME_FILL', 'SHAPE_FILL'];
+  }
+
+  // === TEXT : toujours TEXT_FILL ===
+  if (parts[0] === 'text') return ['TEXT_FILL'];
+
+  // === Pour les autres familles, utiliser semanticScopesMapping ===
+  var family = parts[0];
+  return semanticScopesMapping[family] || [];
+}
 
 function inferPrimitiveScopes(context) {
   if (context.kind !== "primitive") return [];
@@ -5704,7 +6058,8 @@ async function isSemanticVariable(variableName, variableOrMetadata) {
     var folder = parts[0].toLowerCase();
 
     // Dossiers structurés acceptés comme sémantiques
-    var semanticFolders = ['space', 'spacing', 'radius', 'gap', 'padding', 'margin', 'size', 'sizing', 'font', 'ui', 'theme', 'mode'];
+    var semanticFolders = ['space', 'spacing', 'radius', 'gap', 'padding', 'margin', 'size', 'sizing', 'font', 'ui', 'theme', 'mode',
+      'bg', 'background', 'text', 'border', 'surface', 'action', 'status', 'on', 'ring', 'accent', 'brand', 'primary', 'secondary', 'success', 'warning', 'error', 'info', 'destructive', 'stroke'];
     if (semanticFolders.indexOf(folder) !== -1) {
       return true; // space/sm, radius/lg, etc. sont sémantiques
     }
@@ -5831,7 +6186,7 @@ async function isSemanticVariable(variableName, variableOrMetadata) {
   }
 
   // Si c'est dans une collection "Sémantique" ou "Tokens", on accepte plus largement
-  var semanticCollections = ['semantic', 'sémantique', 'tokens', 'theme', 'mode'];
+  var semanticCollections = ['semantic', 'sémantique', 'tokens', 'theme', 'mode', 'system', 'brand', 'spacing', 'radius'];
   for (var k = 0; k < semanticCollections.length; k++) {
     if (colName.indexOf(semanticCollections[k]) !== -1) {
       return true;
@@ -5839,7 +6194,8 @@ async function isSemanticVariable(variableName, variableOrMetadata) {
   }
 
   // ✅ STRICT: Collections de primitives à rejeter
-  var primitiveCollections = ['spacing', 'radius', 'sizing', 'border', 'typography', 'grayscale', 'brand colors', 'primitive', 'primitives', 'core'];
+  // NOTE: spacing et radius sont SÉMANTIQUES (tokens de design system), pas primitives
+  var primitiveCollections = ['grayscale', 'brand colors', 'primitive', 'primitives', 'core'];
   for (var m = 0; m < primitiveCollections.length; m++) {
     if (colName.indexOf(primitiveCollections[m]) !== -1) {
       // Si on est dans une collection primitive ET qu'on n'a pas de préfixe sémantique, c'est une primitive
@@ -6271,8 +6627,25 @@ async function buildVariableIndex() {
       var isSemantic = await isSemanticVariable(variable.name, variable);
       if (isSemantic) countSemantic++; else countPrimitive++;
 
-      var scopes = variable.scopes || [];
+      // Convert Figma scopes (enum values) to string array
+      var scopes = [];
+      if (variable.scopes && variable.scopes.length > 0) {
+        for (var s = 0; s < variable.scopes.length; s++) {
+          // Figma scopes are enum values like "FRAME_FILL", convert to string
+          scopes.push(String(variable.scopes[s]));
+        }
+      }
       if (scopes.length === 0) countNoScopes++;
+
+      // 🔍 DEBUG: Log scopes format for first color variable
+      if (variable.resolvedType === 'COLOR' && DEBUG && totalVariables < 3) {
+        console.log('[SCOPE DEBUG]', variable.name, {
+          scopesRaw: variable.scopes,
+          scopesType: typeof variable.scopes,
+          scopesIsArray: Array.isArray(variable.scopes),
+          scopesKeys: variable.scopes ? Object.keys(variable.scopes) : null
+        });
+      }
 
       // 🔍 DEBUG: Log spacing/radius tokens to diagnose
       if (variable.name.toLowerCase().indexOf('space') !== -1 ||
@@ -6295,7 +6668,7 @@ async function buildVariableIndex() {
       for (var m = 0; m < collection.modes.length; m++) {
         var mode = collection.modes[m];
         var modeId = mode.modeId;
-        var resolvedValue = resolveVariableValueRecursively(variable, modeId);
+        var resolvedValue = await resolveVariableValueRecursively(variable, modeId);
 
         if (!resolvedValue) continue;
 
@@ -6341,6 +6714,20 @@ async function buildVariableIndex() {
         } else if (variable.resolvedType === 'FLOAT') {
           var value = resolvedValue;
 
+          // DEBUG: Log FLOAT variables to diagnose indexing issues
+          var isSpacingOrRadius = variable.name.toLowerCase().indexOf('space') !== -1 ||
+            variable.name.toLowerCase().indexOf('spacing') !== -1 ||
+            variable.name.toLowerCase().indexOf('radius') !== -1;
+
+          if (DEBUG && isSpacingOrRadius) {
+            console.log('[INDEX FLOAT DEBUG]', variable.name, {
+              resolvedValue: resolvedValue,
+              valueType: typeof value,
+              isObject: typeof value === 'object',
+              isAlias: value && typeof value === 'object' && value.type === 'VARIABLE_ALIAS'
+            });
+          }
+
           // Resolve Alias if needed (shallow resolution)
           if (value && typeof value === 'object' && value.type === 'VARIABLE_ALIAS') {
             try {
@@ -6355,6 +6742,13 @@ async function buildVariableIndex() {
                 // This is complex, let's keep it simple: resolve for the primitive's default mode
                 var r = aliasedVar.resolveForConsumer(targetModeId);
                 if (r) value = r.value;
+
+                if (DEBUG && isSpacingOrRadius) {
+                  console.log('[INDEX FLOAT DEBUG] After alias resolution:', variable.name, {
+                    resolvedValue: value,
+                    valueType: typeof value
+                  });
+                }
               }
             } catch (e) {
               if (DEBUG) console.log('Error resolving alias for ' + variable.name, e);
@@ -6362,6 +6756,13 @@ async function buildVariableIndex() {
           }
 
           value = typeof value === 'number' ? value : parseFloat(value);
+
+          if (DEBUG && isSpacingOrRadius) {
+            console.log('[INDEX FLOAT DEBUG] After parseFloat:', variable.name, {
+              value: value,
+              isNaN: isNaN(value)
+            });
+          }
 
           if (!isNaN(value)) {
             // Update meta with resolved value for scoring accuracy
@@ -6381,6 +6782,17 @@ async function buildVariableIndex() {
             VariableIndex.floatPreferred.get(value).push(meta);
 
             indexedVariables++;
+
+            if (DEBUG && isSpacingOrRadius) {
+              console.log('[INDEX FLOAT DEBUG] ✅ Indexed:', variable.name, '=', value);
+            }
+          } else {
+            if (DEBUG && isSpacingOrRadius) {
+              console.warn('[INDEX FLOAT DEBUG] ❌ NOT indexed (NaN):', variable.name, {
+                originalResolvedValue: resolvedValue,
+                finalValue: value
+              });
+            }
           }
         }
       }
@@ -6712,8 +7124,8 @@ async function validateScopesAndFiltering() {
     { name: 'bg-canvas', expectedFamily: 'background', expectedScopes: ['FRAME_FILL', 'SHAPE_FILL'] },
     { name: 'text-primary', expectedFamily: 'text', expectedScopes: ['TEXT_FILL'] },
     { name: 'border-default', expectedFamily: 'border', expectedScopes: ['STROKE_COLOR'] },
-    { name: 'action-primary-default', expectedFamily: 'action', expectedScopes: ['FRAME_FILL', 'SHAPE_FILL'] },
-    { name: 'status-success', expectedFamily: 'status', expectedScopes: ['FRAME_FILL', 'SHAPE_FILL', 'TEXT_FILL'] },
+    { name: 'action-primary-default', expectedFamily: 'action', expectedScopes: ['FRAME_FILL', 'SHAPE_FILL', 'TEXT_FILL'] },
+    { name: 'status-success', expectedFamily: 'status', expectedScopes: ['FRAME_FILL', 'SHAPE_FILL', 'TEXT_FILL', 'STROKE_COLOR'] },
     { name: 'on-primary', expectedFamily: 'on', expectedScopes: ['TEXT_FILL'] },
     { name: 'ring-focus', expectedFamily: 'ring', expectedScopes: ['STROKE_COLOR'] },
     { name: 'surface-overlay', expectedFamily: 'surface', expectedScopes: ['FRAME_FILL', 'SHAPE_FILL'] }
@@ -6770,6 +7182,11 @@ async function validateScopesAndFiltering() {
 function applyScopes(figmaVar, scopes, debugLabel) {
   // Guard: vérifier que c'est bien une vraie Variable Figma
   if (!figmaVar || !figmaVar.id || typeof figmaVar.name !== 'string') {
+    return;
+  }
+
+  // Guard: si scopes vide, ne pas écraser (garder ALL_SCOPES par défaut des primitives)
+  if (!scopes || scopes.length === 0) {
     return;
   }
 
@@ -6843,88 +7260,7 @@ function applyVariableScopes(figmaVar, context) {
   applyScopes(figmaVar, scopes, debugLabel);
 }
 
-/**
- * updateAllVariableScopes: Met à jour les scopes de toutes les variables existantes
- * Utile après une modification du primitiveScopesMapping ou semanticScopesMapping
- */
-async function updateAllVariableScopes() {
-  console.log('🔄 [UPDATE_SCOPES] Updating scopes for all existing variables...');
 
-  var collections = (globalCollectionsCache || []);
-  var totalUpdated = 0;
-  var totalSkipped = 0;
-
-  for (var c = 0; c < collections.length; c++) {
-    var collection = collections[c];
-    var collectionName = (collection.name || '').toLowerCase();
-
-    // Déterminer la catégorie basée sur le nom de la collection
-    var primitiveCollections = ['spacing', 'radius', 'sizing', 'border', 'typography', 'grayscale', 'brand', 'system', 'primitive', 'primitives', 'core', 'stroke'];
-    var isPrimitiveCollection = primitiveCollections.some(function (pc) {
-      return collectionName.indexOf(pc) !== -1;
-    });
-
-    for (var v = 0; v < collection.variableIds.length; v++) {
-      var variableId = collection.variableIds[v];
-      var variable = await figma.variables.getVariableByIdAsync(variableId);
-      if (!variable) continue;
-
-      try {
-        // Détecter la catégorie spécifique de la variable dans la collection primitive
-        var category = 'semantic'; // Par défaut
-
-        if (isPrimitiveCollection) {
-          // Détecter quelle catégorie de primitive
-          if (collectionName.indexOf('radius') !== -1) {
-            category = 'radius';
-          } else if (collectionName.indexOf('spacing') !== -1 || collectionName.indexOf('space') !== -1) {
-            category = 'spacing';
-          } else if (collectionName.indexOf('stroke') !== -1 || collectionName.indexOf('border') !== -1) {
-            category = 'stroke';
-          } else if (collectionName.indexOf('typography') !== -1 || collectionName.indexOf('font') !== -1) {
-            category = 'typography';
-          } else if (collectionName.indexOf('brand') !== -1) {
-            category = 'brand';
-          } else if (collectionName.indexOf('gray') !== -1 || collectionName.indexOf('grey') !== -1) {
-            category = 'gray';
-          } else if (collectionName.indexOf('system') !== -1) {
-            category = 'system';
-          } else {
-            category = 'primitive'; // Fallback générique
-          }
-        }
-
-        // Créer le contexte pour inférer les scopes appropriés
-        var context = createScopeContext(variable, variable.name, category);
-
-        // Calculer les nouveaux scopes
-        var newScopes = inferScopes(context);
-
-        // Vérifier si les scopes ont changé
-        var currentScopes = variable.scopes || [];
-        var scopesChanged = JSON.stringify(currentScopes.sort()) !== JSON.stringify(newScopes.sort());
-
-        if (scopesChanged) {
-          applyScopes(variable, newScopes, 'UPDATE_ALL');
-          totalUpdated++;
-          console.log('✅ [UPDATE_SCOPES] Updated:', variable.name, 'category:', category, '→', newScopes);
-        } else {
-          totalSkipped++;
-        }
-      } catch (error) {
-        console.warn('⚠️ [UPDATE_SCOPES] Error updating scopes for', variable.name, error);
-      }
-    }
-  }
-
-  console.log('✅ [UPDATE_SCOPES] Complete:', {
-    updated: totalUpdated,
-    skipped: totalSkipped,
-    total: totalUpdated + totalSkipped
-  });
-
-  return { updated: totalUpdated, skipped: totalSkipped };
-}
 
 function getOrCreateCollection(name, overwrite) {
   var collections = (globalCollectionsCache || []);
@@ -7124,7 +7460,9 @@ function normalizeResolvedValue(value, variableType) {
 // Fonction helper pour convertir resolvedValue en valeur Figma selon le type
 function getProcessedValueFromResolved(resolvedValue, variableType) {
   if (variableType === "COLOR") {
-    if (typeof resolvedValue === 'string' && /^#[0-9A-Fa-f]{3,8}$/.test(resolvedValue)) {
+    if (typeof resolvedValue === 'string' && resolvedValue.toLowerCase() === 'transparent') {
+      return { r: 1, g: 1, b: 1, a: 0 };
+    } else if (typeof resolvedValue === 'string' && /^#[0-9A-Fa-f]{3,8}$/.test(resolvedValue)) {
       return hexToRgb(resolvedValue);
     } else {
       console.warn(`Invalid color resolvedValue: ${resolvedValue}`);
@@ -7185,59 +7523,15 @@ async function createOrUpdateVariable(collection, name, type, value, category, o
 
   if (!variable) {
     try {
-      // ✅ Calculer les scopes AVANT la création
-      var scopesToApply = [];
-
-      // Déterminer les scopes selon la catégorie (scopes officiels Figma)
-      if (category === 'radius') {
-        scopesToApply = ['CORNER_RADIUS'];
-      } else if (category === 'spacing') {
-        scopesToApply = ['GAP', 'WIDTH_HEIGHT', 'TOP_PADDING', 'BOTTOM_PADDING', 'LEFT_PADDING', 'RIGHT_PADDING', 'INDIVIDUAL_PADDING'];
-      } else if (category === 'stroke') {
-        scopesToApply = ['STROKE_WEIGHT']; // Pas STROKE_FLOAT, mais STROKE_WEIGHT
-      } else if (category === 'typography') {
-        scopesToApply = ['FONT_SIZE', 'LINE_HEIGHT', 'LETTER_SPACING'];
-      } else if (category === 'brand' || category === 'gray' || category === 'system') {
-        // Couleurs : laisser tous les scopes (comportement par défaut)
-        scopesToApply = [];
-      }
-
-      console.log('🔍 [SCOPE_CALC] category:', category, '→ scopes:', scopesToApply);
-      // Pour les couleurs (brand, gray, system), laisser vide pour l'instant
-
       // Créer la variable
       variable = figma.variables.createVariable(name, collection, type);
-
-      // Appliquer les scopes IMMÉDIATEMENT (même tick d'exécution)
-      if (scopesToApply.length > 0) {
-        variable.scopes = scopesToApply;
-        console.log('✅ Variable created:', name, 'category:', category, 'scopes:', scopesToApply, 'actual:', variable.scopes);
-      } else {
-        console.log('✅ Variable created:', name, 'category:', category, '(no specific scopes)');
-      }
-
-      if (DEBUG) console.log('✅ Variable created:', name);
-
-      // Après création, récupérer à nouveau la variable pour s'assurer que toutes les propriétés sont définies
-      if (variable && variable.id) {
-        variable = await figma.variables.getVariableByIdAsync(variable.id);
-        if (!variable) {
-          console.error('❌ Created variable not found by ID');
-          return null;
-        }
-        if (DEBUG) console.log('✅ Variable retrieved after creation:', variable.name, 'collection:', variable.variableCollection ? variable.variableCollection.name : 'NONE');
-      }
+      if (DEBUG) console.log('✅ Variable created:', name, 'category:', category);
     } catch (e) {
       console.error('❌ Failed to create variable:', name, e);
       return null;
     }
   } else {
     if (DEBUG) console.log('📝 Variable exists:', name);
-
-    // ✅ FIX: Appliquer les scopes aussi pour les variables existantes
-    // (pas seulement lors de la création)
-    var context = createScopeContext(variable, hintKey || name, category);
-    applyVariableScopes(variable, context);
   }
 
   if (variable) {
@@ -7275,16 +7569,15 @@ async function createOrUpdateVariable(collection, name, type, value, category, o
       }
     }
 
-    // Réappliquer les scopes après définition de la valeur (au cas où)
-    var context = createScopeContext(variable, hintKey || name, category);
-    applyVariableScopes(variable, context);
+    // ✅ PRIMITIVES : PAS de scopes (gardent ALL_SCOPES par défaut dans Figma)
+    // Les scopes sont appliqués UNIQUEMENT aux sémantiques, via applySemanticScopes()
   }
 
   return variable;
 }
 
 async function importTokensToFigma(tokens, naming, overwrite) {
-  if (DEBUG) console.log('🔄 ENGINE SYNC: Starting importTokensToFigma (Refactored) - PATCH 747 ACTIVE');
+  console.log('[IMPORT] Starting importTokensToFigma, naming:', naming, 'overwrite:', overwrite);
 
   // Pre-fetch all local data once to avoid 1000s of API calls
   var allLocalVariables = await figma.variables.getLocalVariablesAsync();
@@ -7298,23 +7591,6 @@ async function importTokensToFigma(tokens, naming, overwrite) {
       }
     }
     return null;
-  }
-
-  // 🔍 DIAGNOSTIC: Vérifier la structure des tokens sémantiques reçus
-  if (tokens.semantic) {
-    var semKeys = Object.keys(tokens.semantic);
-    console.log(`📦 [SYNC_DIAGNOSTIC] Received ${semKeys.length} semantic tokens for sync.`);
-    console.log(`📦 [SYNC_DIAGNOSTIC] Sample keys: ${semKeys.slice(0, 10).join(', ')}`);
-    var hasDimensions = semKeys.some(function (k) { return k.indexOf('space.') === 0 || k.indexOf('radius.') === 0; });
-    console.log(`📦 [SYNC_DIAGNOSTIC] Has dimension tokens (space/radius): ${hasDimensions}`);
-  }
-  if (tokens && tokens.semantic) {
-    var firstSemanticKey = Object.keys(tokens.semantic)[0];
-    if (firstSemanticKey) {
-      var firstToken = tokens.semantic[firstSemanticKey];
-      if (DEBUG) console.log(`🔍 [IMPORT_DIAGNOSTIC] First semantic token (${firstSemanticKey}):`, JSON.stringify(firstToken, null, 2));
-      if (DEBUG) console.log(`🔍 [IMPORT_DIAGNOSTIC] Has modes structure: ${!!(firstToken && firstToken.modes)}`);
-    }
   }
 
   // 1. Save naming preference
@@ -7332,18 +7608,27 @@ async function importTokensToFigma(tokens, naming, overwrite) {
   // --- PRIMITIVES SYNC ---
 
   if (tokens.brand) {
-    var brandCollection = getOrCreateCollection("Brand Colors", overwrite);
+    // 🆕 Utiliser nom de collection framework-spécifique
+    var brandCollectionName = getCollectionName('brand', naming);
+    var brandCollection = getOrCreateCollection(brandCollectionName, overwrite);
+
     for (var key in tokens.brand) {
       if (!tokens.brand.hasOwnProperty(key)) continue;
-      // Nettoyage: '50', '100' au lieu de 'primary-50' car déjà dans collection 'Brand Colors'
-      var varName = key;
+
+      // 🆕 Utiliser nom de variable framework-spécifique
+      var varName = getPrimitiveVariableName('brand', key, naming);
+
+      if (DEBUG) console.log(`🎨 [BRAND] Creating: "${varName}" (internal: ${key}, framework: ${naming})`);
+
       var variable = await createOrUpdateVariable(brandCollection, varName, "COLOR", hexToRgb(tokens.brand[key]), "brand", overwrite, undefined);
       if (variable) registerPrimitive('brand', key, variable.id);
     }
   }
 
   if (tokens.system) {
-    var systemCollection = getOrCreateCollection("System Colors", overwrite);
+    // 🆕 Utiliser nom de collection framework-spécifique
+    var systemCollectionName = getCollectionName('system', naming);
+    var systemCollection = getOrCreateCollection(systemCollectionName, overwrite);
 
     // Aplatir la structure imbriquée (ex: system.success.500 -> success-500)
     for (var colorFamily in tokens.system) {
@@ -7356,13 +7641,20 @@ async function importTokensToFigma(tokens, naming, overwrite) {
         for (var stop in familyValue) {
           if (!familyValue.hasOwnProperty(stop)) continue;
           var flatKey = colorFamily + '-' + stop;
-          var varName = colorFamily + ' / ' + stop;
+
+          // 🆕 Utiliser nom de variable framework-spécifique
+          var varName = getPrimitiveVariableName('system', flatKey, naming);
+
+          if (DEBUG) console.log(`🟢 [SYSTEM] Creating: "${varName}" (internal: ${flatKey}, framework: ${naming})`);
+
           var variable = await createOrUpdateVariable(systemCollection, varName, "COLOR", hexToRgb(familyValue[stop]), "system", overwrite, undefined);
           if (variable) registerPrimitive('system', flatKey, variable.id);
         }
       } else {
         // Format legacy (plat)
-        var varName = colorFamily.replace(/\.(default|text|contrastText)/i, ' / $1').replace(/\./g, ' / ');
+        // 🆕 Utiliser nom de variable framework-spécifique
+        var varName = getPrimitiveVariableName('system', colorFamily, naming);
+
         var variable = await createOrUpdateVariable(systemCollection, varName, "COLOR", hexToRgb(familyValue), "system", overwrite, undefined);
         if (variable) registerPrimitive('system', colorFamily, variable.id);
       }
@@ -7370,11 +7662,18 @@ async function importTokensToFigma(tokens, naming, overwrite) {
   }
 
   if (tokens.gray) {
-    var grayCollection = getOrCreateCollection("Grayscale", overwrite);
+    // 🆕 Utiliser nom de collection framework-spécifique
+    var grayCollectionName = getCollectionName('gray', naming);
+    var grayCollection = getOrCreateCollection(grayCollectionName, overwrite);
+
     for (var gKey in tokens.gray) {
       if (!tokens.gray.hasOwnProperty(gKey)) continue;
-      // Nettoyage: '50' au lieu de 'gray-50' (Grayscale / 50)
-      var grayName = gKey;
+
+      // 🆕 Utiliser nom de variable framework-spécifique
+      var grayName = getPrimitiveVariableName('gray', gKey, naming);
+
+      if (DEBUG) console.log(`⚫ [GRAY] Creating: "${grayName}" (internal: ${gKey}, framework: ${naming})`);
+
       var variable = await createOrUpdateVariable(grayCollection, grayName, "COLOR", hexToRgb(tokens.gray[gKey]), "gray", overwrite, undefined);
       if (variable) {
         registerPrimitive('gray', gKey, variable.id);
@@ -7383,22 +7682,87 @@ async function importTokensToFigma(tokens, naming, overwrite) {
     }
   }
 
+  // --- SPACING PRIMITIVES ---
+  //
+  // Objectif :
+  // - Garantir que les primitives de spacing ont des valeurs numériques réelles (≠ 0)
+  // - S'aligner sur la nomenclature de la lib sélectionnée (Tailwind, MUI, Ant, Custom, etc.)
+  //
+  // Problème observé :
+  // - Dans certains flux (imports legacy / presets partiels), tokens.spacing peut exister
+  //   mais toutes les valeurs sont à 0, ce qui casse :
+  //   - les suggestions du Scan & Fix (aucun match pour 4/8/16/24/40…)
+  //   - les alias sémantiques space.* qui pointent vers ces primitives.
+  //
+  // Stratégie :
+  // - Si TokenService est disponible, on l'utilise comme source de vérité.
+  // - Si tokens.spacing est vide OU ne contient que des zéros / valeurs invalides,
+  //   on le remplace par la génération officielle de TokenService pour la lib courante.
+  if (typeof TokenService !== 'undefined' && TokenService.generateSpacing) {
+    try {
+      var generatedSpacing = TokenService.generateSpacing(naming);
+
+      var hasSpacing = tokens.spacing && Object.keys(tokens.spacing).length > 0;
+      var hasNonZeroSpacing = false;
+
+      if (hasSpacing) {
+        for (var _spKey in tokens.spacing) {
+          if (!tokens.spacing.hasOwnProperty(_spKey)) continue;
+          var raw = tokens.spacing[_spKey];
+          var norm = normalizeFloatValue(raw);
+          if (typeof norm === 'number' && !isNaN(norm) && norm !== 0) {
+            hasNonZeroSpacing = true;
+            break;
+          }
+        }
+      }
+
+      if (!hasSpacing || !hasNonZeroSpacing) {
+        console.warn('⚠️ [SPACING_FIX] Detected empty or zero-only spacing primitives. Regenerating from naming:', naming);
+        tokens.spacing = generatedSpacing || {};
+      }
+    } catch (e) {
+      console.error('❌ [SPACING_FIX] Failed to regenerate spacing primitives from TokenService:', e);
+    }
+  }
+
   if (tokens.spacing) {
-    var spacingCollection = getOrCreateCollection("Spacing", overwrite);
+    // 🆕 Utiliser nom de collection framework-spécifique
+    var spacingCollectionName = getCollectionName('spacing', naming);
+    var spacingCollection = getOrCreateCollection(spacingCollectionName, overwrite);
+
     for (var spKey in tokens.spacing) {
       if (!tokens.spacing.hasOwnProperty(spKey)) continue;
-      var varName = spKey.replace(/\./g, " / ");
-      var val = normalizeFloatValue(tokens.spacing[spKey]);
+
+      // 🆕 Utiliser nom de variable framework-spécifique
+      var varName = getPrimitiveVariableName('spacing', spKey, naming);
+
+      if (DEBUG) console.log(`📏 [SPACING] Creating: "${varName}" (internal: ${spKey}, framework: ${naming})`);
+
+      var rawSpVal = tokens.spacing[spKey];
+      var val = normalizeFloatValue(rawSpVal);
       var variable = await createOrUpdateVariable(spacingCollection, varName, "FLOAT", val, "spacing", overwrite, undefined);
-      if (variable) registerPrimitive('spacing', spKey, variable.id);
+      if (variable) {
+        registerPrimitive('spacing', spKey, variable.id);
+      } else {
+        console.error('❌ [SPACING] createOrUpdateVariable returned null for key=' + spKey);
+      }
     }
   }
 
   if (tokens.radius) {
-    var radiusCollection = getOrCreateCollection("Radius", overwrite);
+    // 🆕 Utiliser nom de collection framework-spécifique
+    var radiusCollectionName = getCollectionName('radius', naming);
+    var radiusCollection = getOrCreateCollection(radiusCollectionName, overwrite);
+
     for (var rKey in tokens.radius) {
       if (!tokens.radius.hasOwnProperty(rKey)) continue;
-      var varName = rKey.replace(/\./g, " / ");
+
+      // 🆕 Utiliser nom de variable framework-spécifique
+      var varName = getPrimitiveVariableName('radius', rKey, naming);
+
+      if (DEBUG) console.log(`🔘 [RADIUS] Creating: "${varName}" (internal: ${rKey}, framework: ${naming})`);
+
       var rVal = normalizeFloatValue(tokens.radius[rKey]);
       var variable = await createOrUpdateVariable(radiusCollection, varName, "FLOAT", rVal, "radius", overwrite, undefined);
       if (variable) registerPrimitive('radius', rKey, variable.id);
@@ -7458,15 +7822,58 @@ async function importTokensToFigma(tokens, naming, overwrite) {
     }
   }
 
-  // Stroke / Border Width primitives (0, 1, 2, 3, 4)
+  // --- STROKE SAFETY CHECK ---
+  // Garantir que les primitives de stroke ont des valeurs correctes
+  if (typeof TokenService !== 'undefined' && TokenService.generateStroke) {
+    try {
+      var generatedStroke = TokenService.generateStroke(naming);
+
+      var hasStroke = tokens.stroke && Object.keys(tokens.stroke).length > 0;
+      var hasNonZeroStroke = false;
+
+      if (hasStroke) {
+        for (var _stKey in tokens.stroke) {
+          if (!tokens.stroke.hasOwnProperty(_stKey)) continue;
+          var rawSt = tokens.stroke[_stKey];
+          var normSt = normalizeFloatValue(rawSt);
+          if (typeof normSt === 'number' && !isNaN(normSt) && normSt !== 0) {
+            hasNonZeroStroke = true;
+            break;
+          }
+        }
+      }
+
+      if (!hasStroke || !hasNonZeroStroke) {
+        console.warn('⚠️ [STROKE_FIX] Detected empty or zero-only stroke primitives. Regenerating from naming:', naming);
+        tokens.stroke = generatedStroke || {};
+      }
+    } catch (e) {
+      console.error('❌ [STROKE_FIX] Failed to regenerate stroke primitives from TokenService:', e);
+    }
+  }
+
+  // Stroke / Border Width primitives
   if (tokens.stroke) {
-    var strokeCollection = getOrCreateCollection("Stroke", overwrite);
+    // 🆕 Utiliser nom de collection framework-spécifique
+    var strokeCollectionName = getCollectionName('stroke', naming);
+    var strokeCollection = getOrCreateCollection(strokeCollectionName, overwrite);
+
     for (var stKey in tokens.stroke) {
       if (!tokens.stroke.hasOwnProperty(stKey)) continue;
-      var varName = stKey.replace(/\./g, " / ");
-      var stVal = normalizeFloatValue(tokens.stroke[stKey]);
+
+      // 🆕 Utiliser nom de variable framework-spécifique
+      var varName = getPrimitiveVariableName('stroke', stKey, naming);
+
+      if (DEBUG) console.log('🖊️ [STROKE] Creating: "' + varName + '" (internal: ' + stKey + ', framework: ' + naming + ')');
+
+      var rawStVal = tokens.stroke[stKey];
+      var stVal = normalizeFloatValue(rawStVal);
       var variable = await createOrUpdateVariable(strokeCollection, varName, "FLOAT", stVal, "stroke", overwrite, undefined);
-      if (variable) registerPrimitive('stroke', stKey, variable.id);
+      if (variable) {
+        registerPrimitive('stroke', stKey, variable.id);
+      } else {
+        console.error('❌ [STROKE] createOrUpdateVariable returned null for key=' + stKey);
+      }
     }
   }
 
@@ -7531,6 +7938,17 @@ async function importTokensToFigma(tokens, naming, overwrite) {
 
       if (!variable) continue;
 
+      // ✅ Appliquer les scopes SPÉCIFIQUES à la sémantique
+      try {
+        var semanticScopes = getScopesForSemanticKey(key);
+        if (semanticScopes.length > 0) {
+          variable.scopes = semanticScopes;
+          if (DEBUG) console.log(`🎯 [SCOPES] ${key} → [${semanticScopes.join(', ')}]`);
+        }
+      } catch (scopeErr) {
+        console.warn('⚠️ Failed to set scopes for semantic', key + ':', scopeErr.message || scopeErr);
+      }
+
       // ✅ Apply values for each mode
       var modesToProcess = [
         { name: 'light', modeId: lightMode ? lightMode.modeId : null, data: tokenData.modes ? tokenData.modes.light : null },
@@ -7592,24 +8010,25 @@ async function importTokensToFigma(tokens, naming, overwrite) {
             var searchVariableName = null;
 
             if (categoryParts.length === 2 && categoryParts[0] === 'system') {
-              // system.success with key '100' → "System Colors" / "success / 100"
-              searchCollectionName = 'System Colors';
-              searchVariableName = categoryParts[1] + ' / ' + aliasRef.key;
+              // system.success with key '100' → collection name from framework / "success-100"
+              searchCollectionName = getCollectionName('system', naming);
+              var flatSystemKey = categoryParts[1] + '-' + aliasRef.key;
+              searchVariableName = getPrimitiveVariableName('system', flatSystemKey, naming);
             } else if (aliasRef.category === 'gray') {
-              searchCollectionName = 'Grayscale';
-              searchVariableName = aliasRef.key;
+              searchCollectionName = getCollectionName('gray', naming);
+              searchVariableName = getPrimitiveVariableName('gray', aliasRef.key, naming);
             } else if (aliasRef.category === 'brand') {
-              searchCollectionName = 'Brand Colors';
-              searchVariableName = aliasRef.key;
+              searchCollectionName = getCollectionName('brand', naming);
+              searchVariableName = getPrimitiveVariableName('brand', aliasRef.key, naming);
             } else if (aliasRef.category === 'spacing') {
-              searchCollectionName = 'Spacing';
-              searchVariableName = aliasRef.key.replace(/\./g, ' / ');
+              searchCollectionName = getCollectionName('spacing', naming);
+              searchVariableName = getPrimitiveVariableName('spacing', aliasRef.key, naming);
             } else if (aliasRef.category === 'radius') {
-              searchCollectionName = 'Radius';
-              searchVariableName = aliasRef.key.replace(/\./g, ' / ');
+              searchCollectionName = getCollectionName('radius', naming);
+              searchVariableName = getPrimitiveVariableName('radius', aliasRef.key, naming);
             } else if (aliasRef.category === 'stroke') {
-              searchCollectionName = 'Stroke';
-              searchVariableName = aliasRef.key.replace(/\./g, ' / ');
+              searchCollectionName = getCollectionName('stroke', naming);
+              searchVariableName = getPrimitiveVariableName('stroke', aliasRef.key, naming);
             } else {
               // Generic fallback
               searchCollectionName = aliasRef.category.charAt(0).toUpperCase() + aliasRef.category.slice(1);
@@ -7671,6 +8090,364 @@ async function importTokensToFigma(tokens, naming, overwrite) {
 
   figma.notify("✅ Sync Complete!");
   postToUI({ type: 'import-completed' });
+}
+
+/**
+ * 🆕 FRAMEWORK-SPECIFIC VARIABLE NAMING
+ * Convertit les clés internes (numériques) en noms de variables Figma selon le framework
+ * @param {string} category - 'brand', 'gray', 'system', 'spacing', 'radius', etc.
+ * @param {string} internalKey - Clé interne ('500', '900', 'md', 'success', etc.)
+ * @param {string} framework - 'mui', 'ant', 'chakra', 'tailwind', 'bootstrap', 'custom'
+ * @returns {string} Nom de variable pour Figma
+ */
+function getPrimitiveVariableName(category, internalKey, framework) {
+  if (!framework || framework === 'custom' || framework === 'tailwind') {
+    // Tailwind et Custom utilisent les clés numériques directes
+    return internalKey;
+  }
+
+  // ========================================
+  // MATERIAL-UI (MUI)
+  // ========================================
+  if (framework === 'mui') {
+    if (category === 'brand') {
+      // MUI Brand → palette.primary.* (OFFICIAL: only main, light, dark, contrastText)
+      // Référence: https://mui.com/material-ui/customization/palette/
+      var brandMap = {
+        '300': 'primary.light',       // 300 → light (variante claire)
+        '500': 'primary.main',        // 500 → main (couleur principale)
+        '700': 'primary.dark'         // 700 → dark (variante foncée)
+        // Note: contrastText est calculé automatiquement par MUI
+      };
+      // Pour les autres shades (50, 100, 200, 400, 600, 800, 900, 950),
+      // MUI ne les définit pas dans palette.primary, on retourne donc la clé numérique
+      // qui sera ignorée ou utilisée comme fallback
+      return brandMap[internalKey] || internalKey;
+    }
+
+    if (category === 'gray') {
+      // MUI Gray → palette.grey.*
+      return 'grey.' + internalKey;  // grey.50, grey.900, etc.
+    }
+
+    if (category === 'system') {
+      // MUI System → palette.success/error/warning/info.*
+      // internalKey format: "success-500" ou juste "success"
+      var parts = internalKey.split('-');
+      if (parts.length === 2) {
+        var color = parts[0];  // success, error, warning, info
+        var shade = parts[1];   // 50, 500, 900, etc.
+
+        var systemMap = {
+          '300': 'light',
+          '500': 'main',
+          '700': 'dark'
+        };
+
+        var variant = systemMap[shade] || shade;
+        return color + '.' + variant;  // success.main, error.dark, etc.
+      }
+      return internalKey;
+    }
+
+    if (category === 'spacing') {
+      // MUI utilise spacing() function, on garde les clés numériques
+      return internalKey;
+    }
+
+    if (category === 'radius') {
+      // MUI utilise shape.borderRadius, on garde les clés nommées
+      return internalKey;  // sm, md, lg, etc.
+    }
+
+    if (category === 'stroke') {
+      // MUI: borderWidth simple
+      return internalKey;
+    }
+  }
+
+  // ========================================
+  // ANT DESIGN
+  // ========================================
+  if (framework === 'ant') {
+    if (category === 'brand') {
+      // Ant Design → colorPrimary, colorPrimaryBg, etc.
+      var antBrandMap = {
+        '1': 'colorPrimaryBg',
+        '2': 'colorPrimaryBgHover',
+        '3': 'colorPrimaryBorder',
+        '4': 'colorPrimaryBorderHover',
+        '5': 'colorPrimaryHover',
+        '6': 'colorPrimary',           // 6 est la couleur par défaut
+        '7': 'colorPrimaryActive',
+        '8': 'colorPrimaryTextHover',
+        '9': 'colorPrimaryText',
+        '10': 'colorPrimaryTextActive'
+      };
+      return antBrandMap[internalKey] || internalKey;
+    }
+
+    if (category === 'gray') {
+      // Ant Design: échelle 1-13 + tokens sémantiques
+      var antGrayMap = {
+        '1': 'colorBgContainer',      // Le plus clair
+        '2': 'colorBgLayout',
+        '3': 'colorBgElevated',
+        '4': 'colorFillQuaternary',
+        '5': 'colorFillTertiary',
+        '6': 'colorFillSecondary',
+        '7': 'colorFill',
+        '8': 'colorBorder',
+        '9': 'colorBorderSecondary',
+        '10': 'colorText',
+        '11': 'colorTextSecondary',
+        '12': 'colorTextTertiary',
+        '13': 'colorTextQuaternary'   // Le plus foncé
+      };
+      return antGrayMap[internalKey] || internalKey;
+    }
+
+    if (category === 'system') {
+      // Ant System colors: colorSuccess, colorSuccessBg, colorSuccessText, etc.
+      var parts = internalKey.split('-');
+      if (parts.length === 2) {
+        var color = parts[0];  // success, error, warning, info
+        var shade = parts[1];   // 50, 100, ..., 950
+        var colorName = color.charAt(0).toUpperCase() + color.slice(1);  // Success, Error, etc.
+
+        // Map shades to Ant Design semantic tokens
+        var antSystemMap = {
+          '50': 'color' + colorName + 'Bg',           // colorSuccessBg
+          '100': 'color' + colorName + 'BgHover',     // colorSuccessBgHover
+          '200': 'color' + colorName + 'Border',      // colorSuccessBorder
+          '300': 'color' + colorName + 'BorderHover', // colorSuccessBorderHover
+          '400': 'color' + colorName + 'Hover',       // colorSuccessHover
+          '500': 'color' + colorName,                 // colorSuccess (default)
+          '600': 'color' + colorName + 'Active',      // colorSuccessActive
+          '700': 'color' + colorName + 'Text',        // colorSuccessText
+          '800': 'color' + colorName + 'TextHover',   // colorSuccessTextHover
+          '900': 'color' + colorName + 'TextActive'   // colorSuccessTextActive
+        };
+
+        return antSystemMap[shade] || internalKey;
+      }
+      return internalKey;
+    }
+
+    if (category === 'spacing') {
+      // Ant Design v5: size tokens (sizeXXS=4, sizeXS=8, sizeSM=12, size=16, etc.)
+      var antSpacingMap = {
+        '4': 'sizeXXS',
+        '8': 'sizeXS',
+        '12': 'sizeSM',
+        '16': 'size',           // Taille par défaut
+        '20': 'sizeMD',
+        '24': 'sizeLG',
+        '32': 'sizeXL',
+        '48': 'sizeXXL'
+      };
+      return antSpacingMap[internalKey] || internalKey;
+    }
+
+    if (category === 'radius') {
+      // Ant radius → borderRadius, borderRadiusSM, etc.
+      var antRadiusMap = {
+        'sm': 'borderRadiusSM',
+        'md': 'borderRadius',        // Par défaut
+        'lg': 'borderRadiusLG',
+        'xl': 'borderRadiusXL',
+        'none': '0',
+        'full': '9999'
+      };
+      return antRadiusMap[internalKey] || internalKey;
+    }
+
+    if (category === 'stroke') {
+      // Ant Design v5: lineWidth=1, lineWidthBold=2, lineWidthFocus=4
+      var antStrokeMap = {
+        '1': 'lineWidth',
+        '2': 'lineWidthBold',
+        '4': 'lineWidthFocus'
+      };
+      return antStrokeMap[internalKey] || internalKey;
+    }
+  }
+
+  // ========================================
+  // CHAKRA UI
+  // ========================================
+  if (framework === 'chakra') {
+    if (category === 'brand') {
+      // Chakra → colors.primary.500, etc.
+      // Chakra utilise une échelle numérique simple
+      return internalKey;  // 50, 500, 900, etc.
+    }
+
+    if (category === 'gray') {
+      // Chakra Gray → colors.gray.50, gray.900
+      return 'gray.' + internalKey;
+    }
+
+    if (category === 'system') {
+      // Chakra System → colors.green.500 (pour success), red.500 (error), etc.
+      var parts = internalKey.split('-');
+      if (parts.length === 2) {
+        var colorMap = {
+          'success': 'green',
+          'error': 'red',
+          'warning': 'orange',
+          'info': 'blue'
+        };
+        var chakraColor = colorMap[parts[0]] || parts[0];
+        return chakraColor + '.' + parts[1];  // green.500, red.700, etc.
+      }
+      return internalKey;
+    }
+
+    if (category === 'spacing' || category === 'radius') {
+      // Chakra garde les clés nommées/numériques
+      return internalKey;
+    }
+
+    if (category === 'stroke') {
+      // Chakra: borders tokens
+      return internalKey;
+    }
+  }
+
+  // ========================================
+  // BOOTSTRAP
+  // ========================================
+  if (framework === 'bootstrap') {
+    if (category === 'brand') {
+      // Bootstrap → $primary, $primary-100, etc.
+      if (internalKey === '500') return 'primary';  // Couleur principale
+      return 'primary-' + internalKey;
+    }
+
+    if (category === 'gray') {
+      // Bootstrap → $gray-100, $gray-900, etc.
+      return 'gray-' + internalKey;
+    }
+
+    if (category === 'system') {
+      // Bootstrap → $success, $danger, $warning, $info
+      var parts = internalKey.split('-');
+      if (parts.length === 2) {
+        var bsColorMap = {
+          'success': 'success',
+          'error': 'danger',
+          'warning': 'warning',
+          'info': 'info'
+        };
+        var bsColor = bsColorMap[parts[0]] || parts[0];
+        if (parts[1] === '500') return bsColor;  // Couleur principale
+        return bsColor + '-' + parts[1];
+      }
+      return internalKey;
+    }
+
+    if (category === 'spacing' || category === 'radius') {
+      // Bootstrap garde les clés
+      return internalKey;
+    }
+
+    if (category === 'stroke') {
+      // Bootstrap: border-width tokens
+      return internalKey;
+    }
+  }
+
+  // Fallback: retourner la clé interne
+  return internalKey;
+}
+
+/**
+ * 🆕 FRAMEWORK-SPECIFIC COLLECTION NAMING
+ * Retourne le nom de collection recommandé selon le framework
+ */
+function getCollectionName(category, framework) {
+  if (!framework || framework === 'custom') {
+    // Noms génériques
+    var defaultNames = {
+      'brand': 'Brand Colors',
+      'gray': 'Grayscale',
+      'system': 'System Colors',
+      'spacing': 'Spacing',
+      'radius': 'Radius',
+      'typography': 'Typography',
+      'stroke': 'Border Width'
+    };
+    return defaultNames[category] || category;
+  }
+
+  if (framework === 'mui') {
+    var muiNames = {
+      'brand': 'Palette / Primary',
+      'gray': 'Palette / Grey',
+      'system': 'Palette / System',
+      'spacing': 'Spacing',
+      'radius': 'Shape',
+      'typography': 'Typography',
+      'stroke': 'Border Width'
+    };
+    return muiNames[category] || category;
+  }
+
+  if (framework === 'ant') {
+    var antNames = {
+      'brand': 'Colors / Primary',
+      'gray': 'Colors / Neutral',
+      'system': 'Colors / Status',
+      'spacing': 'Sizes',
+      'radius': 'Border Radius',
+      'typography': 'Typography',
+      'stroke': 'Line Width'
+    };
+    return antNames[category] || category;
+  }
+
+  if (framework === 'chakra') {
+    var chakraNames = {
+      'brand': 'Colors / Primary',
+      'gray': 'Colors / Gray',
+      'system': 'Colors / Status',
+      'spacing': 'Space',
+      'radius': 'Radii',
+      'typography': 'Typography',
+      'stroke': 'Border Widths'
+    };
+    return chakraNames[category] || category;
+  }
+
+  if (framework === 'tailwind') {
+    var tailwindNames = {
+      'brand': 'Colors / Primary',
+      'gray': 'Colors / Gray',
+      'system': 'Colors / Status',
+      'spacing': 'Spacing',
+      'radius': 'Border Radius',
+      'typography': 'Typography',
+      'stroke': 'Border Width'
+    };
+    return tailwindNames[category] || category;
+  }
+
+  if (framework === 'bootstrap') {
+    var bootstrapNames = {
+      'brand': 'Theme Colors / Primary',
+      'gray': 'Grays',
+      'system': 'Theme Colors / Status',
+      'spacing': 'Spacers',
+      'radius': 'Border Radius',
+      'typography': 'Typography',
+      'stroke': 'Border Widths'
+    };
+    return bootstrapNames[category] || category;
+  }
+
+  // Fallback
+  return category;
 }
 
 // Fonction pour construire une map globale des variables existantes pour la résolution des alias
@@ -7742,212 +8519,700 @@ async function buildGlobalVariableMap() {
  * @param {string} lib - Type de librairie normalisé ('tailwind', 'ant', 'bootstrap', 'mui', 'chakra')
  * @returns {Object|null} Mapping avec category et keys, ou null si non trouvé
  */
+/**
+ * Get primitive mapping for semantic token across different frameworks
+ * ✅ SYNCHRONIZED with getStandardMapping() - Last sync: 2026-01-31
+ * ✅ COMPLETE: All 5 frameworks now have 80+ tokens with dark mode support
+ *
+ * @param {string} semanticKey - Semantic token key (e.g., 'bg.canvas', 'text.primary')
+ * @param {string} lib - Framework identifier: 'tailwind', 'mui', 'chakra', 'bootstrap', 'ant'
+ * @returns {Object|null} Mapping object with { category, keys, darkKeys? } or null
+ *
+ * Framework nomenclatures:
+ * - Tailwind: Numeric scale (50-950), utility classes
+ * - MUI: palette.*.main/light/dark, grey[X], semantic tokens
+ * - Chakra: Numeric scale (50-900), semantic tokens (chakra-*)
+ * - Bootstrap: Named colors (primary, danger, etc.), gray-X, utility classes (bg-*, text-*)
+ * - Ant Design v5+: Semantic tokens (colorPrimary, colorText, etc.), numeric scale (1-13)
+ */
 function getPrimitiveMappingForSemantic(semanticKey, lib) {
-  // Mapping centralisé pour toutes les librairies
-  // Les clés correspondent aux valeurs extraites par extractVariableKey
   const mappings = {
     tailwind: {
-      // Background - ✅ DARK MODE: Inversion intelligente
-      'bg.canvas': { category: 'gray', keys: ['100'], darkKeys: ['950'] },  // Canvas: fond principal (plus sombre en dark)
-      'bg.surface': { category: 'gray', keys: ['50'], darkKeys: ['900'] },  // Surface: cartes (plus clair que canvas en dark)
+      // ========================================
+      // 🎨 BACKGROUNDS - Tailwind official scale: 50, 100, 200...950
+      // ========================================
+      'bg.canvas': { category: 'gray', keys: ['100'], darkKeys: ['950'] },
+      'bg.surface': { category: 'gray', keys: ['50'], darkKeys: ['900'] },
       'bg.elevated': { category: 'gray', keys: ['200'], darkKeys: ['800'] },
-      'bg.subtle': { category: 'gray', keys: ['300'], darkKeys: ['700'] },
-      'bg.muted': { category: 'gray', keys: ['400'], darkKeys: ['600'] },
+      'bg.subtle': { category: 'gray', keys: ['100'], darkKeys: ['800'] },
+      'bg.muted': { category: 'gray', keys: ['300'], darkKeys: ['700'] },
       'bg.accent': { category: 'brand', keys: ['500'], darkKeys: ['500'] },
-      'bg.inverse': { category: 'gray', keys: ['950', '900'], darkKeys: ['50'] },
+      'bg.inverse': { category: 'gray', keys: ['950'], darkKeys: ['50'] },
 
-      // Text
-      'text.primary': { category: 'gray', keys: ['950', '900'], darkKeys: ['50'] },
-      'text.secondary': { category: 'gray', keys: ['600'], darkKeys: ['400'] },
-      'text.muted': { category: 'gray', keys: ['400'], darkKeys: ['600'] },
-      'text.accent': { category: 'brand', keys: ['600'], darkKeys: ['400'] },
-      'text.link': { category: 'brand', keys: ['500'], darkKeys: ['300'] },
+      // ========================================
+      // ✍️ TEXT
+      // ========================================
+      'text.primary': { category: 'gray', keys: ['950'], darkKeys: ['50'] },
+      'text.secondary': { category: 'gray', keys: ['700'], darkKeys: ['300'] },
+      'text.muted': { category: 'gray', keys: ['600'], darkKeys: ['400'] },
+      'text.caption': { category: 'gray', keys: ['500'], darkKeys: ['500'] },
+      'text.disabled': { category: 'gray', keys: ['400'], darkKeys: ['600'] },
+      'text.placeholder': { category: 'gray', keys: ['400'], darkKeys: ['600'] },
+      'text.link': { category: 'brand', keys: ['600'], darkKeys: ['400'] },
+      'text.accent': { category: 'brand', keys: ['700'], darkKeys: ['300'] },
       'text.inverse': { category: 'gray', keys: ['50'], darkKeys: ['950'] },
-      'text.disabled': { category: 'gray', keys: ['300'], darkKeys: ['700'] },
+      'text.success': { category: 'system.success', keys: ['700'], darkKeys: ['400'] },
+      'text.warning': { category: 'system.warning', keys: ['700'], darkKeys: ['400'] },
+      'text.error': { category: 'system.error', keys: ['700'], darkKeys: ['400'] },
 
-      // Border
-      'border.default': { category: 'gray', keys: ['200'], darkKeys: ['800'] },
-      'border.muted': { category: 'gray', keys: ['100'], darkKeys: ['900'] },
-      'border.accent': { category: 'brand', keys: ['200'], darkKeys: ['500'] },
-      'border.focus': { category: 'brand', keys: ['500'], darkKeys: ['400'] },
+      // ========================================
+      // 🔲 BORDERS
+      // ========================================
+      'border.default': { category: 'gray', keys: ['300'], darkKeys: ['700'] },
+      'border.muted': { category: 'gray', keys: ['200'], darkKeys: ['800'] },
+      'border.subtle': { category: 'gray', keys: ['100'], darkKeys: ['900'] },
+      'border.accent': { category: 'brand', keys: ['300'], darkKeys: ['600'] },
+      'border.focus': { category: 'brand', keys: ['500'], darkKeys: ['500'] },
+      'border.error': { category: 'system.error', keys: ['500'], darkKeys: ['500'] },
 
-      // Action Primary
+      // ========================================
+      // ➗ DIVIDER
+      // ========================================
+      'divider.default': { category: 'gray', keys: ['200'], darkKeys: ['800'] },
+
+      // ========================================
+      // ⭕ RING
+      // ========================================
+      'ring.focus': { category: 'brand', keys: ['500'], darkKeys: ['500'] },
+      'ring.error': { category: 'system.error', keys: ['500'], darkKeys: ['500'] },
+
+      // ========================================
+      // 🔘 ON
+      // ========================================
+      'on.primary': { category: 'gray', keys: ['50'], darkKeys: ['50'] },
+      'on.brand': { category: 'gray', keys: ['50'], darkKeys: ['50'] },
+
+      // ========================================
+      // 🎯 ACTIONS
+      // ========================================
       'action.primary.default': { category: 'brand', keys: ['500'], darkKeys: ['500'] },
       'action.primary.hover': { category: 'brand', keys: ['600'], darkKeys: ['600'] },
       'action.primary.active': { category: 'brand', keys: ['700'], darkKeys: ['700'] },
       'action.primary.disabled': { category: 'gray', keys: ['300'], darkKeys: ['700'] },
       'action.primary.text': { category: 'gray', keys: ['50'], darkKeys: ['50'] },
 
-      // Action Secondary - ✅ Utilise brand clair au lieu de gray
       'action.secondary.default': { category: 'brand', keys: ['100'], darkKeys: ['800'] },
       'action.secondary.hover': { category: 'brand', keys: ['200'], darkKeys: ['700'] },
       'action.secondary.active': { category: 'brand', keys: ['300'], darkKeys: ['600'] },
-      'action.secondary.disabled': { category: 'gray', keys: ['100'], darkKeys: ['800'] },
-      'action.secondary.text': { category: 'brand', keys: ['900'], darkKeys: ['50'] },
+      'action.secondary.disabled': { category: 'gray', keys: ['100'], darkKeys: ['900'] },
+      'action.secondary.text': { category: 'brand', keys: ['700'], darkKeys: ['300'] },
 
-      // Status
-      'status.success': { category: 'system', keys: ['success'] },
-      'status.success.text': { category: 'gray', keys: ['950'], darkKeys: ['50'] },
-      'status.warning': { category: 'system', keys: ['warning'] },
-      'status.warning.text': { category: 'gray', keys: ['950'], darkKeys: ['50'] },
-      'status.error': { category: 'system', keys: ['error'] },
-      'status.error.text': { category: 'gray', keys: ['950'], darkKeys: ['50'] },
-      'status.info': { category: 'system', keys: ['info'] },
-      'status.info.text': { category: 'gray', keys: ['950'], darkKeys: ['50'] },
+      'action.tertiary.default': { category: 'gray', keys: ['transparent'], darkKeys: ['transparent'] },
+      'action.tertiary.hover': { category: 'gray', keys: ['100'], darkKeys: ['900'] },
+      'action.tertiary.active': { category: 'gray', keys: ['200'], darkKeys: ['800'] },
+      'action.tertiary.disabled': { category: 'gray', keys: ['transparent'], darkKeys: ['transparent'] },
+      'action.tertiary.text': { category: 'brand', keys: ['600'], darkKeys: ['400'] },
 
-      // Dimensions
-      'radius.none': { category: 'radius', keys: ['none', '0'] },
-      'radius.sm': { category: 'radius', keys: ['sm', '4'] },
-      'radius.md': { category: 'radius', keys: ['md', '8'] },
-      'radius.lg': { category: 'radius', keys: ['lg', '12'] },
-      'radius.full': { category: 'radius', keys: ['full', '9999'] },
-      'space.xs': { category: 'spacing', keys: ['1', '4'] },
-      'space.sm': { category: 'spacing', keys: ['2', '8'] },
-      'space.md': { category: 'spacing', keys: ['4', '16'] },
-      'space.lg': { category: 'spacing', keys: ['6', '24'] },
-      'space.xl': { category: 'spacing', keys: ['8', '32'] },
-      'space.2xl': { category: 'spacing', keys: ['11', '44'] },
-      'font.size.sm': { category: 'typography', keys: ['text-sm'] },
-      'font.size.base': { category: 'typography', keys: ['text-base'] },
-      'font.size.lg': { category: 'typography', keys: ['text-lg'] },
-      'font.weight.normal': { category: 'typography', keys: ['400'] },
-      'font.weight.medium': { category: 'typography', keys: ['500'] },
-      'font.weight.bold': { category: 'typography', keys: ['700'] }
+      'action.destructive.default': { category: 'system.error', keys: ['600'], darkKeys: ['600'] },
+      'action.destructive.hover': { category: 'system.error', keys: ['700'], darkKeys: ['700'] },
+      'action.destructive.active': { category: 'system.error', keys: ['800'], darkKeys: ['800'] },
+      'action.destructive.disabled': { category: 'gray', keys: ['300'], darkKeys: ['700'] },
+      'action.destructive.text': { category: 'gray', keys: ['50'], darkKeys: ['50'] },
+
+      // ========================================
+      // ⚠️ STATUS
+      // ========================================
+      'status.success.bg': { category: 'system.success', keys: ['100'], darkKeys: ['900'] },
+      'status.success.fg': { category: 'system.success', keys: ['700'], darkKeys: ['300'] },
+      'status.success.border': { category: 'system.success', keys: ['500'], darkKeys: ['500'] },
+      'status.warning.bg': { category: 'system.warning', keys: ['100'], darkKeys: ['900'] },
+      'status.warning.fg': { category: 'system.warning', keys: ['700'], darkKeys: ['300'] },
+      'status.warning.border': { category: 'system.warning', keys: ['500'], darkKeys: ['500'] },
+      'status.error.bg': { category: 'system.error', keys: ['100'], darkKeys: ['900'] },
+      'status.error.fg': { category: 'system.error', keys: ['700'], darkKeys: ['300'] },
+      'status.error.border': { category: 'system.error', keys: ['500'], darkKeys: ['500'] },
+      'status.info.bg': { category: 'system.info', keys: ['100'], darkKeys: ['900'] },
+      'status.info.fg': { category: 'system.info', keys: ['700'], darkKeys: ['300'] },
+      'status.info.border': { category: 'system.info', keys: ['500'], darkKeys: ['500'] },
+
+      // ========================================
+      // 🌑 OVERLAY
+      // ========================================
+      'overlay.dim': { category: 'gray', keys: ['800'], darkKeys: ['900'] },
+      'overlay.scrim': { category: 'gray', keys: ['950'], darkKeys: ['950'] },
+
+      // ========================================
+      // 📐 RADIUS - Tailwind: none, sm, md, lg, xl, 2xl, 3xl, full
+      // ========================================
+      'radius.none': { category: 'radius', keys: ['none'] },
+      'radius.sm': { category: 'radius', keys: ['sm'] },
+      'radius.md': { category: 'radius', keys: ['md'] },
+      'radius.lg': { category: 'radius', keys: ['lg'] },
+      'radius.full': { category: 'radius', keys: ['full'] },
+
+      // ========================================
+      // 📏 SPACING - Tailwind: 0, 1, 2, 3, 4, 5, 6, 8, 10, 12...
+      // ========================================
+      'space.xs': { category: 'spacing', keys: ['1'] },
+      'space.sm': { category: 'spacing', keys: ['2'] },
+      'space.md': { category: 'spacing', keys: ['4'] },
+      'space.lg': { category: 'spacing', keys: ['6'] },
+      'space.xl': { category: 'spacing', keys: ['8'] },
+      'space.2xl': { category: 'spacing', keys: ['12'] },
+
+      // ========================================
+      // 🖊️ STROKE - Tailwind border widths: 0, DEFAULT (1), 2, 4, 8
+      // ========================================
+      'stroke.none': { category: 'stroke', keys: ['0'] },
+      'stroke.thin': { category: 'stroke', keys: ['1'] },
+      'stroke.default': { category: 'stroke', keys: ['2'] },
+      'stroke.thick': { category: 'stroke', keys: ['4'] },
+      'stroke.heavy': { category: 'stroke', keys: ['8'] }
     },
     ant: {
-      // Background - NOTE: bg.canvas is DARKER than bg.surface
-      'bg.canvas': { category: 'gray', keys: ['2'] },
-      'bg.surface': { category: 'gray', keys: ['1'] },
-      'bg.elevated': { category: 'gray', keys: ['2'] },
-      'bg.muted': { category: 'gray', keys: ['2'] },
-      'bg.inverse': { category: 'gray', keys: ['10'] },
-      'text.primary': { category: 'gray', keys: ['10'] },
-      'text.secondary': { category: 'gray', keys: ['8', '9'] },
-      'text.muted': { category: 'gray', keys: ['6', '7'] },
-      'text.inverse': { category: 'gray', keys: ['1'] },
-      'text.disabled': { category: 'gray', keys: ['6'] },
-      'border.default': { category: 'gray', keys: ['4'] },
-      'border.muted': { category: 'gray', keys: ['3'] },
-      'action.primary.default': { category: 'brand', keys: ['3'] },
-      'action.primary.hover': { category: 'brand', keys: ['4'] },
-      'action.primary.active': { category: 'brand', keys: ['5'] },
-      'action.primary.disabled': { category: 'gray', keys: ['6'] },
-      'status.success': { category: 'system', keys: ['success', '6'] },
-      'status.warning': { category: 'system', keys: ['warning', '6'] },
-      'status.error': { category: 'system', keys: ['error', '6'] },
-      'status.info': { category: 'system', keys: ['info', '6'] },
-      'radius.none': { category: 'radius', keys: ['none', '0'] },
-      'radius.sm': { category: 'radius', keys: ['sm', '4'] },
-      'radius.md': { category: 'radius', keys: ['md', '6'] },
-      'radius.lg': { category: 'radius', keys: ['lg', '8'] },
-      'radius.full': { category: 'radius', keys: ['full', '9999'] },
-      'space.xs': { category: 'spacing', keys: ['xs', '4'] },
-      'space.sm': { category: 'spacing', keys: ['sm', '8', 'small'] },
-      'space.md': { category: 'spacing', keys: ['md', '16', 'middle'] },
-      'space.lg': { category: 'spacing', keys: ['lg', '24'] },
-      'space.xl': { category: 'spacing', keys: ['xl', '32'] },
-      'space.2xl': { category: 'spacing', keys: ['xxl', '48'] },
-      'font.size.base': { category: 'typography', keys: ['14'] },
-      'font.weight.base': { category: 'typography', keys: ['400'] }
+      // ========================================
+      // 🎨 BACKGROUNDS - Ant Design v5+ STRICT semantic nomenclature
+      // CLEANED: Removed numeric fallbacks, using ONLY official semantic token names
+      // ========================================
+      'bg.canvas': { category: 'gray', keys: ['colorBgLayout'], darkKeys: ['colorTextQuaternary'] },
+      'bg.surface': { category: 'gray', keys: ['colorBgContainer'], darkKeys: ['colorTextTertiary'] },
+      'bg.elevated': { category: 'gray', keys: ['colorBgElevated'], darkKeys: ['colorTextSecondary'] },
+      'bg.subtle': { category: 'gray', keys: ['colorBgLayout'], darkKeys: ['colorTextSecondary'] },
+      'bg.muted': { category: 'gray', keys: ['colorFillQuaternary'], darkKeys: ['colorText'] },
+      'bg.accent': { category: 'brand', keys: ['colorPrimary'], darkKeys: ['colorPrimary'] },
+      'bg.inverse': { category: 'gray', keys: ['colorTextQuaternary'], darkKeys: ['colorBgContainer'] },
+
+      // ========================================
+      // ✍️ TEXT - Ant Design v5+ STRICT semantic nomenclature
+      // ========================================
+      'text.primary': { category: 'gray', keys: ['colorText'], darkKeys: ['colorTextLightSolid'] },
+      'text.secondary': { category: 'gray', keys: ['colorBorder'], darkKeys: ['colorFillQuaternary'] },
+      'text.muted': { category: 'gray', keys: ['colorFill'], darkKeys: ['colorFillTertiary'] },
+      'text.caption': { category: 'gray', keys: ['colorFillSecondary'], darkKeys: ['colorFillSecondary'] },
+      'text.disabled': { category: 'gray', keys: ['colorFillTertiary'], darkKeys: ['colorFill'] },
+      'text.placeholder': { category: 'gray', keys: ['colorFillTertiary'], darkKeys: ['colorFill'] },
+      'text.link': { category: 'brand', keys: ['colorLink'], darkKeys: ['colorLinkHover'] },
+      'text.accent': { category: 'brand', keys: ['colorPrimaryText'], darkKeys: ['colorPrimaryHover'] },
+      'text.inverse': { category: 'gray', keys: ['colorTextLightSolid'], darkKeys: ['colorText'] },
+      'text.success': { category: 'system.success', keys: ['colorSuccessText'], darkKeys: ['colorSuccessTextHover'] },
+      'text.warning': { category: 'system.warning', keys: ['colorWarningText'], darkKeys: ['colorWarningTextHover'] },
+      'text.error': { category: 'system.error', keys: ['colorErrorText'], darkKeys: ['colorErrorTextHover'] },
+
+      // ========================================
+      // 🔲 BORDERS - Ant Design v5+ STRICT semantic nomenclature
+      // ========================================
+      'border.default': { category: 'gray', keys: ['colorBorder'], darkKeys: ['colorBorderSecondary'] },
+      'border.muted': { category: 'gray', keys: ['colorBorderSecondary'], darkKeys: ['colorBorderSecondary'] },
+      'border.subtle': { category: 'gray', keys: ['colorBgElevated'], darkKeys: ['colorText'] },
+      'border.accent': { category: 'brand', keys: ['colorPrimaryBorder'], darkKeys: ['colorPrimaryBorderHover'] },
+      'border.focus': { category: 'brand', keys: ['colorPrimary'], darkKeys: ['colorPrimary'] },
+      'border.error': { category: 'system.error', keys: ['colorError'], darkKeys: ['colorError'] },
+
+      // ========================================
+      // ➗ DIVIDER - STRICT semantic nomenclature
+      // ========================================
+      'divider.default': { category: 'gray', keys: ['colorSplit'], darkKeys: ['colorBorderSecondary'] },
+
+      // ========================================
+      // ⭕ RING - STRICT semantic nomenclature
+      // ========================================
+      'ring.focus': { category: 'brand', keys: ['colorPrimary'], darkKeys: ['colorPrimary'] },
+      'ring.error': { category: 'system.error', keys: ['colorError'], darkKeys: ['colorError'] },
+
+      // ========================================
+      // 🔘 ON - STRICT semantic nomenclature
+      // ========================================
+      'on.primary': { category: 'gray', keys: ['colorTextLightSolid'], darkKeys: ['colorTextLightSolid'] },
+      'on.brand': { category: 'gray', keys: ['colorTextLightSolid'], darkKeys: ['colorTextLightSolid'] },
+
+      // ========================================
+      // 🎯 ACTIONS - Ant Design v5+ STRICT semantic nomenclature
+      // ========================================
+      // PRIMARY
+      'action.primary.default': { category: 'brand', keys: ['colorPrimary'], darkKeys: ['colorPrimary'] },
+      'action.primary.hover': { category: 'brand', keys: ['colorPrimaryHover'], darkKeys: ['colorPrimaryHover'] },
+      'action.primary.active': { category: 'brand', keys: ['colorPrimaryActive'], darkKeys: ['colorPrimaryActive'] },
+      'action.primary.disabled': { category: 'gray', keys: ['colorBgContainerDisabled'], darkKeys: ['colorBorderSecondary'] },
+      'action.primary.text': { category: 'gray', keys: ['colorTextLightSolid'], darkKeys: ['colorTextLightSolid'] },
+
+      // SECONDARY (Default button in Ant)
+      'action.secondary.default': { category: 'gray', keys: ['colorBgContainer'], darkKeys: ['colorTextSecondary'] },
+      'action.secondary.hover': { category: 'brand', keys: ['colorPrimaryBg'], darkKeys: ['colorText'] },
+      'action.secondary.active': { category: 'brand', keys: ['colorPrimaryBgHover'], darkKeys: ['colorPrimaryText'] },
+      'action.secondary.disabled': { category: 'gray', keys: ['colorBgLayout'], darkKeys: ['colorTextSecondary'] },
+      'action.secondary.text': { category: 'brand', keys: ['colorPrimaryText'], darkKeys: ['colorPrimaryHover'] },
+
+      // TERTIARY (Text/Link button in Ant)
+      'action.tertiary.default': { category: 'gray', keys: ['transparent'], darkKeys: ['transparent'] },
+      'action.tertiary.hover': { category: 'gray', keys: ['colorBgTextHover'], darkKeys: ['colorTextSecondary'] },
+      'action.tertiary.active': { category: 'gray', keys: ['colorBgTextActive'], darkKeys: ['colorText'] },
+      'action.tertiary.disabled': { category: 'gray', keys: ['transparent'], darkKeys: ['transparent'] },
+      'action.tertiary.text': { category: 'brand', keys: ['colorLink'], darkKeys: ['colorLinkHover'] },
+
+      // DESTRUCTIVE (Danger button in Ant)
+      'action.destructive.default': { category: 'system.error', keys: ['colorError'], darkKeys: ['colorError'] },
+      'action.destructive.hover': { category: 'system.error', keys: ['colorErrorHover'], darkKeys: ['colorErrorHover'] },
+      'action.destructive.active': { category: 'system.error', keys: ['colorErrorActive'], darkKeys: ['colorErrorActive'] },
+      'action.destructive.disabled': { category: 'gray', keys: ['colorBgContainerDisabled'], darkKeys: ['colorBorderSecondary'] },
+      'action.destructive.text': { category: 'gray', keys: ['colorTextLightSolid'], darkKeys: ['colorTextLightSolid'] },
+
+      // ========================================
+      // ⚠️ STATUS - Ant Design v5+ STRICT semantic nomenclature
+      // ========================================
+      'status.success.bg': { category: 'system.success', keys: ['colorSuccessBg'], darkKeys: ['colorSuccessBg'] },
+      'status.success.fg': { category: 'system.success', keys: ['colorSuccessText'], darkKeys: ['colorSuccessTextHover'] },
+      'status.success.border': { category: 'system.success', keys: ['colorSuccess'], darkKeys: ['colorSuccess'] },
+      'status.warning.bg': { category: 'system.warning', keys: ['colorWarningBg'], darkKeys: ['colorWarningBg'] },
+      'status.warning.fg': { category: 'system.warning', keys: ['colorWarningText'], darkKeys: ['colorWarningTextHover'] },
+      'status.warning.border': { category: 'system.warning', keys: ['colorWarning'], darkKeys: ['colorWarning'] },
+      'status.error.bg': { category: 'system.error', keys: ['colorErrorBg'], darkKeys: ['colorErrorBg'] },
+      'status.error.fg': { category: 'system.error', keys: ['colorErrorText'], darkKeys: ['colorErrorTextHover'] },
+      'status.error.border': { category: 'system.error', keys: ['colorError'], darkKeys: ['colorError'] },
+      'status.info.bg': { category: 'system.info', keys: ['colorInfoBg'], darkKeys: ['colorInfoBg'] },
+      'status.info.fg': { category: 'system.info', keys: ['colorInfoText'], darkKeys: ['colorInfoTextHover'] },
+      'status.info.border': { category: 'system.info', keys: ['colorInfo'], darkKeys: ['colorInfo'] },
+
+      // ========================================
+      // 🌑 OVERLAY - STRICT semantic nomenclature
+      // ========================================
+      'overlay.dim': { category: 'gray', keys: ['colorTextSecondary'], darkKeys: ['colorTextTertiary'] },
+      'overlay.scrim': { category: 'gray', keys: ['colorTextQuaternary'], darkKeys: ['colorTextQuaternary'] },
+
+      // ========================================
+      // 📐 RADIUS - Ant Design STRICT: borderRadius, borderRadiusSM, borderRadiusLG
+      // ========================================
+      'radius.none': { category: 'radius', keys: ['0'] },
+      'radius.sm': { category: 'radius', keys: ['borderRadiusSM'] },
+      'radius.md': { category: 'radius', keys: ['borderRadius'] },
+      'radius.lg': { category: 'radius', keys: ['borderRadiusLG'] },
+      'radius.full': { category: 'radius', keys: ['9999'] },
+
+      // ========================================
+      // 📏 SPACING - Ant Design STRICT: sizeXXS, sizeXS, sizeSM, size, sizeLG, sizeXL, sizeXXL
+      // ========================================
+      'space.xs': { category: 'spacing', keys: ['sizeXXS'] },
+      'space.sm': { category: 'spacing', keys: ['sizeXS'] },
+      'space.md': { category: 'spacing', keys: ['size'] },
+      'space.lg': { category: 'spacing', keys: ['sizeLG'] },
+      'space.xl': { category: 'spacing', keys: ['sizeXL'] },
+      'space.2xl': { category: 'spacing', keys: ['sizeXXL'] },
+
+      // ========================================
+      // 🖊️ STROKE - Ant Design STRICT: lineWidth, lineWidthBold
+      // ========================================
+      'stroke.none': { category: 'stroke', keys: ['0'] },
+      'stroke.thin': { category: 'stroke', keys: ['lineWidth'] },
+      'stroke.default': { category: 'stroke', keys: ['lineWidthBold'] },
+      'stroke.thick': { category: 'stroke', keys: ['3'] },
+      'stroke.heavy': { category: 'stroke', keys: ['lineWidthFocus'] }
     },
     bootstrap: {
-      // Background - NOTE: bg.canvas is DARKER than bg.surface
-      'bg.canvas': { category: 'gray', keys: ['100', '200'] },
-      'bg.surface': { category: 'gray', keys: ['white', '100'] },
-      'bg.elevated': { category: 'gray', keys: ['200', '300'] },
-      'bg.muted': { category: 'gray', keys: ['300', '400'] },
-      'bg.inverse': { category: 'gray', keys: ['900', 'dark'] },
-      'text.primary': { category: 'gray', keys: ['900', 'dark'] },
-      'text.secondary': { category: 'gray', keys: ['600', 'secondary'] },
-      'text.muted': { category: 'gray', keys: ['500', 'muted'] },
-      'text.inverse': { category: 'gray', keys: ['white', 'light'] },
-      'text.disabled': { category: 'gray', keys: ['400', 'muted'] },
-      'border.default': { category: 'gray', keys: ['300'] },
-      'border.muted': { category: 'gray', keys: ['200'] },
-      'action.primary.default': { category: 'brand', keys: ['primary'] },
-      'action.primary.hover': { category: 'brand', keys: ['primary-hover', 'hover'] },
-      'action.primary.active': { category: 'brand', keys: ['primary-dark', 'dark'] },
-      'action.primary.disabled': { category: 'gray', keys: ['300'] },
-      'status.success': { category: 'system', keys: ['success'] },
-      'status.warning': { category: 'system', keys: ['warning'] },
-      'status.error': { category: 'system', keys: ['error'] },
-      'status.info': { category: 'system', keys: ['info'] },
-      'radius.sm': { category: 'radius', keys: ['sm', '2'] },
-      'radius.md': { category: 'radius', keys: ['md', '4'] },
-      'space.sm': { category: 'spacing', keys: ['sm', '2', '8'] },
-      'space.md': { category: 'spacing', keys: ['md', '3', '16'] },
-      'font.size.base': { category: 'typography', keys: ['base', '16'] },
-      'font.weight.base': { category: 'typography', keys: ['normal', '400'] }
+      // ========================================
+      // 🎨 BACKGROUNDS - Bootstrap STRICT: $gray-X00, $primary, $white, etc.
+      // ========================================
+      'bg.canvas': { category: 'gray', keys: ['gray-100'], darkKeys: ['gray-900'] },
+      'bg.surface': { category: 'gray', keys: ['white'], darkKeys: ['gray-900'] },
+      'bg.elevated': { category: 'gray', keys: ['gray-200'], darkKeys: ['gray-800'] },
+      'bg.subtle': { category: 'gray', keys: ['gray-100'], darkKeys: ['gray-800'] },
+      'bg.muted': { category: 'gray', keys: ['gray-300'], darkKeys: ['gray-700'] },
+      'bg.accent': { category: 'brand', keys: ['primary'], darkKeys: ['primary'] },
+      'bg.inverse': { category: 'gray', keys: ['gray-900'], darkKeys: ['white'] },
+
+      // ========================================
+      // ✍️ TEXT - Bootstrap STRICT: $gray-X00, named colors
+      // ========================================
+      'text.primary': { category: 'gray', keys: ['gray-900'], darkKeys: ['white'] },
+      'text.secondary': { category: 'gray', keys: ['gray-700'], darkKeys: ['gray-300'] },
+      'text.muted': { category: 'gray', keys: ['gray-600'], darkKeys: ['gray-400'] },
+      'text.caption': { category: 'gray', keys: ['gray-500'], darkKeys: ['gray-500'] },
+      'text.disabled': { category: 'gray', keys: ['gray-400'], darkKeys: ['gray-600'] },
+      'text.placeholder': { category: 'gray', keys: ['gray-400'], darkKeys: ['gray-600'] },
+      'text.link': { category: 'brand', keys: ['primary'], darkKeys: ['primary'] },
+      'text.accent': { category: 'brand', keys: ['primary'], darkKeys: ['primary'] },
+      'text.inverse': { category: 'gray', keys: ['white'], darkKeys: ['gray-900'] },
+      'text.success': { category: 'system.success', keys: ['success'], darkKeys: ['success'] },
+      'text.warning': { category: 'system.warning', keys: ['warning'], darkKeys: ['warning'] },
+      'text.error': { category: 'system.error', keys: ['danger'], darkKeys: ['danger'] },
+
+      // ========================================
+      // 🔲 BORDERS - Bootstrap STRICT
+      // ========================================
+      'border.default': { category: 'gray', keys: ['gray-300'], darkKeys: ['gray-700'] },
+      'border.muted': { category: 'gray', keys: ['gray-200'], darkKeys: ['gray-800'] },
+      'border.subtle': { category: 'gray', keys: ['gray-100'], darkKeys: ['gray-900'] },
+      'border.accent': { category: 'brand', keys: ['primary'], darkKeys: ['primary'] },
+      'border.focus': { category: 'brand', keys: ['primary'], darkKeys: ['primary'] },
+      'border.error': { category: 'system.error', keys: ['danger'], darkKeys: ['danger'] },
+
+      // ========================================
+      // ➗ DIVIDER
+      // ========================================
+      'divider.default': { category: 'gray', keys: ['gray-200'], darkKeys: ['gray-800'] },
+
+      // ========================================
+      // ⭕ RING
+      // ========================================
+      'ring.focus': { category: 'brand', keys: ['primary'], darkKeys: ['primary'] },
+      'ring.error': { category: 'system.error', keys: ['danger'], darkKeys: ['danger'] },
+
+      // ========================================
+      // 🔘 ON
+      // ========================================
+      'on.primary': { category: 'gray', keys: ['white'], darkKeys: ['white'] },
+      'on.brand': { category: 'gray', keys: ['white'], darkKeys: ['white'] },
+
+      // ========================================
+      // 🎯 ACTIONS - Bootstrap STRICT: $primary, $secondary, $danger
+      // ========================================
+      'action.primary.default': { category: 'brand', keys: ['primary'], darkKeys: ['primary'] },
+      'action.primary.hover': { category: 'brand', keys: ['primary'], darkKeys: ['primary'] },
+      'action.primary.active': { category: 'brand', keys: ['primary'], darkKeys: ['primary'] },
+      'action.primary.disabled': { category: 'gray', keys: ['gray-300'], darkKeys: ['gray-700'] },
+      'action.primary.text': { category: 'gray', keys: ['white'], darkKeys: ['white'] },
+
+      'action.secondary.default': { category: 'gray', keys: ['secondary'], darkKeys: ['secondary'] },
+      'action.secondary.hover': { category: 'gray', keys: ['secondary'], darkKeys: ['secondary'] },
+      'action.secondary.active': { category: 'gray', keys: ['secondary'], darkKeys: ['secondary'] },
+      'action.secondary.disabled': { category: 'gray', keys: ['gray-100'], darkKeys: ['gray-900'] },
+      'action.secondary.text': { category: 'gray', keys: ['white'], darkKeys: ['white'] },
+
+      'action.tertiary.default': { category: 'gray', keys: ['transparent'] },
+      'action.tertiary.hover': { category: 'gray', keys: ['gray-100'], darkKeys: ['gray-900'] },
+      'action.tertiary.active': { category: 'gray', keys: ['gray-200'], darkKeys: ['gray-800'] },
+      'action.tertiary.disabled': { category: 'gray', keys: ['transparent'] },
+      'action.tertiary.text': { category: 'brand', keys: ['primary'], darkKeys: ['primary'] },
+
+      'action.destructive.default': { category: 'system.error', keys: ['danger'], darkKeys: ['danger'] },
+      'action.destructive.hover': { category: 'system.error', keys: ['danger'], darkKeys: ['danger'] },
+      'action.destructive.active': { category: 'system.error', keys: ['danger'], darkKeys: ['danger'] },
+      'action.destructive.disabled': { category: 'gray', keys: ['gray-300'], darkKeys: ['gray-700'] },
+      'action.destructive.text': { category: 'gray', keys: ['white'], darkKeys: ['white'] },
+
+      // ========================================
+      // ⚠️ STATUS - Bootstrap STRICT: $success, $warning, $danger, $info
+      // ========================================
+      'status.success.bg': { category: 'system.success', keys: ['success'], darkKeys: ['success'] },
+      'status.success.fg': { category: 'system.success', keys: ['success'], darkKeys: ['success'] },
+      'status.success.border': { category: 'system.success', keys: ['success'], darkKeys: ['success'] },
+      'status.warning.bg': { category: 'system.warning', keys: ['warning'], darkKeys: ['warning'] },
+      'status.warning.fg': { category: 'system.warning', keys: ['warning'], darkKeys: ['warning'] },
+      'status.warning.border': { category: 'system.warning', keys: ['warning'], darkKeys: ['warning'] },
+      'status.error.bg': { category: 'system.error', keys: ['danger'], darkKeys: ['danger'] },
+      'status.error.fg': { category: 'system.error', keys: ['danger'], darkKeys: ['danger'] },
+      'status.error.border': { category: 'system.error', keys: ['danger'], darkKeys: ['danger'] },
+      'status.info.bg': { category: 'system.info', keys: ['info'], darkKeys: ['info'] },
+      'status.info.fg': { category: 'system.info', keys: ['info'], darkKeys: ['info'] },
+      'status.info.border': { category: 'system.info', keys: ['info'], darkKeys: ['info'] },
+
+      // ========================================
+      // 🌑 OVERLAY
+      // ========================================
+      'overlay.dim': { category: 'gray', keys: ['gray-800'], darkKeys: ['gray-900'] },
+      'overlay.scrim': { category: 'gray', keys: ['black'], darkKeys: ['black'] },
+
+      // ========================================
+      // 📐 RADIUS - Bootstrap STRICT: numeric values (no named tokens)
+      // ========================================
+      'radius.none': { category: 'radius', keys: ['0'] },
+      'radius.sm': { category: 'radius', keys: ['2'] },
+      'radius.md': { category: 'radius', keys: ['4'] },
+      'radius.lg': { category: 'radius', keys: ['8'] },
+      'radius.full': { category: 'radius', keys: ['50'] },
+
+      // ========================================
+      // 📏 SPACING - Bootstrap: $spacer scale 0-5 (0, 4, 8, 16, 24, 48px)
+      // ========================================
+      'space.xs': { category: 'spacing', keys: ['1'] },
+      'space.sm': { category: 'spacing', keys: ['2'] },
+      'space.md': { category: 'spacing', keys: ['3'] },
+      'space.lg': { category: 'spacing', keys: ['4'] },
+      'space.xl': { category: 'spacing', keys: ['5'] },
+      'space.2xl': { category: 'spacing', keys: ['5'] },
+
+      // ========================================
+      // 🖊️ STROKE - Bootstrap: numeric scale 0-5
+      // ========================================
+      'stroke.none': { category: 'stroke', keys: ['0'] },
+      'stroke.thin': { category: 'stroke', keys: ['1'] },
+      'stroke.default': { category: 'stroke', keys: ['2'] },
+      'stroke.thick': { category: 'stroke', keys: ['3'] },
+      'stroke.heavy': { category: 'stroke', keys: ['5'] }
     },
     mui: {
-      // Background - NOTE: bg.canvas is DARKER than bg.surface
-      'bg.canvas': { category: 'gray', keys: ['100', 'grey.50'] },
-      'bg.surface': { category: 'gray', keys: ['50', 'white'] },
-      'bg.elevated': { category: 'gray', keys: ['200', 'grey.100'] },
-      'bg.muted': { category: 'gray', keys: ['300', 'grey.200'] },
-      'bg.inverse': { category: 'gray', keys: ['900'] },
-      'text.primary': { category: 'gray', keys: ['900'] },
-      'text.secondary': { category: 'gray', keys: ['700', '600'] },
-      'text.muted': { category: 'gray', keys: ['500', '400'] },
-      'text.inverse': { category: 'gray', keys: ['50', '100'] },
-      'text.disabled': { category: 'gray', keys: ['400', '300'] },
-      'border.default': { category: 'gray', keys: ['200', '300'] },
-      'border.muted': { category: 'gray', keys: ['100', '200'] },
-      'action.primary.default': { category: 'brand', keys: ['main', 'primary'] },
-      'action.primary.hover': { category: 'brand', keys: ['dark'] },
-      'action.primary.active': { category: 'brand', keys: ['dark'] },
-      'action.primary.disabled': { category: 'gray', keys: ['300', '400'] },
-      'status.success': { category: 'system', keys: ['success'] },
-      'status.warning': { category: 'system', keys: ['warning'] },
-      'status.error': { category: 'system', keys: ['error'] },
-      'status.info': { category: 'system', keys: ['info'] },
-      'radius.sm': { category: 'radius', keys: ['sm', '4'] },
-      'radius.md': { category: 'radius', keys: ['md', '8'] },
-      'space.sm': { category: 'spacing', keys: ['sm', '8', '2'] },
-      'space.md': { category: 'spacing', keys: ['md', '16', '4'] },
-      'font.size.base': { category: 'typography', keys: ['base', '16'] },
-      'font.weight.base': { category: 'typography', keys: ['regular', '400'] }
+      // ========================================
+      // 🎨 BACKGROUNDS - Material-UI STRICT nomenclature
+      // MUI: Utilise l'échelle 50-900 des primitives gray
+      // ========================================
+      'bg.canvas': { category: 'gray', keys: ['100'], darkKeys: ['900'] },
+      'bg.surface': { category: 'gray', keys: ['50'], darkKeys: ['800'] },
+      'bg.elevated': { category: 'gray', keys: ['200'], darkKeys: ['700'] },
+      'bg.subtle': { category: 'gray', keys: ['100'], darkKeys: ['700'] },
+      'bg.muted': { category: 'gray', keys: ['300'], darkKeys: ['600'] },
+      'bg.accent': { category: 'brand', keys: ['600'], darkKeys: ['500'] },
+      'bg.inverse': { category: 'gray', keys: ['900'], darkKeys: ['50'] },
+
+      // ========================================
+      // ✍️ TEXT - Material-UI STRICT nomenclature
+      // MUI: Utilise l'échelle 50-900 des primitives gray et brand
+      // ========================================
+      'text.primary': { category: 'gray', keys: ['900'], darkKeys: ['50'] },
+      'text.secondary': { category: 'gray', keys: ['700'], darkKeys: ['300'] },
+      'text.muted': { category: 'gray', keys: ['600'], darkKeys: ['400'] },
+      'text.caption': { category: 'gray', keys: ['500'], darkKeys: ['500'] },
+      'text.disabled': { category: 'gray', keys: ['400'], darkKeys: ['600'] },
+      'text.placeholder': { category: 'gray', keys: ['400'], darkKeys: ['600'] },
+      'text.link': { category: 'brand', keys: ['700'], darkKeys: ['400'] },
+      'text.accent': { category: 'brand', keys: ['700'], darkKeys: ['400'] },
+      'text.inverse': { category: 'gray', keys: ['50'], darkKeys: ['900'] },
+      'text.success': { category: 'system.success', keys: ['800'], darkKeys: ['400'] },
+      'text.warning': { category: 'system.warning', keys: ['800'], darkKeys: ['400'] },
+      'text.error': { category: 'system.error', keys: ['800'], darkKeys: ['400'] },
+
+      // ========================================
+      // 🔲 BORDERS - Material-UI STRICT nomenclature
+      // MUI: Utilise l'échelle 50-900
+      // ========================================
+      'border.default': { category: 'gray', keys: ['300'], darkKeys: ['700'] },
+      'border.muted': { category: 'gray', keys: ['200'], darkKeys: ['800'] },
+      'border.subtle': { category: 'gray', keys: ['100'], darkKeys: ['900'] },
+      'border.accent': { category: 'brand', keys: ['400'], darkKeys: ['700'] },
+      'border.focus': { category: 'brand', keys: ['600'], darkKeys: ['500'] },
+      'border.error': { category: 'system.error', keys: ['600'], darkKeys: ['600'] },
+
+      // ========================================
+      // ➗ DIVIDER - MUI: palette.divider
+      // ========================================
+      'divider.default': { category: 'gray', keys: ['200'], darkKeys: ['800'] },
+
+      // ========================================
+      // ⭕ RING
+      // ========================================
+      'ring.focus': { category: 'brand', keys: ['500'], darkKeys: ['500'] },
+      'ring.error': { category: 'system.error', keys: ['600'], darkKeys: ['600'] },
+
+      // ========================================
+      // 🔘 ON - MUI: Texte de contraste sur fond brand
+      // ========================================
+      'on.primary': { category: 'gray', keys: ['50'], darkKeys: ['50'] },
+      'on.brand': { category: 'gray', keys: ['50'], darkKeys: ['50'] },
+
+      // ========================================
+      // 🎯 ACTIONS - Material-UI STRICT nomenclature
+      // MUI: palette.primary.main/light/dark, palette.action.disabled/hover
+      // ========================================
+      'action.primary.default': { category: 'brand', keys: ['600'], darkKeys: ['500'] },
+      'action.primary.hover': { category: 'brand', keys: ['700'], darkKeys: ['600'] },
+      'action.primary.active': { category: 'brand', keys: ['800'], darkKeys: ['700'] },
+      'action.primary.disabled': { category: 'gray', keys: ['300'], darkKeys: ['700'] },
+      'action.primary.text': { category: 'gray', keys: ['50'], darkKeys: ['50'] },
+
+      'action.secondary.default': { category: 'brand', keys: ['100'], darkKeys: ['800'] },
+      'action.secondary.hover': { category: 'brand', keys: ['200'], darkKeys: ['700'] },
+      'action.secondary.active': { category: 'brand', keys: ['300'], darkKeys: ['600'] },
+      'action.secondary.disabled': { category: 'gray', keys: ['100'], darkKeys: ['900'] },
+      'action.secondary.text': { category: 'brand', keys: ['700'], darkKeys: ['300'] },
+
+      'action.tertiary.default': { category: 'gray', keys: ['transparent'] }, // No darkKeys needed for transparent
+      'action.tertiary.hover': { category: 'gray', keys: ['100'], darkKeys: ['900'] },
+      'action.tertiary.active': { category: 'gray', keys: ['200'], darkKeys: ['800'] },
+      'action.tertiary.disabled': { category: 'gray', keys: ['transparent'] },
+      'action.tertiary.text': { category: 'brand', keys: ['600'], darkKeys: ['400'] },
+
+      'action.destructive.default': { category: 'system.error', keys: ['600'], darkKeys: ['600'] },
+      'action.destructive.hover': { category: 'system.error', keys: ['700'], darkKeys: ['700'] },
+      'action.destructive.active': { category: 'system.error', keys: ['800'], darkKeys: ['800'] },
+      'action.destructive.disabled': { category: 'gray', keys: ['300'], darkKeys: ['700'] },
+      'action.destructive.text': { category: 'gray', keys: ['50'], darkKeys: ['50'] },
+
+      // ========================================
+      // ⚠️ STATUS - Material-UI STRICT nomenclature
+      // MUI: Utilise l'échelle 50-900 (100=light bg, 600=main, 800=dark fg)
+      // ========================================
+      'status.success.bg': { category: 'system.success', keys: ['100'], darkKeys: ['900'] },
+      'status.success.fg': { category: 'system.success', keys: ['700'], darkKeys: ['300'] },
+      'status.success.border': { category: 'system.success', keys: ['500'], darkKeys: ['500'] },
+      'status.warning.bg': { category: 'system.warning', keys: ['100'], darkKeys: ['900'] },
+      'status.warning.fg': { category: 'system.warning', keys: ['700'], darkKeys: ['300'] },
+      'status.warning.border': { category: 'system.warning', keys: ['500'], darkKeys: ['500'] },
+      'status.error.bg': { category: 'system.error', keys: ['100'], darkKeys: ['900'] },
+      'status.error.fg': { category: 'system.error', keys: ['700'], darkKeys: ['300'] },
+      'status.error.border': { category: 'system.error', keys: ['500'], darkKeys: ['500'] },
+      'status.info.bg': { category: 'system.info', keys: ['100'], darkKeys: ['900'] },
+      'status.info.fg': { category: 'system.info', keys: ['700'], darkKeys: ['300'] },
+      'status.info.border': { category: 'system.info', keys: ['500'], darkKeys: ['500'] },
+
+      // ========================================
+      // 🌑 OVERLAY
+      // ========================================
+      'overlay.dim': { category: 'gray', keys: ['800'], darkKeys: ['900'] },
+      'overlay.scrim': { category: 'gray', keys: ['900'], darkKeys: ['900'] },
+
+      // ========================================
+      // 📐 RADIUS - MUI utilise les clés nominales du schéma
+      // ========================================
+      'radius.none': { category: 'radius', keys: ['none'] },
+      'radius.sm': { category: 'radius', keys: ['sm'] },
+      'radius.md': { category: 'radius', keys: ['md'] },
+      'radius.lg': { category: 'radius', keys: ['lg'] },
+      'radius.full': { category: 'radius', keys: ['full'] },
+
+      // ========================================
+      // 📏 SPACING - MUI spacing scale multiplier (1 = 8px)
+      // ========================================
+      'space.xs': { category: 'spacing', keys: ['1'] },
+      'space.sm': { category: 'spacing', keys: ['2'] },
+      'space.md': { category: 'spacing', keys: ['4'] },
+      'space.lg': { category: 'spacing', keys: ['6'] },
+      'space.xl': { category: 'spacing', keys: ['8'] },
+      'space.2xl': { category: 'spacing', keys: ['12'] },
+
+      // ========================================
+      // 🖊️ STROKE - MUI: numeric scale 0-4
+      // ========================================
+      'stroke.none': { category: 'stroke', keys: ['0'] },
+      'stroke.thin': { category: 'stroke', keys: ['1'] },
+      'stroke.default': { category: 'stroke', keys: ['2'] },
+      'stroke.thick': { category: 'stroke', keys: ['3'] },
+      'stroke.heavy': { category: 'stroke', keys: ['4'] }
     },
     chakra: {
-      // Background - NOTE: bg.canvas is DARKER than bg.surface
-      'bg.canvas': { category: 'gray', keys: ['100'] },
-      'bg.surface': { category: 'gray', keys: ['50'] },
-      'bg.elevated': { category: 'gray', keys: ['200'] },
-      'bg.muted': { category: 'gray', keys: ['300'] },
-      'bg.inverse': { category: 'gray', keys: ['900', '800'] },
-      'text.primary': { category: 'gray', keys: ['900', '800'] },
-      'text.secondary': { category: 'gray', keys: ['700', '600'] },
-      'text.muted': { category: 'gray', keys: ['500', '400'] },
-      'text.inverse': { category: 'gray', keys: ['50'] },
-      'text.disabled': { category: 'gray', keys: ['400', '300'] },
-      'border.default': { category: 'gray', keys: ['200'] },
-      'border.muted': { category: 'gray', keys: ['100'] },
-      'action.primary.default': { category: 'brand', keys: ['300'] },
-      'action.primary.hover': { category: 'brand', keys: ['400'] },
-      'action.primary.active': { category: 'brand', keys: ['500'] },
-      'action.primary.disabled': { category: 'gray', keys: ['300', '400'] },
-      'status.success': { category: 'system', keys: ['success', '500'] },
-      'status.warning': { category: 'system', keys: ['warning', '500'] },
-      'status.error': { category: 'system', keys: ['error', '500'] },
-      'status.info': { category: 'system', keys: ['info', 'success'] },
-      'radius.none': { category: 'radius', keys: ['none', '0'] },
-      'radius.sm': { category: 'radius', keys: ['sm', '4'] },
-      'radius.md': { category: 'radius', keys: ['md', '8'] },
-      'radius.lg': { category: 'radius', keys: ['lg', '12'] },
-      'radius.full': { category: 'radius', keys: ['full', '50rem'] },
-      'space.xs': { category: 'spacing', keys: ['xs', '1', '4'] },
-      'space.sm': { category: 'spacing', keys: ['sm', '2', '8'] },
-      'space.md': { category: 'spacing', keys: ['md', '4', '16'] },
-      'space.lg': { category: 'spacing', keys: ['lg', '6', '24'] },
-      'space.xl': { category: 'spacing', keys: ['xl', '8', '32'] },
-      'space.2xl': { category: 'spacing', keys: ['2xl', '12', '48'] },
-      'font.size.base': { category: 'typography', keys: ['base', '16'] },
-      'font.weight.base': { category: 'typography', keys: ['normal', '400'] }
+      // ========================================
+      // 🎨 BACKGROUNDS - Chakra UI STRICT: gray.X (with 'a'), white
+      // ========================================
+      'bg.canvas': { category: 'gray', keys: ['gray.100'], darkKeys: ['gray.900'] },
+      'bg.surface': { category: 'gray', keys: ['gray.50'], darkKeys: ['gray.900'] },
+      'bg.elevated': { category: 'gray', keys: ['gray.200'], darkKeys: ['gray.800'] },
+      'bg.subtle': { category: 'gray', keys: ['gray.100'], darkKeys: ['gray.800'] },
+      'bg.muted': { category: 'gray', keys: ['gray.300'], darkKeys: ['gray.700'] },
+      'bg.accent': { category: 'brand', keys: ['500'], darkKeys: ['500'] },
+      'bg.inverse': { category: 'gray', keys: ['gray.900'], darkKeys: ['white'] },
+
+      // ========================================
+      // ✍️ TEXT - Chakra UI STRICT: gray.X, green.X, red.X, etc.
+      // ========================================
+      'text.primary': { category: 'gray', keys: ['gray.900'], darkKeys: ['white'] },
+      'text.secondary': { category: 'gray', keys: ['gray.700'], darkKeys: ['gray.300'] },
+      'text.muted': { category: 'gray', keys: ['gray.600'], darkKeys: ['gray.400'] },
+      'text.caption': { category: 'gray', keys: ['gray.500'], darkKeys: ['gray.500'] },
+      'text.disabled': { category: 'gray', keys: ['gray.400'], darkKeys: ['gray.600'] },
+      'text.placeholder': { category: 'gray', keys: ['gray.400'], darkKeys: ['gray.600'] },
+      'text.link': { category: 'brand', keys: ['600'], darkKeys: ['400'] },
+      'text.accent': { category: 'brand', keys: ['700'], darkKeys: ['300'] },
+      'text.inverse': { category: 'gray', keys: ['white'], darkKeys: ['gray.900'] },
+      'text.success': { category: 'system.success', keys: ['green.700'], darkKeys: ['green.400'] },
+      'text.warning': { category: 'system.warning', keys: ['orange.700'], darkKeys: ['orange.400'] },
+      'text.error': { category: 'system.error', keys: ['red.700'], darkKeys: ['red.400'] },
+
+      // ========================================
+      // 🔲 BORDERS - Chakra UI STRICT
+      // ========================================
+      'border.default': { category: 'gray', keys: ['gray.300'], darkKeys: ['gray.700'] },
+      'border.muted': { category: 'gray', keys: ['gray.200'], darkKeys: ['gray.800'] },
+      'border.subtle': { category: 'gray', keys: ['gray.100'], darkKeys: ['gray.900'] },
+      'border.accent': { category: 'brand', keys: ['300'], darkKeys: ['600'] },
+      'border.focus': { category: 'brand', keys: ['500'], darkKeys: ['500'] },
+      'border.error': { category: 'system.error', keys: ['red.500'], darkKeys: ['red.500'] },
+
+      // ========================================
+      // ➗ DIVIDER
+      // ========================================
+      'divider.default': { category: 'gray', keys: ['gray.200'], darkKeys: ['gray.800'] },
+
+      // ========================================
+      // ⭕ RING
+      // ========================================
+      'ring.focus': { category: 'brand', keys: ['500'], darkKeys: ['500'] },
+      'ring.error': { category: 'system.error', keys: ['red.500'], darkKeys: ['red.500'] },
+
+      // ========================================
+      // 🔘 ON
+      // ========================================
+      'on.primary': { category: 'gray', keys: ['white'], darkKeys: ['white'] },
+      'on.brand': { category: 'gray', keys: ['white'], darkKeys: ['white'] },
+
+      // ========================================
+      // 🎯 ACTIONS - Chakra UI STRICT: numeric scale
+      // ========================================
+      'action.primary.default': { category: 'brand', keys: ['500'], darkKeys: ['500'] },
+      'action.primary.hover': { category: 'brand', keys: ['600'], darkKeys: ['600'] },
+      'action.primary.active': { category: 'brand', keys: ['700'], darkKeys: ['700'] },
+      'action.primary.disabled': { category: 'gray', keys: ['gray.300'], darkKeys: ['gray.700'] },
+      'action.primary.text': { category: 'gray', keys: ['white'], darkKeys: ['white'] },
+
+      'action.secondary.default': { category: 'brand', keys: ['100'], darkKeys: ['800'] },
+      'action.secondary.hover': { category: 'brand', keys: ['200'], darkKeys: ['700'] },
+      'action.secondary.active': { category: 'brand', keys: ['300'], darkKeys: ['600'] },
+      'action.secondary.disabled': { category: 'gray', keys: ['gray.100'], darkKeys: ['gray.900'] },
+      'action.secondary.text': { category: 'brand', keys: ['700'], darkKeys: ['300'] },
+
+      'action.tertiary.default': { category: 'gray', keys: ['transparent'] },
+      'action.tertiary.hover': { category: 'gray', keys: ['gray.100'], darkKeys: ['gray.900'] },
+      'action.tertiary.active': { category: 'gray', keys: ['gray.200'], darkKeys: ['gray.800'] },
+      'action.tertiary.disabled': { category: 'gray', keys: ['transparent'] },
+      'action.tertiary.text': { category: 'brand', keys: ['600'], darkKeys: ['400'] },
+
+      'action.destructive.default': { category: 'system.error', keys: ['red.600'], darkKeys: ['red.600'] },
+      'action.destructive.hover': { category: 'system.error', keys: ['red.700'], darkKeys: ['red.700'] },
+      'action.destructive.active': { category: 'system.error', keys: ['red.800'], darkKeys: ['red.800'] },
+      'action.destructive.disabled': { category: 'gray', keys: ['gray.300'], darkKeys: ['gray.700'] },
+      'action.destructive.text': { category: 'gray', keys: ['white'], darkKeys: ['white'] },
+
+      // ========================================
+      // ⚠️ STATUS - Chakra UI STRICT: green.X, orange.X, red.X, blue.X
+      // ========================================
+      'status.success.bg': { category: 'system.success', keys: ['green.100'], darkKeys: ['green.900'] },
+      'status.success.fg': { category: 'system.success', keys: ['green.700'], darkKeys: ['green.300'] },
+      'status.success.border': { category: 'system.success', keys: ['green.500'], darkKeys: ['green.500'] },
+      'status.warning.bg': { category: 'system.warning', keys: ['orange.100'], darkKeys: ['orange.900'] },
+      'status.warning.fg': { category: 'system.warning', keys: ['orange.700'], darkKeys: ['orange.300'] },
+      'status.warning.border': { category: 'system.warning', keys: ['orange.500'], darkKeys: ['orange.500'] },
+      'status.error.bg': { category: 'system.error', keys: ['red.100'], darkKeys: ['red.900'] },
+      'status.error.fg': { category: 'system.error', keys: ['red.700'], darkKeys: ['red.300'] },
+      'status.error.border': { category: 'system.error', keys: ['red.500'], darkKeys: ['red.500'] },
+      'status.info.bg': { category: 'system.info', keys: ['blue.100'], darkKeys: ['blue.900'] },
+      'status.info.fg': { category: 'system.info', keys: ['blue.700'], darkKeys: ['blue.300'] },
+      'status.info.border': { category: 'system.info', keys: ['blue.500'], darkKeys: ['blue.500'] },
+
+      // ========================================
+      // 🌑 OVERLAY - Chakra STRICT: blackAlpha is official
+      // ========================================
+      'overlay.dim': { category: 'gray', keys: ['blackAlpha.600'], darkKeys: ['blackAlpha.700'] },
+      'overlay.scrim': { category: 'gray', keys: ['blackAlpha.800'], darkKeys: ['blackAlpha.800'] },
+
+      // ========================================
+      // 📐 RADIUS - Chakra STRICT: none, sm, md, lg, full
+      // ========================================
+      'radius.none': { category: 'radius', keys: ['none'] },
+      'radius.sm': { category: 'radius', keys: ['sm'] },
+      'radius.md': { category: 'radius', keys: ['md'] },
+      'radius.lg': { category: 'radius', keys: ['lg'] },
+      'radius.full': { category: 'radius', keys: ['full'] },
+
+      // ========================================
+      // 📏 SPACING - Chakra STRICT: numeric scale 1, 2, 4, 6, 8, 12
+      // ========================================
+      'space.xs': { category: 'spacing', keys: ['1'] },
+      'space.sm': { category: 'spacing', keys: ['2'] },
+      'space.md': { category: 'spacing', keys: ['4'] },
+      'space.lg': { category: 'spacing', keys: ['6'] },
+      'space.xl': { category: 'spacing', keys: ['8'] },
+      'space.2xl': { category: 'spacing', keys: ['12'] },
+
+      // ========================================
+      // 🖊️ STROKE - Chakra STRICT: numeric borderWidth 0, 1, 2, 4, 8
+      // ========================================
+      'stroke.none': { category: 'stroke', keys: ['0'] },
+      'stroke.thin': { category: 'stroke', keys: ['1'] },
+      'stroke.default': { category: 'stroke', keys: ['2'] },
+      'stroke.thick': { category: 'stroke', keys: ['4'] },
+      'stroke.heavy': { category: 'stroke', keys: ['8'] }
     }
   };
   // Primary lookup
   var libMapping = mappings[lib];
+  console.log('🔍 [MAPPING_DEBUG] lib=' + lib + ', semanticKey=' + semanticKey + ', has mapping=' + !!libMapping);
   if (libMapping && libMapping[semanticKey]) {
+    console.log('✅ [MAPPING_FOUND] Using ' + lib + ' mapping for ' + semanticKey);
     return libMapping[semanticKey];
   }
 
@@ -7960,6 +9225,7 @@ function getPrimitiveMappingForSemantic(semanticKey, lib) {
       console.warn('⚠️ [MAPPING_FALLBACK] ' + lib + ' -> tailwind (some keys not defined for ' + lib + ')');
       getPrimitiveMappingForSemantic._warnedFallbacks[lib] = true;
     }
+    console.warn('❌ [USING_TAILWIND_FALLBACK] ' + semanticKey + ' - lib=' + lib + ' a no mapping, using Tailwind');
     return mappings.tailwind[semanticKey];
   }
 
@@ -8028,11 +9294,12 @@ function generateFallbackKeysForMap(key, category) {
  */
 function isCollectionCategory(collectionName, category) {
   var c = (collectionName || '').toLowerCase();
-  if (category === 'brand') return c.includes('brand');
-  if (category === 'system') return c.includes('system');
-  if (category === 'gray') return c.includes('gray') || c.includes('grey') || c.includes('grayscale');
-  if (category === 'spacing') return c.includes('spacing');
-  if (category === 'radius') return c.includes('radius');
+  if (category === 'brand') return c.includes('brand') || c.includes('primary');
+  if (category === 'system' || category.indexOf('system.') === 0) return c.includes('system') || c.includes('status');
+  if (category === 'gray') return c.includes('gray') || c.includes('grey') || c.includes('grayscale') || c.includes('neutral');
+  if (category === 'spacing') return c.includes('spacing') || c.includes('space') || c.includes('spacer') || c.includes('sizes');
+  if (category === 'radius') return c.includes('radius') || c.includes('radii') || c.includes('shape');
+  if (category === 'stroke') return c.includes('stroke') || c.includes('border width') || c.includes('line width') || c.includes('border-width');
   if (category === 'typography') return c.includes('typo') || c.includes('typography');
   return false;
 }
@@ -8119,19 +9386,6 @@ async function resolveSemanticAliasFromMap(semanticKey, allTokens, naming, globa
         var variableId = globalVariableMap.get(searchKey);
         if (DEBUG) console.log(`🔎 [SEARCH_ATTEMPT] ${semanticKey} -> checking '${searchKey}' in map -> ${variableId ? 'FOUND (ID: ' + variableId + ')' : 'NOT FOUND'}`);
         if (variableId) {
-          // VÉRIFICATION ANTI-COLLISION : Désactivée temporairement car elle cause des blocages 
-          // et empêche le partage légitime de primitives entre tokens (ex: disabled states)
-          /*
-          var scope = semanticKey.split('.')[0];
-          var currentMode = modeName || 'light';
-          var collisionKey = scope + ':' + variableId + ':' + currentMode;
-
-          if (resolveSemanticAliasFromMap.usedVariables.has(collisionKey)) {
-            if (DEBUG) console.log(`⚠️ [COLLISION_AVOIDED] ${semanticKey} -> '${searchKey}' already used by another token in scope '${scope}' for mode '${currentMode}' (ID: ${variableId}), skipping`);
-            continue;
-          }
-          */
-
           if (DEBUG) console.log(`✅ [MAP_HIT] ${semanticKey} -> '${searchKey}' found in global map (ID: ${variableId})`);
           var variable = await figma.variables.getVariableByIdAsync(variableId);
           if (variable) {
@@ -8153,9 +9407,7 @@ async function resolveSemanticAliasFromMap(semanticKey, allTokens, naming, globa
               }
 
               if (hasValidValue) {
-                // MARQUER COMME UTILISÉE pour éviter les futures collisions DANS CE SCOPE + MODE
-                resolveSemanticAliasFromMap.usedVariables.add(collisionKey);
-                if (DEBUG) console.log(`✅ [ALIAS_RESOLVE] Found via map: ${semanticKey} → ${possibleKeys[j]} (${variable.name}) - marked as used for scope '${scope}' in mode '${currentMode}' (key: ${collisionKey})`);
+                if (DEBUG) console.log(`✅ [ALIAS_RESOLVE] Found via map: ${semanticKey} → ${possibleKeys[j]} (${variable.name})`);
                 return {
                   variableId: variableId,
                   collection: mapping.category,
@@ -8605,10 +9857,16 @@ function findColorSuggestionsV2(hexValue, contextModeId, requiredScopes, propert
   // Helper filter function
   function isValidCandidate(meta) {
     // 1. Filter Scopes (Strict)
-    if (!filterVariableByScopes(meta, requiredScopes)) return false;
+    if (!filterVariableByScopes(meta, requiredScopes)) {
+      return false;
+    }
 
-    // 2. Filter Primitives (if option disabled)
-    if (!SCAN_ALLOW_PRIMITIVES && meta.tokenKind !== TokenKind.SEMANTIC) return false;
+    // 2. Filter Primitives (exception: radius autorise les primitives)
+    var allowPrimitivesHere = SCAN_ALLOW_PRIMITIVES ||
+      (SCAN_ALLOW_PRIMITIVES_FOR_RADIUS && requiredScopes && requiredScopes.indexOf('CORNER_RADIUS') !== -1);
+    if (!allowPrimitivesHere && meta.tokenKind !== TokenKind.SEMANTIC) {
+      return false;
+    }
 
     return true;
   }
@@ -8629,6 +9887,14 @@ function findColorSuggestionsV2(hexValue, contextModeId, requiredScopes, propert
 
   // Always check global index for other variables with same value (to detect conflicts)
   var preferredMatches = VariableIndex.colorPreferred.get(hexValue) || [];
+
+  if (DEBUG && preferredMatches.length > 0) {
+    console.log('[COLOR MATCH] Found', preferredMatches.length, 'variables for', hexValue);
+    preferredMatches.forEach(function (m) {
+      console.log('  -', m.name, '| scopes:', m.scopes, '| kind:', m.tokenKind);
+    });
+  }
+
   preferredMatches.forEach(function (meta) {
     if (isValidCandidate(meta)) {
       var key = meta.id + '|' + meta.modeId;
@@ -8798,7 +10064,7 @@ function findColorSuggestionsV2(hexValue, contextModeId, requiredScopes, propert
  * Helper: Filter a single variable by scopes
  * Strict Mode: No fallback for variables without scopes if scopes are required.
  */
-const SCOPE_POLICY = 'LENIENT'; // 'STRICT' or 'LENIENT'
+const SCOPE_POLICY = 'STRICT'; // 'STRICT' or 'LENIENT' - STRICT: only suggest variables with matching scopes
 
 function filterVariableByScopes(meta, requiredScopes, policy) {
   if (!requiredScopes || requiredScopes.length === 0) return true;
@@ -8906,8 +10172,10 @@ function findNumericSuggestionsV2(targetValue, contextModeId, requiredScopes, pr
       return false;
     }
 
-    // 2. Filter Primitives
-    if (!SCAN_ALLOW_PRIMITIVES && meta.tokenKind !== TokenKind.SEMANTIC) {
+    // 2. Filter Primitives (exception: radius autorise les primitives)
+    var allowPrimitivesHere = SCAN_ALLOW_PRIMITIVES ||
+      (SCAN_ALLOW_PRIMITIVES_FOR_RADIUS && requiredScopes && requiredScopes.indexOf('CORNER_RADIUS') !== -1);
+    if (!allowPrimitivesHere && meta.tokenKind !== TokenKind.SEMANTIC) {
       diagStats.rejectedPrimitive++;
       if (doDiag && isClose) {
         console.log(`[DIAG REJECT PRIMITIVE] ${meta.name}`, {
@@ -9324,7 +10592,9 @@ async function checkTypographyPropertiesSafely(node, valueToVariableMap, results
           var isSemantic = await isSemanticVariable(boundVar.name, boundVar);
           var hasScopes = filterVariableByScopes({ scopes: boundVar.scopes }, requiredScopes);
 
-          if (SCAN_ALLOW_PRIMITIVES) {
+          var allowPrimHere = SCAN_ALLOW_PRIMITIVES ||
+            (SCAN_ALLOW_PRIMITIVES_FOR_RADIUS && requiredScopes && requiredScopes.indexOf('CORNER_RADIUS') !== -1);
+          if (allowPrimHere) {
             if (hasScopes) return { isConform: true, boundId: binding.id };
           } else {
             if (isSemantic && hasScopes) return { isConform: true, boundId: binding.id };
@@ -9729,6 +10999,15 @@ function tracePipelineOverview() {
 async function checkFillsSafely(node, valueToVariableMap, results) {
   try {
     var fills = node.fills;
+
+    // 🔍 DEBUG: Trace fills detection
+    console.log('🎨 [checkFillsSafely] Called for node:', node.name, {
+      nodeType: node.type,
+      hasFills: !!fills,
+      fillsIsMixed: fills === figma.mixed,
+      fillsCount: Array.isArray(fills) ? fills.length : 'N/A'
+    });
+
     if (!fills || (fills !== figma.mixed && Array.isArray(fills) && fills.length === 0)) {
       return;
     }
@@ -9757,9 +11036,12 @@ async function checkFillsSafely(node, valueToVariableMap, results) {
           var hexValue = rgbToHex(fill.color);
           if (!hexValue) continue;
 
-          // Check Binding
+          // Check Binding - Two possible locations:
+          // 1. node.boundVariables['fills'] (old style or setRangeBoundVariable)
+          // 2. fill.boundVariables.color (from setBoundVariableForPaint)
           var boundVariableId = null;
-          // Logic adapted from isPropertyBoundToVariable
+
+          // Method 1: Check node.boundVariables['fills'] (array binding)
           if (boundVars && boundVars['fills']) {
             var binding = boundVars['fills'];
             if (Array.isArray(binding)) binding = binding[i];
@@ -9768,11 +11050,27 @@ async function checkFillsSafely(node, valueToVariableMap, results) {
             }
           }
 
+          // Method 2: Check fill.boundVariables.color (paint-level binding from setBoundVariableForPaint)
+          if (!boundVariableId && fill.boundVariables && fill.boundVariables.color) {
+            var paintBinding = fill.boundVariables.color;
+            if (paintBinding && paintBinding.type === 'VARIABLE_ALIAS' && paintBinding.id) {
+              boundVariableId = paintBinding.id;
+            }
+          }
+
           var isBound = !!boundVariableId;
 
           // ✅ FIX BUG-003: Si une variable est liée, on considère toujours que c'est conforme
           // L'utilisateur a fait un choix explicite, on ne doit pas remettre en question
           if (boundVariableId) continue;
+
+          // 🔍 DEBUG: Trace hardcoded color found
+          console.log('🎨 [HARDCODED COLOR FOUND]', hexValue, {
+            nodeName: node.name,
+            nodeType: node.type,
+            propertyType: propertyType,
+            requiredScopes: requiredScopes
+          });
 
           // If not conform (unbound or invalid binding), find suggestions
           var rawSuggestions = findColorSuggestionsV2(hexValue, contextModeId, requiredScopes, propertyType, node.type);
@@ -9788,9 +11086,22 @@ async function checkFillsSafely(node, valueToVariableMap, results) {
 
           var suggestions = await enrichSuggestionsWithRealValues(rawSuggestions, contextModeId);
 
+          // 🔍 DEBUG: Trace suggestions
+          console.log('🎨 [COLOR SUGGESTIONS]', hexValue, {
+            rawCount: rawSuggestions.length,
+            enrichedCount: suggestions.length,
+            rawNames: rawSuggestions.map(function (s) { return s.name; }),
+            enrichedNames: suggestions.map(function (s) { return s.name; })
+          });
+
           // If bound but invalid -> IssueStatus.HAS_MATCHES (or NO_MATCH)
           // Effectively we treat it as an issue.
           var status = suggestions.length > 0 ? IssueStatus.HAS_MATCHES : IssueStatus.NO_MATCH;
+
+          console.log('🎨 [ISSUE CREATED]', hexValue, {
+            status: status,
+            suggestionsCount: suggestions.length
+          });
 
           var issue = createScanIssue({
             nodeId: node.id,
@@ -9880,13 +11191,25 @@ async function checkStrokesSafely(node, valueToVariableMap, results) {
           var hexValue = rgbToHex(stroke.color);
           if (!hexValue) continue;
 
-          // Check Binding
+          // Check Binding - Two possible locations:
+          // 1. node.boundVariables['strokes'] (old style or setRangeBoundVariable)
+          // 2. stroke.boundVariables.color (from setBoundVariableForPaint)
           var boundVariableId = null;
+
+          // Method 1: Check node.boundVariables['strokes'] (array binding)
           if (boundVars && boundVars['strokes']) {
             var binding = boundVars['strokes'];
             if (Array.isArray(binding)) binding = binding[j];
             if (binding && binding.type === 'VARIABLE_ALIAS' && binding.id) {
               boundVariableId = binding.id;
+            }
+          }
+
+          // Method 2: Check stroke.boundVariables.color (paint-level binding from setBoundVariableForPaint)
+          if (!boundVariableId && stroke.boundVariables && stroke.boundVariables.color) {
+            var paintBinding = stroke.boundVariables.color;
+            if (paintBinding && paintBinding.type === 'VARIABLE_ALIAS' && paintBinding.id) {
+              boundVariableId = paintBinding.id;
             }
           }
 
@@ -9961,17 +11284,36 @@ function checkCornerRadiusSafely(node, valueToVariableMap, results) {
 
     // Helper to check conformity
     function checkRadiusConformity(propKey, requiredScopes) {
-      if (!boundVars || !boundVars[propKey]) return { isConform: false, boundId: null };
+      console.log('🔍 [checkRadiusConformity] Checking', propKey, 'on', node.name);
+      console.log('🔍 [checkRadiusConformity] boundVars:', JSON.stringify(boundVars || {}));
 
-      var binding = boundVars[propKey];
-      if (Array.isArray(binding)) binding = binding[0];
-
-      // ✅ FIX BUG-003: Si une variable est liée, on considère toujours que c'est conforme
-      // L'utilisateur a fait un choix explicite, on ne doit pas remettre en question
-      if (binding && binding.type === 'VARIABLE_ALIAS' && binding.id) {
-        return { isConform: true, boundId: binding.id };
+      // Check main key first
+      if (boundVars && boundVars[propKey]) {
+        var binding = boundVars[propKey];
+        if (Array.isArray(binding)) binding = binding[0];
+        if (binding && binding.type === 'VARIABLE_ALIAS' && binding.id) {
+          console.log('🔍 [checkRadiusConformity] Found bound variable for', propKey, ':', binding.id);
+          return { isConform: true, boundId: binding.id };
+        }
       }
 
+      // ✅ FIX: For cornerRadius, also check individual corners (Figma stores variable on all 4 corners)
+      if (propKey === 'cornerRadius') {
+        var cornerKeys = ['topLeftRadius', 'topRightRadius', 'bottomLeftRadius', 'bottomRightRadius'];
+        for (var i = 0; i < cornerKeys.length; i++) {
+          var cornerKey = cornerKeys[i];
+          if (boundVars && boundVars[cornerKey]) {
+            var cornerBinding = boundVars[cornerKey];
+            if (Array.isArray(cornerBinding)) cornerBinding = cornerBinding[0];
+            if (cornerBinding && cornerBinding.type === 'VARIABLE_ALIAS' && cornerBinding.id) {
+              console.log('🔍 [checkRadiusConformity] Found bound variable on', cornerKey, ':', cornerBinding.id);
+              return { isConform: true, boundId: cornerBinding.id };
+            }
+          }
+        }
+      }
+
+      console.log('🔍 [checkRadiusConformity] No bound variable found for', propKey);
       return { isConform: false, boundId: null };
     }
 
@@ -10071,16 +11413,36 @@ function checkNumericPropertiesSafely(node, valueToVariableMap, results) {
     var boundVars = node.boundVariables || {};
 
     function checkBinConformity(propKey, requiredScopes) {
-      if (!boundVars || !boundVars[propKey]) return { isConform: false, boundId: null };
-      var binding = boundVars[propKey];
-      if (Array.isArray(binding)) binding = binding[0];
+      console.log('🔍 [checkBinConformity] Checking', propKey, 'on', node.name);
+      console.log('🔍 [checkBinConformity] boundVars:', JSON.stringify(boundVars || {}));
 
-      // ✅ FIX BUG-003: Si une variable est liée, on considère toujours que c'est conforme
-      // L'utilisateur a fait un choix explicite, on ne doit pas remettre en question
-      if (binding && binding.type === 'VARIABLE_ALIAS' && binding.id) {
-        return { isConform: true, boundId: binding.id };
+      // Check main key first
+      if (boundVars && boundVars[propKey]) {
+        var binding = boundVars[propKey];
+        if (Array.isArray(binding)) binding = binding[0];
+        if (binding && binding.type === 'VARIABLE_ALIAS' && binding.id) {
+          console.log('🔍 [checkBinConformity] Found bound variable for', propKey, ':', binding.id);
+          return { isConform: true, boundId: binding.id };
+        }
       }
 
+      // ✅ FIX: For strokeWeight, also check individual sides (Figma stores variable on all 4 sides)
+      if (propKey === 'strokeWeight') {
+        var strokeKeys = ['strokeTopWeight', 'strokeBottomWeight', 'strokeLeftWeight', 'strokeRightWeight'];
+        for (var i = 0; i < strokeKeys.length; i++) {
+          var strokeKey = strokeKeys[i];
+          if (boundVars && boundVars[strokeKey]) {
+            var strokeBinding = boundVars[strokeKey];
+            if (Array.isArray(strokeBinding)) strokeBinding = strokeBinding[0];
+            if (strokeBinding && strokeBinding.type === 'VARIABLE_ALIAS' && strokeBinding.id) {
+              console.log('🔍 [checkBinConformity] Found bound variable on', strokeKey, ':', strokeBinding.id);
+              return { isConform: true, boundId: strokeBinding.id };
+            }
+          }
+        }
+      }
+
+      console.log('🔍 [checkBinConformity] No bound variable found for', propKey);
       return { isConform: false, boundId: null };
     }
 
@@ -10412,7 +11774,7 @@ async function scanSelection(ignoreHiddenLayers) {
     }
 
     var totalIndexSize = VariableIndex.colorExact.size + VariableIndex.colorPreferred.size +
-                         VariableIndex.floatExact.size + VariableIndex.floatPreferred.size;
+      VariableIndex.floatExact.size + VariableIndex.floatPreferred.size;
 
     if (totalIndexSize === 0) {
       console.warn('⚠️ [SCAN] Variable index is empty - no variables in document?');
@@ -10485,7 +11847,7 @@ async function scanPage(ignoreHiddenLayers) {
     }
 
     var totalIndexSize = VariableIndex.colorExact.size + VariableIndex.colorPreferred.size +
-                         VariableIndex.floatExact.size + VariableIndex.floatPreferred.size;
+      VariableIndex.floatExact.size + VariableIndex.floatPreferred.size;
 
     if (totalIndexSize === 0) {
       console.warn('⚠️ [SCAN] Variable index is empty - no variables in document?');
@@ -10601,7 +11963,7 @@ function finishScan(results) {
 
   if (DEBUG && results.length > 0) {
     console.log('[SCAN] Sample issue:', results[0]);
-    var issuesWithSuggestions = results.filter(function(r) { return r.suggestions && r.suggestions.length > 0; }).length;
+    var issuesWithSuggestions = results.filter(function (r) { return r.suggestions && r.suggestions.length > 0; }).length;
     console.log('[SCAN] Issues with suggestions:', issuesWithSuggestions + '/' + results.length);
   }
 
@@ -10672,7 +12034,7 @@ async function diagnoseApplicationFailure(result, variableId, error) {
       diagnosis.details.actualType = variable.resolvedType;
     }
 
-    var node = figma.getNodeById(result.nodeId);
+    var node = await figma.getNodeByIdAsync(result.nodeId);
     if (!node) {
       diagnosis.issue = 'node_missing';
       diagnosis.confidence = 'high';
@@ -10824,7 +12186,7 @@ async function applyAndVerifyFix(result, variableId) {
       throw new Error('Variable introuvable: ' + finalVariableId);
     }
 
-    var node = figma.getNodeById(result.nodeId);
+    var node = await figma.getNodeByIdAsync(result.nodeId);
     if (node) {
       console.log('🔧 [APPLY] Retrieved node:', node.name, 'type:', node.type, 'id:', node.id);
       console.log('🔧 [APPLY] Expected nodeId:', result.nodeId);
@@ -11658,7 +13020,10 @@ async function applyNumericVariable(node, variable, figmaProperty, displayProper
     }
 
     // Cas standard (Radius, Spacing, etc.)
+    console.log('🔧 [applyNumericVariable] Applying to', figmaProperty, 'on node', node.name, 'with variable', variable.name);
     node.setBoundVariable(figmaProperty, variable);
+    console.log('✅ [applyNumericVariable] Successfully applied', variable.name, 'to', figmaProperty);
+    console.log('🔍 [applyNumericVariable] node.boundVariables after:', JSON.stringify(node.boundVariables || {}));
     return true;
 
   } catch (error) {
@@ -11932,10 +13297,17 @@ function getCategoryFromVariableCollection(collectionName) {
 
   // PRIORITÉ 4 : Dimensions & Typo
   if (n === "spacing" || n.includes('spacing') || n.includes('gap') ||
-    n.includes('margin') || n.includes('padding') || n.includes('space')) return "spacing";
+    n.includes('margin') || n.includes('padding') || n.includes('space') ||
+    n === 'sizes' || n === 'spacers') return "spacing";
 
   if (n === "radius" || n.includes('radius') || n.includes('corner') ||
-    n.includes('border-radius') || n.includes('round')) return "radius";
+    n.includes('border-radius') || n.includes('round') || n.includes('radii') ||
+    n.includes('shape')) return "radius";
+
+  // PRIORITÉ : Stroke / Border Width (AVANT typography pour éviter collision avec "border")
+  if (n === "stroke" || n.includes('stroke') || n.includes('border width') ||
+    n.includes('border-width') || n.includes('line width') ||
+    n.includes('line-width') || n.includes('border widths')) return "stroke";
 
   if (n === "typography" || n.includes('typo') || n.includes('typography') ||
     n.includes('font') || n.includes('text') || n.includes('type')) return "typography";
@@ -12605,8 +13977,21 @@ var CORE_TO_MUI = {
     'system.success.600': 'palette.success.main',
     'system.warning.600': 'palette.warning.main',
     'system.error.600': 'palette.error.main',
-    'system.info.600': 'palette.info.main'
+    'system.info.600': 'palette.info.main',
+
+    // MUI common colors (constants)
+    'mui.common.black': 'palette.common.black',
+    'mui.common.white': 'palette.common.white',
+
+    // MUI action states (interaction overlays - light mode)
+    'mui.action.active': 'palette.action.active',
+    'mui.action.hover': 'palette.action.hover',
+    'mui.action.selected': 'palette.action.selected',
+    'mui.action.disabled': 'palette.action.disabled',
+    'mui.action.disabledBackground': 'palette.action.disabledBackground',
+    'mui.action.focus': 'palette.action.focus'
   },
+
   // Primitives (dark mode)
   primitivesDark: {
     'brand.500': 'palette.primary.main',
@@ -12615,23 +14000,253 @@ var CORE_TO_MUI = {
     'system.success.500': 'palette.success.main',
     'system.warning.500': 'palette.warning.main',
     'system.error.500': 'palette.error.main',
-    'system.info.500': 'palette.info.main'
+    'system.info.500': 'palette.info.main',
+
+    // MUI common colors (same in dark mode)
+    'mui.common.black': 'palette.common.black',
+    'mui.common.white': 'palette.common.white',
+
+    // MUI action states (interaction overlays - dark mode)
+    'mui.action.active': 'palette.action.active',
+    'mui.action.hover': 'palette.action.hover',
+    'mui.action.selected': 'palette.action.selected',
+    'mui.action.disabled': 'palette.action.disabled',
+    'mui.action.disabledBackground': 'palette.action.disabledBackground',
+    'mui.action.focus': 'palette.action.focus'
   },
+
+  // Primitives MUI-specific defaults (avec valeurs par défaut)
+  // Ces valeurs sont utilisées comme fallback si les primitives ne sont pas définies
+  muiDefaults: {
+    light: {
+      'mui.common.black': '#000',
+      'mui.common.white': '#fff',
+      'mui.action.active': 'rgba(0, 0, 0, 0.54)',
+      'mui.action.hover': 'rgba(0, 0, 0, 0.04)',
+      'mui.action.selected': 'rgba(0, 0, 0, 0.08)',
+      'mui.action.disabled': 'rgba(0, 0, 0, 0.26)',
+      'mui.action.disabledBackground': 'rgba(0, 0, 0, 0.12)',
+      'mui.action.focus': 'rgba(0, 0, 0, 0.12)'
+    },
+    dark: {
+      'mui.common.black': '#000',
+      'mui.common.white': '#fff',
+      'mui.action.active': '#fff',
+      'mui.action.hover': 'rgba(255, 255, 255, 0.08)',
+      'mui.action.selected': 'rgba(255, 255, 255, 0.16)',
+      'mui.action.disabled': 'rgba(255, 255, 255, 0.3)',
+      'mui.action.disabledBackground': 'rgba(255, 255, 255, 0.12)',
+      'mui.action.focus': 'rgba(255, 255, 255, 0.12)'
+    }
+  },
+
+  // Opacités MUI (constantes numériques, identiques light/dark)
+  muiOpacities: {
+    'hoverOpacity': 0.04,
+    'selectedOpacity': 0.08,
+    'disabledOpacity': 0.38,
+    'focusOpacity': 0.12,
+    'activatedOpacity': 0.12
+  },
+  muiOpacitiesDark: {
+    'hoverOpacity': 0.08,
+    'selectedOpacity': 0.16,
+    'disabledOpacity': 0.38,
+    'focusOpacity': 0.12,
+    'activatedOpacity': 0.24
+  },
+
   // Semantics (light mode)
   semanticsLight: {
-    'text.primary': 'palette.text.primary',
-    'text.secondary': 'palette.text.secondary',
+    // ========================================
+    // BACKGROUND (7 tokens) → palette.background.*
+    // ========================================
     'bg.canvas': 'palette.background.default',
     'bg.surface': 'palette.background.paper',
-    'border.default': 'palette.divider'
+    'bg.elevated': 'palette.background.elevated',
+    'bg.subtle': 'palette.background.subtle',
+    'bg.muted': 'palette.background.muted',
+    'bg.accent': 'palette.background.accent',
+    'bg.inverse': 'palette.background.inverse',
+
+    // ========================================
+    // TEXT (12 tokens) → palette.text.*
+    // ========================================
+    'text.primary': 'palette.text.primary',
+    'text.secondary': 'palette.text.secondary',
+    'text.muted': 'palette.text.muted',
+    'text.caption': 'palette.text.caption',
+    'text.disabled': 'palette.text.disabled',
+    'text.placeholder': 'palette.text.placeholder',
+    'text.link': 'palette.text.link',
+    'text.accent': 'palette.text.accent',
+    'text.inverse': 'palette.text.inverse',
+    'text.success': 'palette.success.contrastText',
+    'text.warning': 'palette.warning.contrastText',
+    'text.error': 'palette.error.contrastText',
+
+    // ========================================
+    // BORDER (6 tokens) → palette.divider & palette.border.*
+    // ========================================
+    'border.default': 'palette.divider',
+    'border.muted': 'palette.border.muted',
+    'border.subtle': 'palette.border.subtle',
+    'border.accent': 'palette.border.accent',
+    'border.focus': 'palette.border.focus',
+    'border.error': 'palette.error.main',
+
+    // ========================================
+    // DIVIDER (1 token) → palette.divider
+    // ========================================
+    'divider.default': 'palette.divider',
+
+    // ========================================
+    // ON - Contrast text (2 tokens) → palette.*.contrastText
+    // ========================================
+    'on.primary': 'palette.primary.contrastText',
+    'on.brand': 'palette.primary.contrastText',
+
+    // ========================================
+    // ACTION.PRIMARY (5 tokens) → palette.primary.*
+    // ========================================
+    'action.primary.default': 'palette.primary.main',
+    'action.primary.hover': 'palette.primary.dark',
+    'action.primary.active': 'palette.primary.dark',
+    'action.primary.disabled': 'palette.action.disabledBackground',
+    'action.primary.text': 'palette.primary.contrastText',
+
+    // ========================================
+    // ACTION.DESTRUCTIVE (4 tokens) → palette.error.*
+    // Note: secondary et tertiary iront dans palette.semantic.* via fallback
+    // ========================================
+    'action.destructive.default': 'palette.error.main',
+    'action.destructive.hover': 'palette.error.dark',
+    'action.destructive.active': 'palette.error.dark',
+    'action.destructive.disabled': 'palette.action.disabledBackground',
+
+    // ========================================
+    // STATUS.SUCCESS (3 tokens) → palette.success.*
+    // ========================================
+    'status.success.bg': 'palette.success.light',
+    'status.success.fg': 'palette.success.main',
+    'status.success.border': 'palette.success.dark',
+
+    // ========================================
+    // STATUS.WARNING (3 tokens) → palette.warning.*
+    // ========================================
+    'status.warning.bg': 'palette.warning.light',
+    'status.warning.fg': 'palette.warning.main',
+    'status.warning.border': 'palette.warning.dark',
+
+    // ========================================
+    // STATUS.ERROR (3 tokens) → palette.error.*
+    // ========================================
+    'status.error.bg': 'palette.error.light',
+    'status.error.fg': 'palette.error.main',
+    'status.error.border': 'palette.error.dark',
+
+    // ========================================
+    // STATUS.INFO (3 tokens) → palette.info.*
+    // ========================================
+    'status.info.bg': 'palette.info.light',
+    'status.info.fg': 'palette.info.main',
+    'status.info.border': 'palette.info.dark'
   },
-  // Semantics (dark mode) - même mapping
+  // Semantics (dark mode) - même mapping (MUI gère light/dark automatiquement)
   semanticsDark: {
-    'text.primary': 'palette.text.primary',
-    'text.secondary': 'palette.text.secondary',
+    // ========================================
+    // BACKGROUND (7 tokens) → palette.background.*
+    // ========================================
     'bg.canvas': 'palette.background.default',
     'bg.surface': 'palette.background.paper',
-    'border.default': 'palette.divider'
+    'bg.elevated': 'palette.background.elevated',
+    'bg.subtle': 'palette.background.subtle',
+    'bg.muted': 'palette.background.muted',
+    'bg.accent': 'palette.background.accent',
+    'bg.inverse': 'palette.background.inverse',
+
+    // ========================================
+    // TEXT (12 tokens) → palette.text.*
+    // ========================================
+    'text.primary': 'palette.text.primary',
+    'text.secondary': 'palette.text.secondary',
+    'text.muted': 'palette.text.muted',
+    'text.caption': 'palette.text.caption',
+    'text.disabled': 'palette.text.disabled',
+    'text.placeholder': 'palette.text.placeholder',
+    'text.link': 'palette.text.link',
+    'text.accent': 'palette.text.accent',
+    'text.inverse': 'palette.text.inverse',
+    'text.success': 'palette.success.contrastText',
+    'text.warning': 'palette.warning.contrastText',
+    'text.error': 'palette.error.contrastText',
+
+    // ========================================
+    // BORDER (6 tokens) → palette.divider & palette.border.*
+    // ========================================
+    'border.default': 'palette.divider',
+    'border.muted': 'palette.border.muted',
+    'border.subtle': 'palette.border.subtle',
+    'border.accent': 'palette.border.accent',
+    'border.focus': 'palette.border.focus',
+    'border.error': 'palette.error.main',
+
+    // ========================================
+    // DIVIDER (1 token) → palette.divider
+    // ========================================
+    'divider.default': 'palette.divider',
+
+    // ========================================
+    // ON - Contrast text (2 tokens) → palette.*.contrastText
+    // ========================================
+    'on.primary': 'palette.primary.contrastText',
+    'on.brand': 'palette.primary.contrastText',
+
+    // ========================================
+    // ACTION.PRIMARY (5 tokens) → palette.primary.*
+    // ========================================
+    'action.primary.default': 'palette.primary.main',
+    'action.primary.hover': 'palette.primary.dark',
+    'action.primary.active': 'palette.primary.dark',
+    'action.primary.disabled': 'palette.action.disabledBackground',
+    'action.primary.text': 'palette.primary.contrastText',
+
+    // ========================================
+    // ACTION.DESTRUCTIVE (4 tokens) → palette.error.*
+    // Note: secondary et tertiary iront dans palette.semantic.* via fallback
+    // ========================================
+    'action.destructive.default': 'palette.error.main',
+    'action.destructive.hover': 'palette.error.dark',
+    'action.destructive.active': 'palette.error.dark',
+    'action.destructive.disabled': 'palette.action.disabledBackground',
+
+    // ========================================
+    // STATUS.SUCCESS (3 tokens) → palette.success.*
+    // ========================================
+    'status.success.bg': 'palette.success.light',
+    'status.success.fg': 'palette.success.main',
+    'status.success.border': 'palette.success.dark',
+
+    // ========================================
+    // STATUS.WARNING (3 tokens) → palette.warning.*
+    // ========================================
+    'status.warning.bg': 'palette.warning.light',
+    'status.warning.fg': 'palette.warning.main',
+    'status.warning.border': 'palette.warning.dark',
+
+    // ========================================
+    // STATUS.ERROR (3 tokens) → palette.error.*
+    // ========================================
+    'status.error.bg': 'palette.error.light',
+    'status.error.fg': 'palette.error.main',
+    'status.error.border': 'palette.error.dark',
+
+    // ========================================
+    // STATUS.INFO (3 tokens) → palette.info.*
+    // ========================================
+    'status.info.bg': 'palette.info.light',
+    'status.info.fg': 'palette.info.main',
+    'status.info.border': 'palette.info.dark'
   }
 };
 
@@ -12732,17 +14347,36 @@ var MuiAdapter = {
     var semantics = coreTokens.semantics || {};
     var mapping = CORE_TO_MUI;
 
-    // Helper: extraire valeur d'un semantic token pour un mode
+    // Helper: extraire valeur ET alias d'un semantic token pour un mode
     function getSemanticValue(key, mode) {
       var token = semantics[key];
       if (!token || !token.modes || !token.modes[mode]) return null;
-      return token.modes[mode].resolvedValue;
+
+      // ✅ CORRECTION: Retourner à la fois resolvedValue ET aliasRef
+      return {
+        resolvedValue: token.modes[mode].resolvedValue,
+        aliasRef: token.modes[mode].aliasRef || null
+      };
     }
 
     var output = {
       light: { palette: { mode: 'light' } },
       dark: { palette: { mode: 'dark' } }
     };
+
+    // ✅ Structure pour stocker les métadonnées d'alias (pour importTokensToFigma)
+    var aliasMetadata = {
+      light: {},
+      dark: {}
+    };
+
+    // Initialiser les paths MUI manquants pour éviter les erreurs
+    if (!output.light.palette.text) output.light.palette.text = {};
+    if (!output.light.palette.background) output.light.palette.background = {};
+    if (!output.light.palette.border) output.light.palette.border = {};
+    if (!output.dark.palette.text) output.dark.palette.text = {};
+    if (!output.dark.palette.background) output.dark.palette.background = {};
+    if (!output.dark.palette.border) output.dark.palette.border = {};
 
     // 1. Primitives light via mapping table
     for (var lightKey in mapping.primitivesLight) {
@@ -12766,8 +14400,21 @@ var MuiAdapter = {
     for (var semLightKey in mapping.semanticsLight) {
       if (mapping.semanticsLight.hasOwnProperty(semLightKey)) {
         var semLightTarget = mapping.semanticsLight[semLightKey];
-        var semLightValue = getSemanticValue(semLightKey, 'light');
-        if (semLightValue) setByPath(output.light, semLightTarget, semLightValue);
+        var semLightData = getSemanticValue(semLightKey, 'light');
+
+        if (semLightData) {
+          // ✅ Extraire resolvedValue et aliasRef
+          var semLightValue = semLightData.resolvedValue;
+          var semLightAlias = semLightData.aliasRef;
+
+          // Appliquer la valeur au path MUI (palette.text.primary, etc.)
+          setByPath(output.light, semLightTarget, semLightValue);
+
+          // ✅ Stocker l'aliasRef dans les métadonnées pour importTokensToFigma
+          if (semLightAlias) {
+            aliasMetadata.light[semLightTarget] = semLightAlias;
+          }
+        }
       }
     }
 
@@ -12775,10 +14422,138 @@ var MuiAdapter = {
     for (var semDarkKey in mapping.semanticsDark) {
       if (mapping.semanticsDark.hasOwnProperty(semDarkKey)) {
         var semDarkTarget = mapping.semanticsDark[semDarkKey];
-        var semDarkValue = getSemanticValue(semDarkKey, 'dark');
-        if (semDarkValue) setByPath(output.dark, semDarkTarget, semDarkValue);
+        var semDarkData = getSemanticValue(semDarkKey, 'dark');
+
+        if (semDarkData) {
+          // ✅ Extraire resolvedValue et aliasRef
+          var semDarkValue = semDarkData.resolvedValue;
+          var semDarkAlias = semDarkData.aliasRef;
+
+          // Appliquer la valeur au path MUI (palette.text.primary, etc.)
+          setByPath(output.dark, semDarkTarget, semDarkValue);
+
+          // ✅ Stocker l'aliasRef dans les métadonnées pour importTokensToFigma
+          if (semDarkAlias) {
+            aliasMetadata.dark[semDarkTarget] = semDarkAlias;
+          }
+        }
       }
     }
+
+    // 4b. Fallback dynamique : exporter TOUS les tokens sémantiques non mappés
+    // Cette approche garantit qu'aucun token n'est perdu, comme pour Tailwind
+    console.log('[MUI] Applying semantic fallback for unmapped tokens...');
+    var mappedTokens = {};
+
+    // Marquer les tokens déjà mappés
+    for (var mk in mapping.semanticsLight) {
+      if (mapping.semanticsLight.hasOwnProperty(mk)) mappedTokens[mk] = true;
+    }
+
+    // Exporter les tokens non mappés dans palette.semantic.*
+    var unmappedCount = 0;
+    for (var semKey in semantics) {
+      if (!semantics.hasOwnProperty(semKey)) continue;
+      if (mappedTokens[semKey]) continue; // Skip si déjà mappé
+
+      var token = semantics[semKey];
+      if (!token.modes) continue;
+
+      // Créer un path sémantique générique : bg.canvas → palette.semantic.bg.canvas
+      var genericPath = 'palette.semantic.' + semKey;
+
+      // ✅ Extraire à la fois resolvedValue et aliasRef pour light mode
+      if (token.modes.light && token.modes.light.resolvedValue) {
+        setByPath(output.light, genericPath, token.modes.light.resolvedValue);
+
+        // ✅ Stocker l'aliasRef si présent
+        if (token.modes.light.aliasRef) {
+          aliasMetadata.light[genericPath] = token.modes.light.aliasRef;
+        }
+      }
+
+      // ✅ Extraire à la fois resolvedValue et aliasRef pour dark mode
+      if (token.modes.dark && token.modes.dark.resolvedValue) {
+        setByPath(output.dark, genericPath, token.modes.dark.resolvedValue);
+
+        // ✅ Stocker l'aliasRef si présent
+        if (token.modes.dark.aliasRef) {
+          aliasMetadata.dark[genericPath] = token.modes.dark.aliasRef;
+        }
+      }
+
+      unmappedCount++;
+    }
+    console.log('[MUI] Exported ' + unmappedCount + ' unmapped semantic tokens to palette.semantic.*');
+
+    // 5. MUI-specific palette.action (interaction states)
+    // Utilise les primitives mui.action.* si disponibles, sinon fallback vers defaults
+    // Référence: https://mui.com/material-ui/customization/palette/#default-values
+    var actionPropsLight = ['active', 'hover', 'selected', 'disabled', 'disabledBackground', 'focus'];
+    var actionPropsDark = ['active', 'hover', 'selected', 'disabled', 'disabledBackground', 'focus'];
+
+    output.light.palette.action = {};
+    for (var i = 0; i < actionPropsLight.length; i++) {
+      var prop = actionPropsLight[i];
+      var primKey = 'mui.action.' + prop;
+      var value = getByPath(primitives, primKey) || mapping.muiDefaults.light[primKey];
+      if (value) output.light.palette.action[prop] = value;
+    }
+    // Ajouter les opacités (constantes)
+    for (var opKey in mapping.muiOpacities) {
+      if (mapping.muiOpacities.hasOwnProperty(opKey)) {
+        output.light.palette.action[opKey] = mapping.muiOpacities[opKey];
+      }
+    }
+
+    output.dark.palette.action = {};
+    for (var j = 0; j < actionPropsDark.length; j++) {
+      var propDark = actionPropsDark[j];
+      var primKeyDark = 'mui.action.' + propDark;
+      var valueDark = getByPath(primitives, primKeyDark) || mapping.muiDefaults.dark[primKeyDark];
+      if (valueDark) output.dark.palette.action[propDark] = valueDark;
+    }
+    // Ajouter les opacités dark (constantes)
+    for (var opKeyDark in mapping.muiOpacitiesDark) {
+      if (mapping.muiOpacitiesDark.hasOwnProperty(opKeyDark)) {
+        output.dark.palette.action[opKeyDark] = mapping.muiOpacitiesDark[opKeyDark];
+      }
+    }
+
+    // 6. MUI-specific palette.common (black/white constants)
+    // Utilise les primitives mui.common.* si disponibles, sinon fallback vers defaults
+    output.light.palette.common = {
+      black: getByPath(primitives, 'mui.common.black') || mapping.muiDefaults.light['mui.common.black'],
+      white: getByPath(primitives, 'mui.common.white') || mapping.muiDefaults.light['mui.common.white']
+    };
+    output.dark.palette.common = {
+      black: getByPath(primitives, 'mui.common.black') || mapping.muiDefaults.dark['mui.common.black'],
+      white: getByPath(primitives, 'mui.common.white') || mapping.muiDefaults.dark['mui.common.white']
+    };
+
+    // Debug: vérifier la structure finale de l'export MUI
+    console.log('[MUI Export] Final palette structure (light):');
+    console.log('  - palette.text:', Object.keys(output.light.palette.text || {}).length, 'keys');
+    console.log('  - palette.background:', Object.keys(output.light.palette.background || {}).length, 'keys');
+    console.log('  - palette.border:', Object.keys(output.light.palette.border || {}).length, 'keys');
+    console.log('  - palette.action:', Object.keys(output.light.palette.action || {}).length, 'keys');
+    console.log('  - palette.semantic:', Object.keys(output.light.palette.semantic || {}).length, 'keys');
+    console.log('  - palette.primary:', output.light.palette.primary ? 'defined' : 'undefined');
+    console.log('  - palette.secondary:', output.light.palette.secondary ? 'defined' : 'undefined');
+    console.log('  - Total palette keys:', Object.keys(output.light.palette).length);
+
+    // ✅ Debug: vérifier les alias récupérés
+    var lightAliasCount = Object.keys(aliasMetadata.light).length;
+    var darkAliasCount = Object.keys(aliasMetadata.dark).length;
+    console.log('[MUI Export] Alias metadata extracted:');
+    console.log('  - Light mode aliases:', lightAliasCount);
+    console.log('  - Dark mode aliases:', darkAliasCount);
+    if (lightAliasCount > 0) {
+      console.log('  - Sample light aliases:', Object.keys(aliasMetadata.light).slice(0, 3));
+    }
+
+    // ✅ CORRECTION: Inclure les métadonnées d'alias dans le retour
+    output._aliasMetadata = aliasMetadata;
 
     return output;
   }
@@ -13147,8 +14922,9 @@ var CORE_PRESET_V1 = {
   ],
 
   // Règles de mapping sémantique (light/dark modes) - 80 tokens
-  // P2 NOTE: This is a DUPLICATE of getStandardMapping() (L1479) in different format.
+  // ⚠️ P2 NOTE: This is a DUPLICATE of getStandardMapping() in different format.
   // When updating, BOTH must be synchronized. Future refactor should unify.
+  // ✅ LAST SYNC: 2026-01-31 - Now identical with getStandardMapping()
   mappingRules: {
     // Background (7) - ✅ DARK MODE: Inversion intelligente
     'bg.canvas': { light: { category: 'gray', ref: '100' }, dark: { category: 'gray', ref: '950' } },  // Canvas: fond principal
@@ -13220,10 +14996,10 @@ var CORE_PRESET_V1 = {
     'action.secondary.text': { light: { category: 'brand', ref: '700' }, dark: { category: 'brand', ref: '300' } }, // ✅ Lisible
 
     // TERTIARY
-    'action.tertiary.default': { light: { category: 'gray', ref: '0' }, dark: { category: 'gray', ref: '0' } },     // ✅ Transparent
+    'action.tertiary.default': { light: { category: 'gray', ref: 'transparent' }, dark: { category: 'gray', ref: 'transparent' } },
     'action.tertiary.hover': { light: { category: 'gray', ref: '100' }, dark: { category: 'gray', ref: '900' } },   // ✅ 100/900
     'action.tertiary.active': { light: { category: 'gray', ref: '200' }, dark: { category: 'gray', ref: '800' } },  // ✅ 200/800
-    'action.tertiary.disabled': { light: { category: 'gray', ref: '0' }, dark: { category: 'gray', ref: '0' } },
+    'action.tertiary.disabled': { light: { category: 'gray', ref: 'transparent' }, dark: { category: 'gray', ref: 'transparent' } },
     'action.tertiary.text': { light: { category: 'brand', ref: '600' }, dark: { category: 'brand', ref: '400' } },
 
     // DESTRUCTIVE
@@ -13311,8 +15087,13 @@ function generateCorePrimitives(primaryColor, options, corePreset) {
     typography: {}
   };
 
-  // Génération des couleurs brand (réutilise la logique existante si ColorService disponible)
-  if (typeof ColorService !== 'undefined') {
+  // Génération des couleurs via TokenService (Source de vérité unique corrections framework)
+  if (typeof TokenService !== 'undefined') {
+    primitives.brand = TokenService.generateBrand(primaryColor, options.naming);
+    primitives.gray = TokenService.generateGray(options.naming);
+    primitives.system = TokenService.generateSystem(options.naming, primaryColor);
+  } else if (typeof ColorService !== 'undefined') {
+    // FALLBACK LEGACY (Si TokenService indisponible pour obscure raison)
     var brandHsl = ColorService.hexToHsl(primaryColor);
     var brandStops = corePreset.primitivesSchema.colors.brand;
 
@@ -13394,26 +15175,45 @@ function generateCorePrimitives(primaryColor, options, corePreset) {
   }
 
   // Spacing (valeurs en px)
-  var spacingKeys = corePreset.primitivesSchema.spacing;
-  for (var k = 0; k < spacingKeys.length; k++) {
-    var key = spacingKeys[k];
-    primitives.spacing[key] = parseInt(key) * 4; // 0->0, 1->4, 2->8, etc.
+  // ✅ Utiliser TokenService pour la logique spécifique au framework
+  if (typeof TokenService !== 'undefined' && TokenService.generateSpacing) {
+    primitives.spacing = TokenService.generateSpacing(options.naming);
+  } else {
+    // Fallback legacy
+    var spacingKeys = corePreset.primitivesSchema.spacing;
+    for (var k = 0; k < spacingKeys.length; k++) {
+      var key = spacingKeys[k];
+      primitives.spacing[key] = parseInt(key) * 4; // 0->0, 1->4, 2->8, etc.
+    }
   }
 
   // Radius (valeurs en px)
-  var radiusMap = { 'none': 0, 'sm': 2, 'md': 4, 'lg': 8, 'xl': 12, 'full': 9999 };
-  var radiusKeys = corePreset.primitivesSchema.radius;
-  for (var r = 0; r < radiusKeys.length; r++) {
-    var rKey = radiusKeys[r];
-    primitives.radius[rKey] = radiusMap[rKey] || 0;
+  // ✅ Utiliser TokenService pour la logique spécifique au framework (MUI, Ant, etc.)
+  if (typeof TokenService !== 'undefined' && TokenService.generateRadius) {
+    primitives.radius = TokenService.generateRadius(options.naming);
+    console.log('[RADIUS_DEBUG] Primitives radius generated:', primitives.radius);
+  } else {
+    // Fallback legacy
+    var radiusMap = { 'none': 0, 'sm': 2, 'md': 4, 'lg': 8, 'xl': 12, 'full': 9999 };
+    var radiusKeys = corePreset.primitivesSchema.radius;
+    for (var r = 0; r < radiusKeys.length; r++) {
+      var rKey = radiusKeys[r];
+      primitives.radius[rKey] = radiusMap[rKey] || 0;
+    }
   }
 
   // Stroke / Border Width (valeurs en px)
-  // Using borderWidth from schema: ['0', '1', '2', '4', '8']
-  var strokeWidths = corePreset.primitivesSchema.borderWidth || ['0', '1', '2', '3', '4'];
-  for (var bw = 0; bw < strokeWidths.length; bw++) {
-    var bwKey = strokeWidths[bw];
-    primitives.stroke[bwKey] = parseInt(bwKey) || 0;
+  // ✅ Utiliser TokenService pour la logique spécifique au framework
+  if (typeof TokenService !== 'undefined' && TokenService.generateStroke) {
+    primitives.stroke = TokenService.generateStroke(options.naming);
+    console.log('[STROKE_DEBUG] Primitives stroke generated:', primitives.stroke);
+  } else {
+    // Fallback legacy
+    var strokeWidths = corePreset.primitivesSchema.borderWidth || ['0', '1', '2', '3', '4'];
+    for (var bw = 0; bw < strokeWidths.length; bw++) {
+      var bwKey = strokeWidths[bw];
+      primitives.stroke[bwKey] = parseInt(bwKey) || 0;
+    }
   }
 
   // Typography
@@ -13823,6 +15623,45 @@ function runPluginTests() {
     return true;
   });
 
+  // ✅ Test de cohérence entre getStandardMapping et CORE_PRESET_V1.mappingRules
+  test('getStandardMapping matches CORE_PRESET_V1.mappingRules', function () {
+    var inconsistencies = [];
+    for (var i = 0; i < CORE_PRESET_V1.semanticSchema.length; i++) {
+      var key = CORE_PRESET_V1.semanticSchema[i];
+      var presetRule = CORE_PRESET_V1.mappingRules[key];
+      var standardMapping = getStandardMapping(key);
+
+      if (!standardMapping) {
+        inconsistencies.push(key + ': missing in getStandardMapping');
+        continue;
+      }
+
+      // Compare light mode
+      if (presetRule.light && standardMapping.light !== presetRule.light.ref) {
+        inconsistencies.push(key + '.light: ' + standardMapping.light + ' !== ' + presetRule.light.ref);
+      }
+
+      // Compare dark mode
+      if (presetRule.dark && standardMapping.dark !== presetRule.dark.ref) {
+        inconsistencies.push(key + '.dark: ' + standardMapping.dark + ' !== ' + presetRule.dark.ref);
+      }
+
+      // Compare category
+      if (presetRule.light && standardMapping.category !== presetRule.light.category) {
+        inconsistencies.push(key + '.category: ' + standardMapping.category + ' !== ' + presetRule.light.category);
+      }
+    }
+
+    if (inconsistencies.length > 0) {
+      console.warn('⚠️ Mapping inconsistencies found:');
+      for (var j = 0; j < inconsistencies.length; j++) {
+        console.warn('  - ' + inconsistencies[j]);
+      }
+      return false;
+    }
+    return true;
+  });
+
   // ✅ Test que les références sont valides
   test('All mapping refs exist in primitives schema', function () {
     var invalidRefs = [];
@@ -13867,6 +15706,70 @@ function runPluginTests() {
         console.warn('⚠️ ' + statusTokens[i] + ' does not use system.* category');
         return false;
       }
+    }
+    return true;
+  });
+
+  // ✅ Test extractVariableKey avec nomenclatures strictes des frameworks
+  test('extractVariableKey supports strict framework nomenclatures', function () {
+    var testCases = [
+      // MUI: Dotted gray keys
+      { name: 'grey.900', collection: 'Grayscale', expected: 'grey.900' },
+      { name: 'grey.50', collection: 'Gray Colors', expected: 'grey.50' },
+      { name: 'gray.700', collection: 'Neutral', expected: 'gray.700' },
+
+      // MUI: Brand dotted keys (should work via brand fallback)
+      { name: 'primary.main', collection: 'Brand', expected: 'primary.main' },
+      { name: 'primary.light', collection: 'Brand Colors', expected: 'primary.light' },
+      { name: 'primary.dark', collection: 'Theme', expected: 'primary.dark' },
+
+      // MUI: System dotted keys
+      { name: 'success.main', collection: 'System Colors', expected: 'success.main' },
+      { name: 'error.dark', collection: 'System', expected: 'error.dark' },
+
+      // Ant Design: camelCase gray
+      { name: 'colorText', collection: 'Grayscale', expected: 'colorText' },
+      { name: 'colorBgContainer', collection: 'Gray', expected: 'colorBgContainer' },
+      { name: 'colorTextSecondary', collection: 'Neutral', expected: 'colorTextSecondary' },
+
+      // Ant Design: camelCase spacing
+      { name: 'sizeXS', collection: 'Spacing', expected: 'sizeXS' },
+      { name: 'sizeXXL', collection: 'Spacing', expected: 'sizeXXL' },
+      { name: 'size', collection: 'Spacing', expected: 'size' },
+
+      // Ant Design: camelCase radius
+      { name: 'borderRadius', collection: 'Radius', expected: 'borderRadius' },
+      { name: 'borderRadiusSM', collection: 'Radius', expected: 'borderRadiusSM' },
+
+      // Chakra: Dotted gray keys
+      { name: 'gray.900', collection: 'Gray', expected: 'gray.900' },
+      { name: 'green.700', collection: 'System Colors', expected: 'green.700' },
+
+      // Bootstrap: Dashed keys (traditional extraction)
+      { name: 'gray-900', collection: 'Grayscale', expected: '900' },
+      { name: 'primary', collection: 'Brand', expected: 'primary' },
+
+      // Tailwind: Numbers and simple keys
+      { name: '950', collection: 'Gray', expected: '950' },
+      { name: 'md', collection: 'Radius', expected: 'md' },
+    ];
+
+    var failures = [];
+    for (var i = 0; i < testCases.length; i++) {
+      var tc = testCases[i];
+      var mockVar = { name: tc.name };
+      var result = extractVariableKey(mockVar, tc.collection);
+      if (result !== tc.expected) {
+        failures.push(tc.name + ' (' + tc.collection + '): expected "' + tc.expected + '", got "' + result + '"');
+      }
+    }
+
+    if (failures.length > 0) {
+      console.warn('⚠️ extractVariableKey failures:');
+      for (var j = 0; j < failures.length; j++) {
+        console.warn('  - ' + failures[j]);
+      }
+      return false;
     }
     return true;
   });
